@@ -184,10 +184,10 @@ export function Lobby() {
                   <div
                     key={p.id}
                     className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${isSelf
-                        ? 'bg-cyan-950/20 border-cyan-500/30 shadow-md'
-                        : !p.isConnected
-                          ? 'bg-rose-950/20 border-rose-500/40 opacity-75'
-                          : 'bg-dark-800/60 border-slate-800'
+                      ? 'bg-cyan-950/20 border-cyan-500/30 shadow-md'
+                      : !p.isConnected
+                        ? 'bg-rose-950/20 border-rose-500/40 opacity-75'
+                        : 'bg-dark-800/60 border-slate-800'
                       }`}
                   >
                     <div className="flex items-center gap-3">
@@ -250,7 +250,7 @@ export function Lobby() {
                 className="btn-primary flex items-center gap-2 px-8 py-3.5 shadow-xl disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Play className="w-5 h-5 fill-current" />
-                <span className="font-bold">Start Match</span>
+                <span className="font-bold">Start</span>
               </button>
             ) : (
               <div className="text-xs font-semibold px-4 py-2.5 rounded-xl bg-slate-800 text-slate-400 border border-slate-700">
@@ -326,8 +326,8 @@ export function Lobby() {
                           type="button"
                           onClick={() => updateSettings(normalizedCode, player.id, { impostersCount: num })}
                           className={`py-2 rounded-xl text-xs font-bold border transition-all ${isSelected
-                              ? 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500'
-                              : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                            ? 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500'
+                            : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
                             }`}
                         >
                           {num} {num === 1 ? 'Imposter' : 'Imposters'}
@@ -349,8 +349,8 @@ export function Lobby() {
                         type="button"
                         onClick={() => updateSettings(normalizedCode, player.id, { turnDurationSeconds: sec })}
                         className={`py-2 rounded-xl text-xs font-bold border transition-all ${settings.turnDurationSeconds === sec
-                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
-                            : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                          : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
                           }`}
                       >
                         {sec}s
@@ -371,8 +371,8 @@ export function Lobby() {
                         type="button"
                         onClick={() => updateSettings(normalizedCode, player.id, { votingDurationSeconds: sec })}
                         className={`py-2 rounded-xl text-xs font-bold border transition-all ${settings.votingDurationSeconds === sec
-                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
-                            : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                          : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
                           }`}
                       >
                         {sec}s
@@ -387,7 +387,6 @@ export function Lobby() {
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
                       Lobby Disconnect Timeout
                     </label>
-                    <span className="text-[10px] text-rose-400 font-semibold">Configurable</span>
                   </div>
                   <div className="grid grid-cols-5 gap-1.5">
                     {[3, 5, 10, 15, 30].map((sec) => (
@@ -396,8 +395,8 @@ export function Lobby() {
                         type="button"
                         onClick={() => updateSettings(normalizedCode, player.id, { lobbyDisconnectTimeout: sec })}
                         className={`py-2 rounded-xl text-xs font-bold border transition-all ${(settings.lobbyDisconnectTimeout || 5) === sec
-                            ? 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500'
-                            : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500'
+                          : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
                           }`}
                       >
                         {sec}s
@@ -415,7 +414,6 @@ export function Lobby() {
                     <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
                       Game Disconnect Timeout
                     </label>
-                    <span className="text-[10px] text-cyan-400 font-semibold">Configurable</span>
                   </div>
                   <div className="grid grid-cols-5 gap-1.5">
                     {[3, 5, 10, 15, 30].map((sec) => (
@@ -424,8 +422,8 @@ export function Lobby() {
                         type="button"
                         onClick={() => updateSettings(normalizedCode, player.id, { gameDisconnectTimeout: sec })}
                         className={`py-2 rounded-xl text-xs font-bold border transition-all ${(settings.gameDisconnectTimeout || settings.gameDisconnectGracePeriod || 15) === sec
-                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 ring-1 ring-cyan-500'
-                            : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 ring-1 ring-cyan-500'
+                          : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
                           }`}
                       >
                         {sec}s

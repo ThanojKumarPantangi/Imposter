@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import {
   Shield, Send, Clock, Vote, Trophy, Skull,
-  AlertCircle, Sparkles, Volume2, ArrowRight, RotateCcw, Home as HomeIcon, ArrowLeft
+  AlertCircle, Sparkles, Volume2, ArrowRight, RotateCcw, Home as HomeIcon, ArrowLeft, Eye
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -136,14 +136,15 @@ export function GameView() {
   }
 
   const me = roomState.players.find(p => p.id === player?.id) || {};
-  const isMyTurn = roomState.status === 'CLUE_ROUND' && roomState.activeTurnPlayerId === player?.id;
+  const isAlive = me.isAlive !== false && !me.permanentlyDeparted;
+  const isMyTurn = isAlive && roomState.status === 'CLUE_ROUND' && roomState.activeTurnPlayerId === player?.id;
   const isImposter = me.role === 'IMPOSTER';
   const isCivilian = me.role === 'CIVILIAN';
-  const isAlive = me.isAlive !== false && !me.permanentlyDeparted;
 
   const handleClueSubmit = (e) => {
     e.preventDefault();
     setErrorMessage('');
+    if (!isAlive || !isMyTurn) return;
     if (!clueInput.trim()) return;
 
     try {
@@ -156,6 +157,7 @@ export function GameView() {
 
   const handleVoteSubmit = () => {
     setErrorMessage('');
+    if (!isAlive) return;
     if (!selectedVoteTarget) {
       setErrorMessage('Please select a player to vote for.');
       return;
@@ -210,6 +212,30 @@ export function GameView() {
           )}
         </div>
       </div>
+
+      {/* Persistent Spectator / Eliminated Banner */}
+      {!isAlive && roomState.status !== 'FINISHED' && (
+        <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-rose-950/40 via-purple-950/30 to-dark-900 border border-rose-500/40 shadow-xl shadow-rose-950/20 backdrop-blur-md animate-fade-in">
+          <div className="flex items-center gap-3.5">
+            <div className="p-3 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex-shrink-0">
+              <Skull className="w-6 h-6 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="font-display font-black text-sm sm:text-base text-white tracking-wide">
+                  YOU HAVE BEEN ELIMINATED
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  Spectator Mode
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                You are now spectating this match. You can watch the remaining rounds, but you cannot submit clues or vote.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Secret Card Section (Private to the user) */}
       <div className="mb-6">
@@ -304,57 +330,78 @@ export function GameView() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Clue Input & Active Player Banner */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Active Player Status Card */}
-            <div
-              className={`glass-card p-5 sm:p-6 border ${isMyTurn
-                  ? 'border-cyan-500/60 bg-cyan-950/20 ring-1 ring-cyan-500'
-                  : 'border-slate-800'
-                }`}
-            >
-              <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl ${isMyTurn ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-800 text-slate-400'}`}>
-                    <Clock className="w-5 h-5" />
+            {/* Active Player Status Card / Spectator Card */}
+            {!isAlive ? (
+              <div className="glass-card p-5 sm:p-6 border border-slate-800 bg-dark-900/60">
+                <div className="flex items-center gap-3.5">
+                  <div className="p-3 rounded-2xl bg-slate-800 text-cyan-400 border border-slate-700/60 flex-shrink-0">
+                    <Eye className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-display font-bold text-base sm:text-lg text-white">
-                      {isMyTurn ? '🌟 It is YOUR turn to submit a clue!' : `${roomState.players.find(p => p.id === roomState.activeTurnPlayerId)?.username || 'active player'}'s turn...`}
+                    <h3 className="font-display font-bold text-base sm:text-lg text-white flex items-center gap-2">
+                      <span>Spectating Round {roomState.currentRound || 1}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                        Spectator
+                      </span>
                     </h3>
-                    <p className="text-xs text-slate-400">
-                      {isImposter
-                        ? 'Give a clue or guess the secret word to win!'
-                        : 'Give a one-word clue without revealing the secret!'}
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      You have been eliminated and cannot submit clues. Watch the remaining players.
                     </p>
                   </div>
                 </div>
               </div>
-
-              {/* Clue Input Form */}
-              {isMyTurn && isAlive && (
-                <form onSubmit={handleClueSubmit} className="space-y-3">
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      value={clueInput}
-                      onChange={(e) => setClueInput(e.target.value)}
-                      placeholder={isImposter ? 'Enter clue OR exact secret word guess...' : 'Enter your related clue...'}
-                      autoFocus
-                      maxLength={40}
-                      className="flex-1 bg-dark-950 border border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 px-4 py-3 rounded-xl text-white placeholder-slate-500 text-sm font-semibold outline-none"
-                    />
-                    <button type="submit" className="btn-cyan flex items-center justify-center gap-2 px-6 py-3 sm:py-0 w-full sm:w-auto">
-                      <Send className="w-4 h-4" />
-                      <span>Submit</span>
-                    </button>
-                  </div>
-                  {isImposter && (
-                    <div className="text-[11px] text-rose-400 font-semibold bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
-                      💡 <strong>Imposter Tip:</strong> Guess the secret word and enter it here to win instantly!
+            ) : (
+              <div
+                className={`glass-card p-5 sm:p-6 border ${isMyTurn
+                    ? 'border-cyan-500/60 bg-cyan-950/20 ring-1 ring-cyan-500'
+                    : 'border-slate-800'
+                  }`}
+              >
+                <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl ${isMyTurn ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-800 text-slate-400'}`}>
+                      <Clock className="w-5 h-5" />
                     </div>
-                  )}
-                </form>
-              )}
-            </div>
+                    <div>
+                      <h3 className="font-display font-bold text-base sm:text-lg text-white">
+                        {isMyTurn ? '🌟 It is YOUR turn to submit a clue!' : `${roomState.players.find(p => p.id === roomState.activeTurnPlayerId)?.username || 'active player'}'s turn...`}
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        {isImposter
+                          ? 'Give a clue or guess the secret word to win!'
+                          : 'Give a one-word clue without revealing the secret!'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Clue Input Form */}
+                {isMyTurn && isAlive && (
+                  <form onSubmit={handleClueSubmit} className="space-y-3">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={clueInput}
+                        onChange={(e) => setClueInput(e.target.value)}
+                        placeholder={isImposter ? 'Enter clue OR exact secret word guess...' : 'Enter your related clue...'}
+                        autoFocus
+                        maxLength={40}
+                        className="flex-1 bg-dark-950 border border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 px-4 py-3 rounded-xl text-white placeholder-slate-500 text-sm font-semibold outline-none"
+                      />
+                      <button type="submit" className="btn-cyan flex items-center justify-center gap-2 px-6 py-3 sm:py-0 w-full sm:w-auto">
+                        <Send className="w-4 h-4" />
+                        <span>Submit</span>
+                      </button>
+                    </div>
+                    {isImposter && (
+                      <div className="text-[11px] text-rose-400 font-semibold bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                        💡 <strong>Imposter Tip:</strong> Guess the secret word and enter it here to win instantly!
+                      </div>
+                    )}
+                  </form>
+                )}
+              </div>
+            )}
 
             {/* Submitted Clues Table (Section 6 Requirement) */}
             <div className="glass-card p-5 sm:p-6">
@@ -530,64 +577,144 @@ export function GameView() {
       {/* PHASE 3: VOTING */}
       {/* ========================================================== */}
       {roomState.status === 'VOTING' && (
-        <div className="glass-card p-6 sm:p-8 animate-fade-in">
-          <div className="text-center mb-6">
-            <div className="w-14 h-14 rounded-3xl bg-rose-500/20 text-rose-500 flex items-center justify-center mx-auto mb-3 border border-rose-500/30">
-              <Vote className="w-7 h-7" />
+        isAlive ? (
+          /* Normal Alive Player Voting Interface */
+          <div className="glass-card p-6 sm:p-8 animate-fade-in">
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 rounded-3xl bg-rose-500/20 text-rose-500 flex items-center justify-center mx-auto mb-3 border border-rose-500/30">
+                <Vote className="w-7 h-7" />
+              </div>
+              <h2 className="font-display font-black text-2xl text-white">Cast Your Vote</h2>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Review all clues submitted and vote to eliminate who you believe is the Imposter.
+              </p>
             </div>
-            <h2 className="font-display font-black text-2xl text-white">Cast Your Vote</h2>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Review all clues submitted and vote to eliminate who you believe is the Imposter.
-            </p>
-          </div>
 
-          {/* Player Voting Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-            {roomState.players.filter(p => p.isAlive && !p.permanentlyDeparted).map((p) => {
-              const isSelf = p.id === player?.id;
-              const isSelected = selectedVoteTarget === p.id;
-              return (
-                <button
-                  key={p.id}
-                  disabled={isSelf || hasVoted || !isAlive}
-                  onClick={() => setSelectedVoteTarget(p.id)}
-                  className={`p-4 rounded-2xl border text-left transition-all ${isSelected
-                      ? 'bg-rose-950/40 border-rose-500 text-white ring-2 ring-rose-500 shadow-lg shadow-rose-500/20'
-                      : isSelf
-                        ? 'bg-dark-950/40 border-slate-800 opacity-60 cursor-not-allowed'
-                        : 'bg-dark-800/80 border-slate-700/80 hover:border-slate-600 hover:bg-dark-800'
-                    }`}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <PlayerAvatar player={p} size="sm" showStatus={false} />
-                    <div>
-                      <div className="font-bold text-sm text-slate-100">{p.username}</div>
-                      <div className="text-[11px] text-slate-400">
-                        {isSelf ? '(You cannot vote self)' : 'Vote to Eliminate'}
+            {/* Player Voting Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+              {roomState.players.filter(p => p.isAlive && !p.permanentlyDeparted).map((p) => {
+                const isSelf = p.id === player?.id;
+                const isSelected = selectedVoteTarget === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    disabled={isSelf || hasVoted || !isAlive}
+                    onClick={() => setSelectedVoteTarget(p.id)}
+                    className={`p-4 rounded-2xl border text-left transition-all ${isSelected
+                        ? 'bg-rose-950/40 border-rose-500 text-white ring-2 ring-rose-500 shadow-lg shadow-rose-500/20'
+                        : isSelf
+                          ? 'bg-dark-950/40 border-slate-800 opacity-60 cursor-not-allowed'
+                          : 'bg-dark-800/80 border-slate-700/80 hover:border-slate-600 hover:bg-dark-800'
+                      }`}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <PlayerAvatar player={p} size="sm" showStatus={false} />
+                      <div>
+                        <div className="font-bold text-sm text-slate-100">{p.username}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {isSelf ? '(You cannot vote self)' : 'Vote to Eliminate'}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  {p.clues?.length > 0 && (
-                    <div className="text-[11px] text-slate-400 mt-2 truncate">
-                      Clues: <span className="text-slate-200 font-semibold">{p.clues.filter(Boolean).join(', ')}</span>
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                    {p.clues?.length > 0 && (
+                      <div className="text-[11px] text-slate-400 mt-2 truncate">
+                        Clues: <span className="text-slate-200 font-semibold">{p.clues.filter(Boolean).join(', ')}</span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-          <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={handleVoteSubmit}
-              disabled={!selectedVoteTarget || hasVoted || !isAlive}
-              className="btn-primary px-8 py-3.5 flex items-center gap-2 text-sm disabled:opacity-40"
-            >
-              <Vote className="w-4 h-4" />
-              <span>{hasVoted ? 'Vote Submitted!' : 'Confirm Vote'}</span>
-            </button>
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={handleVoteSubmit}
+                disabled={!selectedVoteTarget || hasVoted || !isAlive}
+                className="btn-primary px-8 py-3.5 flex items-center gap-2 text-sm disabled:opacity-40"
+              >
+                <Vote className="w-4 h-4" />
+                <span>{hasVoted ? 'Vote Submitted!' : 'Confirm Vote'}</span>
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          /* Spectator Voting View (Eliminated players cannot vote) */
+          <div className="glass-card p-6 sm:p-8 animate-fade-in">
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 rounded-3xl bg-purple-500/20 text-purple-400 flex items-center justify-center mx-auto mb-3 border border-purple-500/30">
+                <Eye className="w-7 h-7" />
+              </div>
+              <h2 className="font-display font-black text-2xl text-white">
+                Voting in Progress — Spectating
+              </h2>
+              <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                You are spectating this round. Alive players are voting to eliminate who they suspect is the Imposter.
+              </p>
+              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-xs font-semibold text-slate-300">
+                <span>Votes cast:</span>
+                <span className="font-bold text-cyan-400 font-mono">
+                  {Object.keys(roomState.votes || {}).length} / {roomState.players.filter(p => p.isAlive && !p.permanentlyDeparted).length}
+                </span>
+              </div>
+            </div>
+
+            {/* Spectator Live Votes Table */}
+            <div className="overflow-x-auto border border-slate-800 rounded-2xl bg-dark-950/60 max-w-2xl mx-auto shadow-inner">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-400 bg-dark-900/80">
+                    <th className="py-3 px-4">Eligible Voter</th>
+                    <th className="py-3 px-4">Voted For</th>
+                    <th className="py-3 px-4 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50 text-xs sm:text-sm">
+                  {roomState.players.filter(p => p.isAlive && !p.permanentlyDeparted).map((voter) => {
+                    const targetPlayerId = roomState.votes?.[voter.id];
+                    const targetPlayer = targetPlayerId ? roomState.players.find(x => x.id === targetPlayerId) : null;
+                    const hasCastVote = Boolean(targetPlayerId);
+
+                    return (
+                      <tr key={voter.id} className="hover:bg-dark-900/40 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2.5">
+                            <PlayerAvatar player={voter} size="sm" showStatus={false} />
+                            <span className="font-semibold text-slate-200">{voter.username}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          {hasCastVote ? (
+                            <div className="flex items-center gap-1.5 font-bold text-rose-300">
+                              <span>🎯</span>
+                              <span>{targetPlayer ? targetPlayer.username : 'Target Selected'}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-500 italic">Undecided...</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {hasCastVote ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Voted
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">
+                              Deciding...
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-5 text-center text-xs text-slate-500">
+              Results and eliminations will be calculated when all alive players cast their votes or time expires.
+            </div>
+          </div>
+        )
       )}
 
       {/* ========================================================== */}
