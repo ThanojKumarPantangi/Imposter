@@ -205,6 +205,7 @@ export function GameView() {
           {/* Phase Countdown Timer */}
           {roomState.status === 'CLUE_ROUND' && roomState.turnDeadline && (
             <CountdownTimer
+              key={`turn-${roomState.currentRound}-${roomState.activeTurnIndex}-${roomState.turnDeadline}`}
               deadline={roomState.turnDeadline}
               totalSeconds={roomState.settings?.turnDurationSeconds || 30}
               label="Turn Timer"
@@ -213,6 +214,7 @@ export function GameView() {
 
           {roomState.status === 'VOTING' && roomState.votingDeadline && (
             <CountdownTimer
+              key={`voting-${roomState.currentRound}-${roomState.votingDeadline}`}
               deadline={roomState.votingDeadline}
               totalSeconds={roomState.settings?.votingDurationSeconds || 45}
               label="Voting Deadline"

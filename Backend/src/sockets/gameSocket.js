@@ -1,6 +1,33 @@
 import gameEngine from '../services/gameEngine.js';
 import roomRepository from '../redis/roomRepository.js';
 
+// Server-authoritative phase timer registries (one authoritative timer per room)
+const activeTurnTimers = new Map();
+const activeVotingTimers = new Map();
+const activeNextRoundTimers = new Map();
+const activeRoleRevealTimers = new Map();
+
+export function clearRoomPhaseTimers(roomCode) {
+  if (!roomCode) return;
+  const normalized = roomCode.toUpperCase();
+  if (activeTurnTimers.has(normalized)) {
+    clearTimeout(activeTurnTimers.get(normalized));
+    activeTurnTimers.delete(normalized);
+  }
+  if (activeVotingTimers.has(normalized)) {
+    clearTimeout(activeVotingTimers.get(normalized));
+    activeVotingTimers.delete(normalized);
+  }
+  if (activeNextRoundTimers.has(normalized)) {
+    clearTimeout(activeNextRoundTimers.get(normalized));
+    activeNextRoundTimers.delete(normalized);
+  }
+  if (activeRoleRevealTimers.has(normalized)) {
+    clearTimeout(activeRoleRevealTimers.get(normalized));
+    activeRoleRevealTimers.delete(normalized);
+  }
+}
+
 /**
  * Socket.IO Game & Voice Signaling Controller
  */
@@ -58,6 +85,34 @@ function setupNamespace(nsp) {
           username: player.username
         });
 
+        // Direct state push to ensure the joining player has immediate authoritative state
+        const sanitizedSelf = gameEngine.sanitizeRoomForPlayer(room, player.id);
+        socket.emit('room_state', sanitizedSelf);
+
+        if (room.status === 'CLUE_ROUND' && room.turnDeadline) {
+          socket.emit('turn_started', {
+            round: room.currentRound,
+            activeTurnPlayerId: room.activeTurnPlayerId,
+            activeTurnIndex: room.activeTurnIndex,
+            turnDeadline: room.turnDeadline,
+            duration: room.settings?.turnDurationSeconds || 30,
+            turnDurationSeconds: room.settings?.turnDurationSeconds || 30,
+            votingDurationSeconds: room.settings?.votingDurationSeconds || 45,
+            settings: room.settings
+          });
+        } else if (room.status === 'VOTING' && room.votingDeadline) {
+          const votingPayload = {
+            votingDeadline: room.votingDeadline,
+            duration: room.settings?.votingDurationSeconds || 45,
+            votingDurationSeconds: room.settings?.votingDurationSeconds || 45,
+            turnDurationSeconds: room.settings?.turnDurationSeconds || 30,
+            settings: room.settings,
+            round: room.currentRound
+          };
+          socket.emit('voting_phase_started', votingPayload);
+          socket.emit('voting_started', votingPayload);
+        }
+
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
 
         nsp.to(`room:${normalizedCode}`).emit('player_connected', {
@@ -76,13 +131,38 @@ function setupNamespace(nsp) {
       const room = await roomRepository.getRoom(normalizedCode);
       if (room) {
         socket.join(`room:${normalizedCode}`);
-        if (playerId) {
-          socket.playerId = playerId;
-          socket.join(`user:${playerId}`);
-          await roomRepository.mapSocketToPlayer(socket.id, playerId);
+        const effectivePlayerId = playerId || socket.playerId || await roomRepository.getPlayerBySocket(socket.id);
+        if (effectivePlayerId) {
+          socket.playerId = effectivePlayerId;
+          socket.join(`user:${effectivePlayerId}`);
+          await roomRepository.mapSocketToPlayer(socket.id, effectivePlayerId);
         }
-        const sanitized = gameEngine.sanitizeRoomForPlayer(room, playerId);
+        const sanitized = gameEngine.sanitizeRoomForPlayer(room, effectivePlayerId);
         socket.emit('room_state', sanitized);
+
+        if (room.status === 'CLUE_ROUND' && room.turnDeadline) {
+          socket.emit('turn_started', {
+            round: room.currentRound,
+            activeTurnPlayerId: room.activeTurnPlayerId,
+            activeTurnIndex: room.activeTurnIndex,
+            turnDeadline: room.turnDeadline,
+            duration: room.settings?.turnDurationSeconds || 30,
+            turnDurationSeconds: room.settings?.turnDurationSeconds || 30,
+            votingDurationSeconds: room.settings?.votingDurationSeconds || 45,
+            settings: room.settings
+          });
+        } else if (room.status === 'VOTING' && room.votingDeadline) {
+          const votingPayload = {
+            votingDeadline: room.votingDeadline,
+            duration: room.settings?.votingDurationSeconds || 45,
+            votingDurationSeconds: room.settings?.votingDurationSeconds || 45,
+            turnDurationSeconds: room.settings?.turnDurationSeconds || 30,
+            settings: room.settings,
+            round: room.currentRound
+          };
+          socket.emit('voting_phase_started', votingPayload);
+          socket.emit('voting_started', votingPayload);
+        }
       }
     });
 
@@ -131,6 +211,31 @@ function setupNamespace(nsp) {
           roomCode: normalizedCode,
           room: sanitized
         });
+        socket.emit('room_state', sanitized);
+
+        if (room.status === 'CLUE_ROUND' && room.turnDeadline) {
+          socket.emit('turn_started', {
+            round: room.currentRound,
+            activeTurnPlayerId: room.activeTurnPlayerId,
+            activeTurnIndex: room.activeTurnIndex,
+            turnDeadline: room.turnDeadline,
+            duration: room.settings?.turnDurationSeconds || 30,
+            turnDurationSeconds: room.settings?.turnDurationSeconds || 30,
+            votingDurationSeconds: room.settings?.votingDurationSeconds || 45,
+            settings: room.settings
+          });
+        } else if (room.status === 'VOTING' && room.votingDeadline) {
+          const votingPayload = {
+            votingDeadline: room.votingDeadline,
+            duration: room.settings?.votingDurationSeconds || 45,
+            votingDurationSeconds: room.settings?.votingDurationSeconds || 45,
+            turnDurationSeconds: room.settings?.turnDurationSeconds || 30,
+            settings: room.settings,
+            round: room.currentRound
+          };
+          socket.emit('voting_phase_started', votingPayload);
+          socket.emit('voting_started', votingPayload);
+        }
 
         nsp.to(`room:${normalizedCode}`).emit('game_disconnect_cancelled', {
           playerId,
@@ -166,6 +271,7 @@ function setupNamespace(nsp) {
 
         const result = await gameEngine.leaveRoom(normalizedCode, playerId);
         if (result && result.roomDeleted) {
+          clearRoomPhaseTimers(normalizedCode);
           nsp.to(`room:${normalizedCode}`).emit('room_closed', {
             roomCode: normalizedCode,
             reason: 'All players departed. Room closed.'
@@ -177,6 +283,7 @@ function setupNamespace(nsp) {
           });
 
           if (result.gameOver) {
+            clearRoomPhaseTimers(normalizedCode);
             nsp.to(`room:${normalizedCode}`).emit('game_finished', result.winnerResult);
           }
 
@@ -445,23 +552,43 @@ function setupNamespace(nsp) {
 
         console.log(`🎮 [Game] Room ${normalizedCode} started! Word: "${room.secretWord}", Hint: "${room.hint}"`);
 
-        await broadcastPersonalizedRoomState(nsp, normalizedCode);
-        nsp.to(`room:${normalizedCode}`).emit('game_started', {
-          status: 'ROLE_REVEAL',
-          duration: 6
-        });
+        clearRoomPhaseTimers(normalizedCode);
 
-        setTimeout(async () => {
+        await broadcastPersonalizedRoomState(nsp, normalizedCode);
+        const gameStartedPayload = {
+          status: 'ROLE_REVEAL',
+          duration: 6,
+          turnDurationSeconds: room.settings.turnDurationSeconds,
+          votingDurationSeconds: room.settings.votingDurationSeconds,
+          settings: room.settings
+        };
+        nsp.to(`room:${normalizedCode}`).emit('game_started', gameStartedPayload);
+
+        const revealTimer = setTimeout(async () => {
+          activeRoleRevealTimers.delete(normalizedCode);
           const currentRoom = await roomRepository.getRoom(normalizedCode);
           if (currentRoom && currentRoom.status === 'ROLE_REVEAL') {
-            await gameEngine.startClueRound(normalizedCode);
-            await broadcastPersonalizedRoomState(nsp, normalizedCode);
-            nsp.to(`room:${normalizedCode}`).emit('clue_round_started', {
-              round: currentRoom.currentRound
-            });
-            scheduleTurnTimeout(nsp, normalizedCode);
+            const updatedRoom = await gameEngine.startClueRound(normalizedCode);
+            if (updatedRoom) {
+              await broadcastPersonalizedRoomState(nsp, normalizedCode);
+              const roundPayload = {
+                round: updatedRoom.currentRound,
+                turnDeadline: updatedRoom.turnDeadline,
+                duration: updatedRoom.settings.turnDurationSeconds,
+                turnDurationSeconds: updatedRoom.settings.turnDurationSeconds,
+                votingDurationSeconds: updatedRoom.settings.votingDurationSeconds,
+                settings: updatedRoom.settings,
+                activeTurnPlayerId: updatedRoom.activeTurnPlayerId,
+                activeTurnIndex: updatedRoom.activeTurnIndex
+              };
+              nsp.to(`room:${normalizedCode}`).emit('round_started', roundPayload);
+              nsp.to(`room:${normalizedCode}`).emit('clue_round_started', roundPayload);
+              nsp.to(`room:${normalizedCode}`).emit('turn_started', roundPayload);
+              scheduleTurnTimeout(nsp, normalizedCode);
+            }
           }
         }, 6000);
+        activeRoleRevealTimers.set(normalizedCode, revealTimer);
       } catch (err) {
         socket.emit('error', { message: err.message });
       }
@@ -474,6 +601,7 @@ function setupNamespace(nsp) {
         const result = await gameEngine.submitClueOrGuess(normalizedCode, playerId, clue);
 
         if (result.gameOver) {
+          clearRoomPhaseTimers(normalizedCode);
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
           nsp.to(`room:${normalizedCode}`).emit('game_finished', result.winnerResult);
           return;
@@ -482,12 +610,30 @@ function setupNamespace(nsp) {
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
 
         if (result.phaseChanged && result.room.status === 'VOTING') {
-          nsp.to(`room:${normalizedCode}`).emit('voting_phase_started', {
+          clearRoomPhaseTimers(normalizedCode);
+          const votingPayload = {
             votingDeadline: result.room.votingDeadline,
-            duration: result.room.settings.votingDurationSeconds
-          });
+            duration: result.room.settings.votingDurationSeconds,
+            votingDurationSeconds: result.room.settings.votingDurationSeconds,
+            turnDurationSeconds: result.room.settings.turnDurationSeconds,
+            settings: result.room.settings,
+            round: result.room.currentRound
+          };
+          nsp.to(`room:${normalizedCode}`).emit('voting_phase_started', votingPayload);
+          nsp.to(`room:${normalizedCode}`).emit('voting_started', votingPayload);
           scheduleVotingTimeout(nsp, normalizedCode, result.room.settings.votingDurationSeconds);
         } else {
+          const turnPayload = {
+            round: result.room.currentRound,
+            activeTurnPlayerId: result.room.activeTurnPlayerId,
+            activeTurnIndex: result.room.activeTurnIndex,
+            turnDeadline: result.room.turnDeadline,
+            duration: result.room.settings.turnDurationSeconds,
+            turnDurationSeconds: result.room.settings.turnDurationSeconds,
+            votingDurationSeconds: result.room.settings.votingDurationSeconds,
+            settings: result.room.settings
+          };
+          nsp.to(`room:${normalizedCode}`).emit('turn_started', turnPayload);
           scheduleTurnTimeout(nsp, normalizedCode);
         }
       } catch (err) {
@@ -502,6 +648,7 @@ function setupNamespace(nsp) {
         const result = await gameEngine.submitVote(normalizedCode, voterId, targetPlayerId);
 
         if (result.finishedVoting) {
+          clearRoomPhaseTimers(normalizedCode);
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
           if (result.gameOver) {
             nsp.to(`room:${normalizedCode}`).emit('game_finished', result.winnerResult);
@@ -521,6 +668,7 @@ function setupNamespace(nsp) {
     socket.on('return_to_lobby', async ({ roomCode, playerId }) => {
       try {
         const normalizedCode = (roomCode || '').toUpperCase();
+        clearRoomPhaseTimers(normalizedCode);
         const room = await gameEngine.returnToLobby(normalizedCode, playerId);
 
         nsp.to(`room:${normalizedCode}`).emit('room_returned_to_lobby', { roomCode: normalizedCode });
@@ -742,58 +890,93 @@ function setupNamespace(nsp) {
  * Schedule Authoritative Turn Timeout
  */
 function scheduleTurnTimeout(nsp, roomCode) {
+  if (!roomCode) return;
+  const normalizedCode = roomCode.toUpperCase();
+
+  // Cancel any existing turn timeout for this room to avoid duplicate executions
+  if (activeTurnTimers.has(normalizedCode)) {
+    clearTimeout(activeTurnTimers.get(normalizedCode));
+    activeTurnTimers.delete(normalizedCode);
+  }
+
   (async () => {
     try {
-      const room = await roomRepository.getRoom(roomCode);
+      const room = await roomRepository.getRoom(normalizedCode);
       if (!room || room.status !== 'CLUE_ROUND' || !room.turnDeadline) return;
 
       const activePlayerId = room.activeTurnPlayerId;
       const turnIndex = room.activeTurnIndex;
+      const currentRound = room.currentRound;
       const remainingMs = Math.max(100, (room.turnDeadline - Date.now()) + 50);
 
-      setTimeout(async () => {
+      const timerId = setTimeout(async () => {
+        activeTurnTimers.delete(normalizedCode);
         try {
-          const freshRoom = await roomRepository.getRoom(roomCode);
+          const freshRoom = await roomRepository.getRoom(normalizedCode);
           if (!freshRoom || freshRoom.status !== 'CLUE_ROUND') return;
 
-          // Guard against race condition: check if turn already rotated or completed
-          if (freshRoom.activeTurnPlayerId !== activePlayerId || freshRoom.activeTurnIndex !== turnIndex) {
+          // Guard against race condition: check if round or turn already rotated or completed
+          if (
+            freshRoom.currentRound !== currentRound ||
+            freshRoom.activeTurnPlayerId !== activePlayerId ||
+            freshRoom.activeTurnIndex !== turnIndex
+          ) {
             return;
           }
 
           // If clock jitter caused early wakeup, wait remaining time
           if (freshRoom.turnDeadline && Date.now() < freshRoom.turnDeadline - 200) {
-            scheduleTurnTimeout(nsp, roomCode);
+            scheduleTurnTimeout(nsp, normalizedCode);
             return;
           }
 
-          const result = await gameEngine.handleTurnTimeout(roomCode, activePlayerId, turnIndex);
+          const result = await gameEngine.handleTurnTimeout(normalizedCode, activePlayerId, turnIndex);
           if (result) {
             const skippedPlayer = result.skippedPlayer || freshRoom.players.find(p => p.id === activePlayerId);
             const name = skippedPlayer ? skippedPlayer.username : 'Player';
 
-            nsp.to(`room:${roomCode}`).emit('turn_skipped', {
+            nsp.to(`room:${normalizedCode}`).emit('turn_skipped', {
               playerId: activePlayerId,
               username: name,
               message: `${name} skipped the turn — no clue submitted.`
             });
 
-            await broadcastPersonalizedRoomState(nsp, roomCode);
+            await broadcastPersonalizedRoomState(nsp, normalizedCode);
 
             if (result.phaseChanged && result.room.status === 'VOTING') {
-              nsp.to(`room:${roomCode}`).emit('voting_phase_started', {
+              clearRoomPhaseTimers(normalizedCode);
+              const votingPayload = {
                 votingDeadline: result.room.votingDeadline,
-                duration: result.room.settings.votingDurationSeconds
-              });
-              scheduleVotingTimeout(nsp, roomCode, result.room.settings.votingDurationSeconds);
+                duration: result.room.settings.votingDurationSeconds,
+                votingDurationSeconds: result.room.settings.votingDurationSeconds,
+                turnDurationSeconds: result.room.settings.turnDurationSeconds,
+                settings: result.room.settings,
+                round: result.room.currentRound
+              };
+              nsp.to(`room:${normalizedCode}`).emit('voting_phase_started', votingPayload);
+              nsp.to(`room:${normalizedCode}`).emit('voting_started', votingPayload);
+              scheduleVotingTimeout(nsp, normalizedCode, result.room.settings.votingDurationSeconds);
             } else if (!result.phaseChanged) {
-              scheduleTurnTimeout(nsp, roomCode);
+              const turnPayload = {
+                round: result.room.currentRound,
+                activeTurnPlayerId: result.room.activeTurnPlayerId,
+                activeTurnIndex: result.room.activeTurnIndex,
+                turnDeadline: result.room.turnDeadline,
+                duration: result.room.settings.turnDurationSeconds,
+                turnDurationSeconds: result.room.settings.turnDurationSeconds,
+                votingDurationSeconds: result.room.settings.votingDurationSeconds,
+                settings: result.room.settings
+              };
+              nsp.to(`room:${normalizedCode}`).emit('turn_started', turnPayload);
+              scheduleTurnTimeout(nsp, normalizedCode);
             }
           }
         } catch (err) {
-          console.error(`Error in turn timeout for ${roomCode}:`, err);
+          console.error(`Error in turn timeout for ${normalizedCode}:`, err);
         }
       }, remainingMs);
+
+      activeTurnTimers.set(normalizedCode, timerId);
     } catch (e) {
       console.error('Error scheduling turn timeout:', e);
     }
@@ -804,33 +987,84 @@ function scheduleTurnTimeout(nsp, roomCode) {
  * Schedule Authoritative Voting Timeout
  */
 function scheduleVotingTimeout(nsp, roomCode, durationSeconds = 45) {
-  setTimeout(async () => {
-    const room = await roomRepository.getRoom(roomCode);
-    if (room && room.status === 'VOTING') {
-      const tallyResult = await gameEngine.tallyVotesAndProcessElimination(roomCode);
-      await broadcastPersonalizedRoomState(nsp, roomCode);
-      if (tallyResult.gameOver) {
-        nsp.to(`room:${roomCode}`).emit('game_finished', tallyResult.winnerResult);
-      } else {
-        nsp.to(`room:${roomCode}`).emit('round_results', tallyResult.room.eliminationResult);
-        scheduleNextRound(nsp, roomCode);
-      }
+  if (!roomCode) return;
+  const normalizedCode = roomCode.toUpperCase();
+
+  // Cancel any existing voting timeout for this room to prevent duplicate tallying
+  if (activeVotingTimers.has(normalizedCode)) {
+    clearTimeout(activeVotingTimers.get(normalizedCode));
+    activeVotingTimers.delete(normalizedCode);
+  }
+
+  (async () => {
+    try {
+      const room = await roomRepository.getRoom(normalizedCode);
+      if (!room || room.status !== 'VOTING') return;
+
+      const votingRound = room.currentRound;
+      const configuredDuration = room.settings?.votingDurationSeconds || durationSeconds || 45;
+      const remainingMs = room.votingDeadline
+        ? Math.max(100, (room.votingDeadline - Date.now()) + 50)
+        : (configuredDuration + 0.5) * 1000;
+
+      const timerId = setTimeout(async () => {
+        activeVotingTimers.delete(normalizedCode);
+        const freshRoom = await roomRepository.getRoom(normalizedCode);
+        if (freshRoom && freshRoom.status === 'VOTING' && freshRoom.currentRound === votingRound) {
+          const tallyResult = await gameEngine.tallyVotesAndProcessElimination(normalizedCode);
+          await broadcastPersonalizedRoomState(nsp, normalizedCode);
+          if (tallyResult.gameOver) {
+            clearRoomPhaseTimers(normalizedCode);
+            nsp.to(`room:${normalizedCode}`).emit('game_finished', tallyResult.winnerResult);
+          } else {
+            nsp.to(`room:${normalizedCode}`).emit('round_results', tallyResult.room.eliminationResult);
+            scheduleNextRound(nsp, normalizedCode);
+          }
+        }
+      }, remainingMs);
+
+      activeVotingTimers.set(normalizedCode, timerId);
+    } catch (e) {
+      console.error('Error scheduling voting timeout:', e);
     }
-  }, (durationSeconds + 1) * 1000);
+  })();
 }
 
 function scheduleNextRound(nsp, roomCode) {
-  setTimeout(async () => {
-    const room = await roomRepository.getRoom(roomCode);
+  if (!roomCode) return;
+  const normalizedCode = roomCode.toUpperCase();
+
+  if (activeNextRoundTimers.has(normalizedCode)) {
+    clearTimeout(activeNextRoundTimers.get(normalizedCode));
+    activeNextRoundTimers.delete(normalizedCode);
+  }
+
+  const timerId = setTimeout(async () => {
+    activeNextRoundTimers.delete(normalizedCode);
+    const room = await roomRepository.getRoom(normalizedCode);
     if (room && room.status === 'RESULTS') {
-      await gameEngine.startClueRound(roomCode);
-      await broadcastPersonalizedRoomState(nsp, roomCode);
-      nsp.to(`room:${roomCode}`).emit('clue_round_started', {
-        round: room.currentRound
-      });
-      scheduleTurnTimeout(nsp, roomCode);
+      const updatedRoom = await gameEngine.startClueRound(normalizedCode);
+      if (updatedRoom) {
+        await broadcastPersonalizedRoomState(nsp, normalizedCode);
+        const roundPayload = {
+          round: updatedRoom.currentRound,
+          turnDeadline: updatedRoom.turnDeadline,
+          duration: updatedRoom.settings.turnDurationSeconds,
+          turnDurationSeconds: updatedRoom.settings.turnDurationSeconds,
+          votingDurationSeconds: updatedRoom.settings.votingDurationSeconds,
+          settings: updatedRoom.settings,
+          activeTurnPlayerId: updatedRoom.activeTurnPlayerId,
+          activeTurnIndex: updatedRoom.activeTurnIndex
+        };
+        nsp.to(`room:${normalizedCode}`).emit('round_started', roundPayload);
+        nsp.to(`room:${normalizedCode}`).emit('clue_round_started', roundPayload);
+        nsp.to(`room:${normalizedCode}`).emit('turn_started', roundPayload);
+        scheduleTurnTimeout(nsp, normalizedCode);
+      }
     }
   }, 7000);
+
+  activeNextRoundTimers.set(normalizedCode, timerId);
 }
 
 async function broadcastPersonalizedRoomState(nsp, roomCode) {

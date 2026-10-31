@@ -262,21 +262,99 @@ export function SocketProvider({ children }) {
       showToast(`⏱️ ${data.message || `${data.username} skipped the turn`}`);
     });
 
-    // Game lifecycle alerts
-    socket.on('game_started', () => {
+    // Game lifecycle alerts & state synchronization
+    socket.on('game_started', (data) => {
       sounds.playReveal();
       showToast('🎭 Game Started! Reveal your secret roles!');
+      if (data) {
+        setRoomState(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: data.status || 'ROLE_REVEAL',
+            settings: {
+              ...prev.settings,
+              ...(data.settings || {}),
+              ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {}),
+              ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {})
+            }
+          };
+        });
+      }
     });
 
-    socket.on('clue_round_started', (data) => {
+    const handleRoundStarted = (data) => {
       sounds.playTurnAlert();
-      showToast(`📝 Round ${data.round}: Clue submission has begun!`);
+      showToast(`📝 Round ${data?.round || 1}: Clue submission has begun!`);
+      if (data) {
+        setRoomState(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: 'CLUE_ROUND',
+            currentRound: data.round || prev.currentRound,
+            activeTurnPlayerId: data.activeTurnPlayerId || prev.activeTurnPlayerId,
+            activeTurnIndex: data.activeTurnIndex !== undefined ? data.activeTurnIndex : prev.activeTurnIndex,
+            turnDeadline: data.turnDeadline || prev.turnDeadline,
+            settings: {
+              ...prev.settings,
+              ...(data.settings || {}),
+              ...(data.duration ? { turnDurationSeconds: data.duration } : {}),
+              ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {}),
+              ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {})
+            }
+          };
+        });
+      }
+    };
+    socket.on('clue_round_started', handleRoundStarted);
+    socket.on('round_started', handleRoundStarted);
+
+    socket.on('turn_started', (data) => {
+      if (data) {
+        setRoomState(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: 'CLUE_ROUND',
+            activeTurnPlayerId: data.activeTurnPlayerId || prev.activeTurnPlayerId,
+            activeTurnIndex: data.activeTurnIndex !== undefined ? data.activeTurnIndex : prev.activeTurnIndex,
+            turnDeadline: data.turnDeadline || prev.turnDeadline,
+            currentRound: data.round || prev.currentRound,
+            settings: {
+              ...prev.settings,
+              ...(data.settings || {}),
+              ...(data.duration ? { turnDurationSeconds: data.duration } : {}),
+              ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {})
+            }
+          };
+        });
+      }
     });
 
-    socket.on('voting_phase_started', () => {
+    const handleVotingStarted = (data) => {
       sounds.playTurnAlert();
       showToast('🗳️ Voting Phase started! Cast your vote for the Imposter!');
-    });
+      if (data) {
+        setRoomState(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: 'VOTING',
+            turnDeadline: null,
+            votingDeadline: data.votingDeadline || prev.votingDeadline,
+            settings: {
+              ...prev.settings,
+              ...(data.settings || {}),
+              ...(data.duration ? { votingDurationSeconds: data.duration } : {}),
+              ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {})
+            }
+          };
+        });
+      }
+    };
+    socket.on('voting_phase_started', handleVotingStarted);
+    socket.on('voting_started', handleVotingStarted);
 
     socket.on('game_finished', (result) => {
       sounds.playWin();
