@@ -2,14 +2,13 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import {
-  Shield, Eye, EyeOff, Send, Clock, Vote, Trophy, Skull,
+  Shield, Send, Clock, Vote, Trophy, Skull,
   AlertCircle, Sparkles, Volume2, ArrowRight, RotateCcw, Home as HomeIcon, ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { CountdownTimer } from '../components/CountdownTimer';
-import { VoiceControls } from '../components/VoiceControls';
 import { sounds } from '../utils/sound';
 
 function DisconnectCountdownBadge({ deadline, timeout = 15, isGameOver = false }) {
@@ -69,7 +68,6 @@ export function GameView() {
   const [clueInput, setClueInput] = useState('');
   const [selectedVoteTarget, setSelectedVoteTarget] = useState(null);
   const [hasVoted, setHasVoted] = useState(false);
-  const [revealedSecret, setRevealedSecret] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const normalizedCode = (roomCode || '').toUpperCase();
@@ -169,11 +167,11 @@ export function GameView() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
       {/* Top Game Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 mb-6">
-        <div className="flex items-center justify-between sm:justify-start gap-3 flex-wrap">
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           <button
             onClick={handleLeaveGame}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl bg-dark-900 border border-slate-800 transition-colors"
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-3 py-2 rounded-xl bg-dark-900 border border-slate-800 hover:border-slate-700 transition-colors"
             title="Leave Match"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -182,7 +180,7 @@ export function GameView() {
 
           <div className="flex flex-col">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Category</span>
-            <span className="font-display font-bold text-sm sm:text-base text-white truncate max-w-[130px] sm:max-w-xs">
+            <span className="font-display font-bold text-sm sm:text-base text-white truncate max-w-[140px] sm:max-w-xs">
               {roomState.settings?.categoryName || 'Fruits'}
             </span>
           </div>
@@ -193,7 +191,7 @@ export function GameView() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
+        <div className="flex items-center justify-end gap-3">
           {/* Phase Countdown Timer */}
           {roomState.status === 'CLUE_ROUND' && roomState.turnDeadline && (
             <CountdownTimer
@@ -210,73 +208,57 @@ export function GameView() {
               label="Voting Deadline"
             />
           )}
-
-          {/* Voice controls */}
-          <VoiceControls />
         </div>
       </div>
 
       {/* Secret Card Section (Private to the user) */}
       <div className="mb-6">
         <div
-          className={`glass-card p-5 border relative overflow-hidden transition-all ${
+          className={`glass-card p-5 sm:p-6 border relative overflow-hidden transition-all ${
             isImposter
               ? 'border-rose-500/50 bg-rose-950/20 imposter-glow'
               : 'border-cyan-500/50 bg-cyan-950/20 civilian-glow'
           }`}
         >
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3.5">
-              <div
-                className={`p-3 rounded-2xl ${
-                  isImposter ? 'bg-rose-500/20 text-rose-400' : 'bg-cyan-500/20 text-cyan-400'
-                }`}
-              >
-                <Shield className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Your Secret Role</span>
-                  <span className={isImposter ? 'badge-imposter' : 'badge-civilian'}>
-                    {me.role || 'SPECTATOR'}
+          <div className="flex items-center gap-4">
+            <div
+              className={`p-3.5 rounded-2xl flex-shrink-0 ${
+                isImposter ? 'bg-rose-500/20 text-rose-400' : 'bg-cyan-500/20 text-cyan-400'
+              }`}
+            >
+              <Shield className="w-7 h-7" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Your Secret Role</span>
+                <span className={isImposter ? 'badge-imposter' : 'badge-civilian'}>
+                  {me.role || 'SPECTATOR'}
+                </span>
+                {!isAlive && (
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                    Spectating
                   </span>
-                  {!isAlive && (
-                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                      Spectating
-                    </span>
-                  )}
-                </div>
+                )}
+              </div>
 
-                <div className="flex items-center gap-2 mt-1">
-                  {isImposter ? (
-                    <div>
-                      <span className="text-xs text-rose-300 font-semibold block">Your Persistent Hint:</span>
-                      <span className="text-base sm:text-lg font-black text-rose-200">{roomState.myHint}</span>
-                    </div>
-                  ) : isCivilian ? (
-                    <div>
-                      <span className="text-xs text-cyan-300 font-semibold block">Your Secret Word:</span>
-                      <span className="text-xl sm:text-2xl font-black text-cyan-200 tracking-wide font-display">
-                        {revealedSecret ? roomState.myWord : '••••••••'}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-sm font-semibold text-slate-400">Spectator Mode (You were eliminated)</span>
-                  )}
-                </div>
+              <div>
+                {isImposter ? (
+                  <div>
+                    <span className="text-xs text-rose-300 font-semibold block mb-0.5">Your Persistent Hint:</span>
+                    <span className="text-lg sm:text-xl font-black text-rose-200">{roomState.myHint}</span>
+                  </div>
+                ) : isCivilian ? (
+                  <div>
+                    <span className="text-xs text-cyan-300 font-semibold block mb-0.5">Your Secret Word:</span>
+                    <span className="text-2xl sm:text-3xl font-black text-cyan-200 tracking-wide font-display break-words">
+                      {roomState.myWord || '—'}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-sm font-semibold text-slate-400">Spectator Mode (You were eliminated)</span>
+                )}
               </div>
             </div>
-
-            {/* Toggle Visibility button for Civilian secret word */}
-            {isCivilian && (
-              <button
-                onClick={() => setRevealedSecret(prev => !prev)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-900 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-white"
-              >
-                {revealedSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                <span>{revealedSecret ? 'Hide Word' : 'Reveal Word'}</span>
-              </button>
-            )}
           </div>
         </div>
       </div>

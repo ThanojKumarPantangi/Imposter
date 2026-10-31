@@ -44,9 +44,6 @@ export function Navbar() {
                 <span className="font-display font-extrabold text-xl tracking-tight bg-gradient-to-r from-rose-400 via-pink-300 to-purple-400 bg-clip-text text-transparent">
                   IMPOSTER
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                  Party
-                </span>
               </div>
             </div>
           </Link>

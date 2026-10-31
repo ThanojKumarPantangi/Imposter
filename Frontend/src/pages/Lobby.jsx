@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Copy, Check, Play, UserX, Settings, Layers, Clock, ShieldAlert,
-  Users, Volume2, ArrowLeft, AlertCircle, Share2
+  Users, ArrowLeft, AlertCircle, Share2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -10,7 +10,6 @@ import { PlayerAvatar } from '../components/PlayerAvatar';
 import { CategorySelector } from '../components/CategorySelector';
 import { KickConfirmModal } from '../components/KickConfirmModal';
 import { DisconnectedBanner } from '../components/DisconnectedBanner';
-import { VoiceControls } from '../components/VoiceControls';
 import { RejoinApprovalModal } from '../components/RejoinApprovalModal';
 import { sounds } from '../utils/sound';
 
@@ -123,25 +122,18 @@ export function Lobby() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 mb-6">
-        <div className="flex items-center justify-between sm:justify-start gap-3">
-          <button
-            onClick={handleLeaveRoom}
-            className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white px-3 py-2.5 rounded-xl bg-dark-900 border border-slate-800 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Leave Room</span>
-          </button>
-
-          {/* In-Lobby Voice Controls (Mobile left-aligned or inline) */}
-          <div className="sm:hidden">
-            <VoiceControls />
-          </div>
-        </div>
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <button
+          onClick={handleLeaveRoom}
+          className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white px-3.5 py-2.5 rounded-xl bg-dark-900 border border-slate-800 hover:border-slate-700 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Leave Room</span>
+        </button>
 
         {/* Room Code Badge */}
-        <div className="flex items-center justify-between sm:justify-center gap-3 bg-dark-900 border border-slate-800 px-4 sm:px-5 py-2.5 rounded-2xl shadow-xl">
-          <div className="text-left sm:text-right">
+        <div className="flex items-center gap-3 bg-dark-900 border border-slate-800 px-4 sm:px-5 py-2 rounded-2xl shadow-xl">
+          <div className="text-right">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Room Code</span>
             <span className="font-display font-black text-xl sm:text-2xl tracking-widest text-cyan-400 font-mono">
               {normalizedCode}
@@ -155,11 +147,6 @@ export function Lobby() {
           >
             {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
           </button>
-        </div>
-
-        {/* In-Lobby Voice Controls (Desktop) */}
-        <div className="hidden sm:block">
-          <VoiceControls />
         </div>
       </div>
 
