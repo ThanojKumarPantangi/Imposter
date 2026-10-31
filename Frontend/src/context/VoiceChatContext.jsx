@@ -4,12 +4,35 @@ import { useAuth } from './AuthContext';
 
 const VoiceChatContext = createContext(null);
 
-const ICE_SERVERS = {
-  iceServers: [
+const getIceServers = () => {
+  const iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' }
-  ]
+  ];
+
+  const turnUrl = import.meta.env.VITE_TURN_URL;
+  const turnUsername = import.meta.env.VITE_TURN_USERNAME;
+  const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
+
+  if (turnUrl) {
+    const urls = turnUrl.includes(',')
+      ? turnUrl.split(',').map(u => u.trim())
+      : [turnUrl];
+
+    const turnConfig = { urls };
+    if (turnUsername) {
+      turnConfig.username = turnUsername;
+    }
+    if (turnCredential) {
+      turnConfig.credential = turnCredential;
+    }
+    iceServers.push(turnConfig);
+  }
+
+  return { iceServers };
 };
+
+const ICE_SERVERS = getIceServers();
 
 export function VoiceChatProvider({ children }) {
   const { socket, roomState } = useSocket();
