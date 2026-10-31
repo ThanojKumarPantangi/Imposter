@@ -359,6 +359,28 @@ describe('🎮 Authoritative Imposter Multiplayer Test Suite', () => {
       assert.equal(resB.winnerResult.winnerRole, 'IMPOSTER');
       assert.equal(resB.winnerResult.winCondition, 'IMPOSTERS_PARITY');
     });
+
+    test('43. Permanently departed player is strictly rejected from rejoining active game', async () => {
+      const roomC = {
+        code: 'LEAVE_C',
+        status: 'CLUE_ROUND',
+        players: [
+          { id: 'c1', username: 'C1', role: 'CIVILIAN', isAlive: true, permanentlyDeparted: false },
+          { id: 'c2', username: 'C2', role: 'CIVILIAN', isAlive: true, permanentlyDeparted: false },
+          { id: 'c3', username: 'C3', role: 'CIVILIAN', isAlive: true, permanentlyDeparted: true },
+          { id: 'imp', username: 'Imp', role: 'IMPOSTER', isAlive: true, permanentlyDeparted: false }
+        ]
+      };
+      await roomRepository.saveRoom('LEAVE_C', roomC);
+
+      // Attempting to rejoin as departed player must be rejected
+      await assert.rejects(
+        async () => {
+          await gameEngine.joinRoom('LEAVE_C', { id: 'c3', username: 'C3' });
+        },
+        /permanently departed/
+      );
+    });
   });
 
   describe('5. Multi-Category Word Selection & Zero-Member Cleanup', () => {

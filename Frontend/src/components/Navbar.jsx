@@ -17,9 +17,13 @@ export function Navbar() {
   const isLobbyOrGame = location.pathname.startsWith('/lobby') || location.pathname.startsWith('/game');
 
   const handleNavClick = async (e, to) => {
-    if (isLobbyOrGame && roomState?.code && player?.id) {
+    if (isLobbyOrGame) {
       e.preventDefault();
-      await leaveRoom(roomState.code, player.id);
+      const pathCode = location.pathname.split('/')[2];
+      const code = roomState?.code || pathCode;
+      if (player?.id) {
+        await leaveRoom(code, player.id);
+      }
       navigate(to);
     }
   };

@@ -77,7 +77,36 @@ export const leaveRoom = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Room code and Player ID required' });
     }
 
-    const result = await gameEngine.leaveRoom(roomCode, playerId);
+    const normalizedCode = roomCode.toUpperCase();
+    const result = await gameEngine.leaveRoom(normalizedCode, playerId);
+
+    const io = req.app.get('io');
+    if (io) {
+      const nsp = io.of('/game');
+      if (result && result.roomDeleted) {
+        nsp.to(`room:${normalizedCode}`).emit('room_closed', {
+          roomCode: normalizedCode,
+          reason: 'All players departed. Room closed.'
+        });
+      } else if (result && result.room) {
+        nsp.to(`room:${normalizedCode}`).emit('player_left', {
+          playerId,
+          username: result.departedPlayer ? result.departedPlayer.username : 'Player'
+        });
+
+        if (result.gameOver) {
+          nsp.to(`room:${normalizedCode}`).emit('game_finished', result.winnerResult);
+        }
+
+        const socketsInRoom = await nsp.in(`room:${normalizedCode}`).fetchSockets();
+        for (const s of socketsInRoom) {
+          const sPlayerId = await roomRepository.getPlayerBySocket(s.id);
+          const sanitized = gameEngine.sanitizeRoomForPlayer(result.room, sPlayerId);
+          s.emit('room_state', sanitized);
+        }
+      }
+    }
+
     return res.json({ success: true, ...result });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });

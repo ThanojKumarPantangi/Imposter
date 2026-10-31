@@ -45,6 +45,7 @@ if (isRedisConfigured() && !isUsingUpstash() && process.env.REDIS_URL && !proces
 
 // Register real-time game handlers
 registerGameSocket(io);
+app.set('io', io);
 
 // Start server
 async function startServer() {

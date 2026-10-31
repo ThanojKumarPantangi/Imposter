@@ -35,7 +35,7 @@ const getIceServers = () => {
 const ICE_SERVERS = getIceServers();
 
 export function VoiceChatProvider({ children }) {
-  const { socket, roomState } = useSocket();
+  const { socket, roomState, roomLifecycleState } = useSocket();
   const { player } = useAuth();
 
   // Specification: Mic default OFF, Speaker default ON
@@ -50,7 +50,13 @@ export function VoiceChatProvider({ children }) {
 
   // Join Voice room when player enters room
   useEffect(() => {
-    if (!socket || !roomState?.code || !player?.id) {
+    if (
+      !socket ||
+      !roomState?.code ||
+      !player?.id ||
+      roomLifecycleState === 'INTENTIONAL_EXIT' ||
+      roomLifecycleState === 'NO_ROOM'
+    ) {
       cleanupAllPeers();
       return;
     }
@@ -122,7 +128,7 @@ export function VoiceChatProvider({ children }) {
       socket.off('voice_peer_left', handlePeerLeft);
       cleanupAllPeers();
     };
-  }, [socket, roomState?.code, player?.id]);
+  }, [socket, roomState?.code, player?.id, roomLifecycleState]);
 
   function createPeerConnection(peerSocketId, peerPlayerId) {
     if (peersRef.current[peerSocketId]) {

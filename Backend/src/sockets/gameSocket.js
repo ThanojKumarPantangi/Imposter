@@ -157,6 +157,12 @@ function setupNamespace(nsp) {
 
         if (!normalizedCode || !playerId) return;
 
+        // Immediately notify voice peers that this participant departed
+        nsp.to(`room:${normalizedCode}`).emit('voice_peer_left', {
+          peerSocketId: socket.id,
+          playerId
+        });
+
         const result = await gameEngine.leaveRoom(normalizedCode, playerId);
         if (result && result.roomDeleted) {
           nsp.to(`room:${normalizedCode}`).emit('room_closed', {

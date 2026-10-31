@@ -13,6 +13,9 @@ export function Home() {
   const { player } = useAuth();
   const {
     joinRoom,
+    leaveRoom,
+    roomState,
+    roomLifecycleState,
     rejoinState,
     requestRejoin,
     clearRejoinState
@@ -22,6 +25,14 @@ export function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showRules, setShowRules] = useState(false);
+
+  // If arriving Home (e.g. via browser back button) with a lingering active room session, clean it up!
+  useEffect(() => {
+    const lingeringCode = roomState?.code || sessionStorage.getItem('active_room_code');
+    if (lingeringCode && player?.id && roomLifecycleState !== 'INTENTIONAL_EXIT') {
+      leaveRoom(lingeringCode, player.id);
+    }
+  }, []);
 
   // Watch for approval to auto-enter lobby
   useEffect(() => {

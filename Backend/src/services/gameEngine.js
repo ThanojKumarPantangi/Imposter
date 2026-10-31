@@ -119,8 +119,10 @@ class GameEngine {
       if (!existingPlayer) {
         throw new Error('Game is already in progress and you are not a participant in this room');
       }
+      if (existingPlayer.permanentlyDeparted) {
+        throw new Error('You have permanently departed from this game');
+      }
       existingPlayer.isConnected = true;
-      existingPlayer.permanentlyDeparted = false;
       await roomRepository.saveRoom(normalizedCode, room);
       await roomRepository.setPlayerRoomMapping(player.id, normalizedCode);
       return room;

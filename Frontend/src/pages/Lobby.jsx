@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Copy, Check, Play, UserX, Settings, Layers, Clock, ShieldAlert,
-  Users, ArrowLeft, AlertCircle, Share2
+  Users, LogOut, AlertCircle, Share2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -30,13 +30,15 @@ export function Lobby() {
     kickPlayer,
     startGame,
     joinRoom,
-    leaveRoom
+    leaveRoom,
+    roomLifecycleState
   } = useSocket();
 
   const [copied, setCopied] = useState(false);
   const [showCategorySelector, setShowCategorySelector] = useState(false);
   const [playerToKick, setPlayerToKick] = useState(null);
   const [startError, setStartError] = useState('');
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const normalizedCode = (roomCode || '').toUpperCase();
 
@@ -47,13 +49,14 @@ export function Lobby() {
     }
   }, [kickedNotice, navigate]);
 
-  // If roomState is not loaded or reconnected, auto-join socket room (unless kicked)
+  // If roomState is not loaded or reconnected, auto-join socket room (unless kicked, leaving, or intentionally exited)
   useEffect(() => {
     if (kickedNotice) return;
+    if (isLeaving || roomLifecycleState === 'INTENTIONAL_EXIT' || roomLifecycleState === 'NO_ROOM') return;
     if (player && (!roomState || roomState.code !== normalizedCode)) {
       joinRoom(normalizedCode, player);
     }
-  }, [normalizedCode, player, roomState, kickedNotice, joinRoom]);
+  }, [normalizedCode, player, roomState, kickedNotice, joinRoom, isLeaving, roomLifecycleState]);
 
   // Navigate to Game view when room status changes away from WAITING
   useEffect(() => {
@@ -64,12 +67,17 @@ export function Lobby() {
 
   // Leave room cleanly when clicking Leave or navigating to Home
   const handleLeaveRoom = useCallback(async () => {
+    if (isLeaving) return;
+    setIsLeaving(true);
     sounds.playClick();
-    if (player?.id) {
-      await leaveRoom(normalizedCode, player.id);
+    try {
+      if (player?.id) {
+        await leaveRoom(normalizedCode, player.id);
+      }
+    } finally {
+      navigate('/', { replace: true });
     }
-    navigate('/');
-  }, [leaveRoom, normalizedCode, player?.id, navigate]);
+  }, [leaveRoom, normalizedCode, player?.id, navigate, isLeaving]);
 
   const isHost = roomState?.hostId === player?.id;
   const players = roomState?.players || [];
@@ -122,19 +130,24 @@ export function Lobby() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
       {/* Top Header */}
+
       <div className="flex items-center justify-between gap-4 mb-6">
         <button
           onClick={handleLeaveRoom}
-          className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white px-3.5 py-2.5 rounded-xl bg-dark-900 border border-slate-800 hover:border-slate-700 transition-colors"
+          disabled={isLeaving}
+          className="flex items-center justify-center text-slate-400 hover:text-rose-400 p-2.5 rounded-xl bg-dark-900 border border-slate-800 hover:border-rose-500/30 transition-colors disabled:opacity-50"
+          title={isLeaving ? 'Leaving...' : 'Leave Room'}
+          aria-label="Leave Room"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Leave Room</span>
+          <LogOut className="w-4 h-4" />
         </button>
 
         {/* Room Code Badge */}
         <div className="flex items-center gap-3 bg-dark-900 border border-slate-800 px-4 sm:px-5 py-2 rounded-2xl shadow-xl">
-          <div className="text-right">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Room Code</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Room Code
+            </span>
             <span className="font-display font-black text-xl sm:text-2xl tracking-widest text-cyan-400 font-mono">
               {normalizedCode}
             </span>
@@ -144,8 +157,13 @@ export function Lobby() {
             onClick={copyRoomLink}
             className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors active:scale-95"
             title="Copy Invite Link"
+            aria-label="Copy Invite Link"
           >
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+            {copied ? (
+              <Check className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
           </button>
         </div>
       </div>
@@ -272,9 +290,6 @@ export function Lobby() {
                     Word Categories ({sharedCategorySlugs.length})
                   </span>
                 </div>
-                <span className="text-[10px] text-cyan-400 font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
-                  Shared Room
-                </span>
               </div>
               <p className="text-xs text-slate-300 font-medium mb-3 truncate">
                 {sharedCategoryNames.join(', ')}
@@ -285,11 +300,8 @@ export function Lobby() {
                 className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-950/40"
               >
                 <Layers className="w-4 h-4" />
-                <span>Select / Change Categories</span>
+                <span>Change Categories</span>
               </button>
-              <span className="text-[10px] text-slate-500 mt-2 block leading-relaxed">
-                The match word pool is drawn from these categories. Any player in the lobby can select or change them.
-              </span>
             </div>
 
             {/* Section 2: Global Game Settings */}

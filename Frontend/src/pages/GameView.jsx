@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import {
-  Shield, Send, Clock, Vote, Trophy, Skull,
+  Shield, Send, Clock, Vote, Trophy, Skull,LogOut ,
   AlertCircle, Sparkles, Volume2, ArrowRight, RotateCcw, Home as HomeIcon, ArrowLeft, Eye
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -62,13 +62,15 @@ export function GameView() {
     submitVote,
     joinRoom,
     leaveRoom,
-    returnToLobby
+    returnToLobby,
+    roomLifecycleState
   } = useSocket();
 
   const [clueInput, setClueInput] = useState('');
   const [selectedVoteTarget, setSelectedVoteTarget] = useState(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const normalizedCode = (roomCode || '').toUpperCase();
 
@@ -79,13 +81,14 @@ export function GameView() {
     }
   }, [kickedNotice, navigate]);
 
-  // Reconnect / sync if needed
+  // Reconnect / sync if needed (unless kicked, leaving, or intentionally exited)
   useEffect(() => {
     if (kickedNotice) return;
+    if (isLeaving || roomLifecycleState === 'INTENTIONAL_EXIT' || roomLifecycleState === 'NO_ROOM') return;
     if (player && (!roomState || roomState.code !== normalizedCode)) {
       joinRoom(normalizedCode, player);
     }
-  }, [normalizedCode, player, roomState, kickedNotice, joinRoom]);
+  }, [normalizedCode, player, roomState, kickedNotice, joinRoom, isLeaving, roomLifecycleState]);
 
   // If room resets to WAITING (play again/return to lobby), automatically navigate to lobby!
   useEffect(() => {
@@ -114,12 +117,17 @@ export function GameView() {
   }, [roomState?.status, roomState?.currentRound]);
 
   const handleLeaveGame = useCallback(async () => {
+    if (isLeaving) return;
+    setIsLeaving(true);
     sounds.playClick();
-    if (player?.id) {
-      await leaveRoom(normalizedCode, player.id);
+    try {
+      if (player?.id) {
+        await leaveRoom(normalizedCode, player.id);
+      }
+    } finally {
+      navigate('/', { replace: true });
     }
-    navigate('/');
-  }, [leaveRoom, normalizedCode, player?.id, navigate]);
+  }, [leaveRoom, normalizedCode, player?.id, navigate, isLeaving]);
 
   const handleReturnToLobby = () => {
     sounds.playClick();
@@ -173,23 +181,23 @@ export function GameView() {
         <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           <button
             onClick={handleLeaveGame}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-3 py-2 rounded-xl bg-dark-900 border border-slate-800 hover:border-slate-700 transition-colors"
+            disabled={isLeaving}
+            className="flex items-center justify-center text-slate-400 hover:text-white p-2.5 rounded-xl bg-dark-900 border border-slate-800 hover:border-slate-700 transition-colors disabled:opacity-50"
             title="Leave Match"
+            aria-label="Leave Match"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Leave</span>
+            <LogOut  className="w-4 h-4" />
           </button>
 
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Category</span>
-            <span className="font-display font-bold text-sm sm:text-base text-white truncate max-w-[140px] sm:max-w-xs">
-              {roomState.settings?.categoryName || 'Fruits'}
-            </span>
-          </div>
           <div className="h-6 w-px bg-slate-800 hidden sm:block" />
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Round</span>
-            <span className="font-display font-bold text-sm sm:text-base text-cyan-400">{roomState.currentRound || 1}</span>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Round
+            </span>
+            <span className="font-display font-bold text-sm sm:text-base text-cyan-400">
+              {roomState.currentRound || 1}
+            </span>
           </div>
         </div>
 
@@ -241,8 +249,8 @@ export function GameView() {
       <div className="mb-6">
         <div
           className={`glass-card p-5 sm:p-6 border relative overflow-hidden transition-all ${isImposter
-              ? 'border-rose-500/50 bg-rose-950/20 imposter-glow'
-              : 'border-cyan-500/50 bg-cyan-950/20 civilian-glow'
+            ? 'border-rose-500/50 bg-rose-950/20 imposter-glow'
+            : 'border-cyan-500/50 bg-cyan-950/20 civilian-glow'
             }`}
         >
           <div className="flex items-center gap-4">
@@ -330,78 +338,58 @@ export function GameView() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Clue Input & Active Player Banner */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Active Player Status Card / Spectator Card */}
-            {!isAlive ? (
-              <div className="glass-card p-5 sm:p-6 border border-slate-800 bg-dark-900/60">
-                <div className="flex items-center gap-3.5">
-                  <div className="p-3 rounded-2xl bg-slate-800 text-cyan-400 border border-slate-700/60 flex-shrink-0">
-                    <Eye className="w-5 h-5" />
+
+            <div
+              className={`glass-card p-5 sm:p-6 border ${isMyTurn
+                ? 'border-cyan-500/60 bg-cyan-950/20 ring-1 ring-cyan-500'
+                : 'border-slate-800'
+                }`}
+            >
+              <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl ${isMyTurn ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-800 text-slate-400'}`}>
+                    <Clock className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-display font-bold text-base sm:text-lg text-white flex items-center gap-2">
-                      <span>Spectating Round {roomState.currentRound || 1}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                        Spectator
-                      </span>
+                    <h3 className="font-display font-bold text-base sm:text-lg text-white">
+                      {isMyTurn ? '🌟 It is YOUR turn to submit a clue!' : `${roomState.players.find(p => p.id === roomState.activeTurnPlayerId)?.username || 'active player'}'s turn...`}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      You have been eliminated and cannot submit clues. Watch the remaining players.
+                    <p className="text-xs text-slate-400">
+                      {isImposter
+                        ? 'Give a clue or guess the secret word to win!'
+                        : 'Give a one-word clue without revealing the secret!'}
                     </p>
                   </div>
                 </div>
               </div>
-            ) : (
-              <div
-                className={`glass-card p-5 sm:p-6 border ${isMyTurn
-                    ? 'border-cyan-500/60 bg-cyan-950/20 ring-1 ring-cyan-500'
-                    : 'border-slate-800'
-                  }`}
-              >
-                <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl ${isMyTurn ? 'bg-cyan-500/20 text-cyan-400' : 'bg-slate-800 text-slate-400'}`}>
-                      <Clock className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-display font-bold text-base sm:text-lg text-white">
-                        {isMyTurn ? '🌟 It is YOUR turn to submit a clue!' : `${roomState.players.find(p => p.id === roomState.activeTurnPlayerId)?.username || 'active player'}'s turn...`}
-                      </h3>
-                      <p className="text-xs text-slate-400">
-                        {isImposter
-                          ? 'Give a clue or guess the secret word to win!'
-                          : 'Give a one-word clue without revealing the secret!'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Clue Input Form */}
-                {isMyTurn && isAlive && (
-                  <form onSubmit={handleClueSubmit} className="space-y-3">
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        value={clueInput}
-                        onChange={(e) => setClueInput(e.target.value)}
-                        placeholder={isImposter ? 'Enter clue OR exact secret word guess...' : 'Enter your related clue...'}
-                        autoFocus
-                        maxLength={40}
-                        className="flex-1 bg-dark-950 border border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 px-4 py-3 rounded-xl text-white placeholder-slate-500 text-sm font-semibold outline-none"
-                      />
-                      <button type="submit" className="btn-cyan flex items-center justify-center gap-2 px-6 py-3 sm:py-0 w-full sm:w-auto">
-                        <Send className="w-4 h-4" />
-                        <span>Submit</span>
-                      </button>
+              {/* Clue Input Form */}
+              {isMyTurn && isAlive && (
+                <form onSubmit={handleClueSubmit} className="space-y-3">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={clueInput}
+                      onChange={(e) => setClueInput(e.target.value)}
+                      placeholder={isImposter ? 'Enter clue OR exact secret word guess...' : 'Enter your related clue...'}
+                      autoFocus
+                      maxLength={40}
+                      className="flex-1 bg-dark-950 border border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 px-4 py-3 rounded-xl text-white placeholder-slate-500 text-sm font-semibold outline-none"
+                    />
+                    <button type="submit" className="btn-cyan flex items-center justify-center gap-2 px-6 py-3 sm:py-0 w-full sm:w-auto">
+                      <Send className="w-4 h-4" />
+                      <span>Submit</span>
+                    </button>
+                  </div>
+                  {isImposter && (
+                    <div className="text-[11px] text-rose-400 font-semibold bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                      💡 <strong>Imposter Tip:</strong> Guess the secret word and enter it here to win instantly!
                     </div>
-                    {isImposter && (
-                      <div className="text-[11px] text-rose-400 font-semibold bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
-                        💡 <strong>Imposter Tip:</strong> Guess the secret word and enter it here to win instantly!
-                      </div>
-                    )}
-                  </form>
-                )}
-              </div>
-            )}
+                  )}
+                </form>
+              )}
+            </div>
+
 
             {/* Submitted Clues Table (Section 6 Requirement) */}
             <div className="glass-card p-5 sm:p-6">
@@ -531,12 +519,12 @@ export function GameView() {
                   <div
                     key={p.id}
                     className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${isActive
-                        ? 'bg-cyan-950/40 border-cyan-500 text-white font-bold ring-1 ring-cyan-500'
-                        : isDisconnected
-                          ? 'bg-rose-950/30 border-rose-500/60 text-white ring-1 ring-rose-500/40 shadow-sm shadow-rose-950'
-                          : isEliminated
-                            ? 'bg-dark-950/40 border-slate-900 opacity-40'
-                            : 'bg-dark-800/60 border-slate-800 text-slate-300'
+                      ? 'bg-cyan-950/40 border-cyan-500 text-white font-bold ring-1 ring-cyan-500'
+                      : isDisconnected
+                        ? 'bg-rose-950/30 border-rose-500/60 text-white ring-1 ring-rose-500/40 shadow-sm shadow-rose-950'
+                        : isEliminated
+                          ? 'bg-dark-950/40 border-slate-900 opacity-40'
+                          : 'bg-dark-800/60 border-slate-800 text-slate-300'
                       }`}
                   >
                     <div className="flex items-center gap-2.5">
@@ -601,10 +589,10 @@ export function GameView() {
                     disabled={isSelf || hasVoted || !isAlive}
                     onClick={() => setSelectedVoteTarget(p.id)}
                     className={`p-4 rounded-2xl border text-left transition-all ${isSelected
-                        ? 'bg-rose-950/40 border-rose-500 text-white ring-2 ring-rose-500 shadow-lg shadow-rose-500/20'
-                        : isSelf
-                          ? 'bg-dark-950/40 border-slate-800 opacity-60 cursor-not-allowed'
-                          : 'bg-dark-800/80 border-slate-700/80 hover:border-slate-600 hover:bg-dark-800'
+                      ? 'bg-rose-950/40 border-rose-500 text-white ring-2 ring-rose-500 shadow-lg shadow-rose-500/20'
+                      : isSelf
+                        ? 'bg-dark-950/40 border-slate-800 opacity-60 cursor-not-allowed'
+                        : 'bg-dark-800/80 border-slate-700/80 hover:border-slate-600 hover:bg-dark-800'
                       }`}
                   >
                     <div className="flex items-center gap-3 mb-2">
@@ -817,10 +805,11 @@ export function GameView() {
           <div className="flex items-center justify-center gap-3">
             <button
               onClick={handleLeaveGame}
-              className="btn-secondary px-6 py-3 flex items-center gap-2 text-sm"
+              disabled={isLeaving}
+              className="btn-secondary px-6 py-3 flex items-center gap-2 text-sm disabled:opacity-50"
             >
               <HomeIcon className="w-4 h-4" />
-              <span>Back to Home</span>
+              <span>{isLeaving ? 'Leaving...' : 'Back to Home'}</span>
             </button>
             <button
               onClick={handleReturnToLobby}

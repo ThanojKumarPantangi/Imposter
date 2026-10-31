@@ -21,6 +21,14 @@ export function SocketProvider({ children }) {
   const [rejoinState, setRejoinState] = useState(null); // Requester state: { status: 'PENDING' | 'APPROVED' | 'DENIED' | 'TIMEOUT', requestId, roomCode, message, expiresInSeconds }
   const [gameToast, setGameToast] = useState(null);
 
+  // Client-side room lifecycle: 'ACTIVE_ROOM' | 'TEMPORARILY_DISCONNECTED' | 'INTENTIONAL_EXIT' | 'NO_ROOM'
+  const initialRoomCode = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('active_room_code') : null;
+  const [roomLifecycleState, setRoomLifecycleState] = useState(
+    initialRoomCode ? 'TEMPORARILY_DISCONNECTED' : 'NO_ROOM'
+  );
+  const roomLifecycleRef = useRef(initialRoomCode ? 'TEMPORARILY_DISCONNECTED' : 'NO_ROOM');
+  const isLeavingRef = useRef(false);
+
   // Keep playerRef updated without triggering reconnect
   useEffect(() => {
     playerRef.current = player;
@@ -44,38 +52,63 @@ export function SocketProvider({ children }) {
       setIsConnected(true);
 
       const currentPlayer = playerRef.current;
+      const currentLifecycle = roomLifecycleRef.current;
       const savedRoomCode = sessionStorage.getItem('active_room_code');
 
       if (currentPlayer?.id) {
         socket.emit('register_user', { playerId: currentPlayer.id });
-        // Attempt authoritative session recovery
+      }
+
+      // If user intentionally exited or has no active room, do NOT restore or rejoin
+      if (currentLifecycle === 'INTENTIONAL_EXIT' || currentLifecycle === 'NO_ROOM' || !savedRoomCode) {
+        return;
+      }
+
+      // Reconnect/recover only if in active room or temporarily disconnected
+      if (currentPlayer?.id) {
         socket.emit('recover_session', { playerId: currentPlayer.id });
-      } else if (savedRoomCode && currentPlayer) {
-        if (currentPlayer.id) {
-          socket.emit('register_user', { playerId: currentPlayer.id });
-        }
-        socket.emit('request_sync', { roomCode: savedRoomCode, playerId: currentPlayer.id });
+      } else if (savedRoomCode) {
+        socket.emit('request_sync', { roomCode: savedRoomCode });
       }
     });
 
     socket.on('disconnect', (reason) => {
       console.log('🔌 [Socket] Disconnected from server:', reason);
       setIsConnected(false);
+      if (roomLifecycleRef.current === 'ACTIVE_ROOM') {
+        roomLifecycleRef.current = 'TEMPORARILY_DISCONNECTED';
+        setRoomLifecycleState('TEMPORARILY_DISCONNECTED');
+      }
     });
 
     // Session recovery response from backend
     socket.on('session_recovered', (data) => {
+      if (roomLifecycleRef.current === 'INTENTIONAL_EXIT' || roomLifecycleRef.current === 'NO_ROOM') {
+        console.log('🛑 [Socket] Discarded session_recovered because user intentionally exited or has no room');
+        sessionStorage.removeItem('active_room_code');
+        return;
+      }
+
       if (data && data.room) {
+        roomLifecycleRef.current = 'ACTIVE_ROOM';
+        setRoomLifecycleState('ACTIVE_ROOM');
         setRoomState(data.room);
         sessionStorage.setItem('active_room_code', data.room.code);
         console.log('🔄 [Socket] Restored active room session:', data.room.code);
       } else {
         sessionStorage.removeItem('active_room_code');
+        roomLifecycleRef.current = 'NO_ROOM';
+        setRoomLifecycleState('NO_ROOM');
       }
     });
 
     // Authoritative room state update
     socket.on('room_state', (updatedRoom) => {
+      if (roomLifecycleRef.current === 'INTENTIONAL_EXIT' || roomLifecycleRef.current === 'NO_ROOM') {
+        console.log('🛑 [Socket] Discarded room_state because user intentionally exited');
+        return;
+      }
+
       if (updatedRoom) {
         const currentPlayer = playerRef.current;
         if (currentPlayer?.id && Array.isArray(updatedRoom.players)) {
@@ -83,6 +116,8 @@ export function SocketProvider({ children }) {
           if (!isMember) {
             // Player was authoritatively kicked/removed from this room
             sessionStorage.removeItem('active_room_code');
+            roomLifecycleRef.current = 'NO_ROOM';
+            setRoomLifecycleState('NO_ROOM');
             setRoomState(null);
             setPendingRejoinRequest(null);
             setKickedNotice('You have been removed from this room by the host.');
@@ -90,6 +125,8 @@ export function SocketProvider({ children }) {
           }
         }
 
+        roomLifecycleRef.current = 'ACTIVE_ROOM';
+        setRoomLifecycleState('ACTIVE_ROOM');
         setRoomState(updatedRoom);
         sessionStorage.setItem('active_room_code', updatedRoom.code);
 
@@ -142,6 +179,9 @@ export function SocketProvider({ children }) {
     // Host Player Removal notification
     socket.on('kicked_from_room', (data) => {
       sessionStorage.removeItem('active_room_code');
+      sessionStorage.removeItem('imposter_active_room');
+      roomLifecycleRef.current = 'NO_ROOM';
+      setRoomLifecycleState('NO_ROOM');
       setRoomState(null);
       setPendingRejoinRequest(null);
       setRejoinState(null);
@@ -180,6 +220,8 @@ export function SocketProvider({ children }) {
         player: data.player
       });
       if (data.room) {
+        roomLifecycleRef.current = 'ACTIVE_ROOM';
+        setRoomLifecycleState('ACTIVE_ROOM');
         setRoomState(data.room);
         sessionStorage.setItem('active_room_code', data.roomCode);
       }
@@ -206,6 +248,9 @@ export function SocketProvider({ children }) {
 
     socket.on('room_closed', (data) => {
       sessionStorage.removeItem('active_room_code');
+      sessionStorage.removeItem('imposter_active_room');
+      roomLifecycleRef.current = 'NO_ROOM';
+      setRoomLifecycleState('NO_ROOM');
       setRoomState(null);
       setPendingRejoinRequest(null);
       showToast(`🔒 ${data.reason || 'The room has been closed'}`);
@@ -285,6 +330,9 @@ export function SocketProvider({ children }) {
   // Re-sync or recover when player profile becomes available if not yet connected
   useEffect(() => {
     if (player?.id && socketRef.current && socketRef.current.connected) {
+      if (roomLifecycleRef.current === 'INTENTIONAL_EXIT' || roomLifecycleRef.current === 'NO_ROOM') {
+        return;
+      }
       const savedRoomCode = sessionStorage.getItem('active_room_code');
       if (savedRoomCode) {
         socketRef.current.emit('recover_session', { playerId: player.id });
@@ -299,28 +347,58 @@ export function SocketProvider({ children }) {
 
   // Emitter Actions
   const joinRoom = (roomCode, playerData) => {
-    if (socketRef.current) {
-      sessionStorage.setItem('active_room_code', roomCode.toUpperCase());
-      socketRef.current.emit('join_room', { roomCode: roomCode.toUpperCase(), player: playerData });
+    if (roomLifecycleRef.current === 'INTENTIONAL_EXIT') {
+      console.warn('⚠️ [Socket] joinRoom ignored because user is in INTENTIONAL_EXIT state');
+      return;
+    }
+    if (socketRef.current && roomCode) {
+      const code = roomCode.toUpperCase();
+      roomLifecycleRef.current = 'ACTIVE_ROOM';
+      setRoomLifecycleState('ACTIVE_ROOM');
+      sessionStorage.setItem('active_room_code', code);
+      socketRef.current.emit('join_room', { roomCode: code, player: playerData });
     }
   };
 
   const leaveRoom = async (roomCode, playerId) => {
+    if (isLeavingRef.current) return;
+    isLeavingRef.current = true;
+
+    // 1. Immediately & synchronously mark intentional exit
+    roomLifecycleRef.current = 'INTENTIONAL_EXIT';
+    setRoomLifecycleState('INTENTIONAL_EXIT');
+
     const code = (roomCode || sessionStorage.getItem('active_room_code') || '').toUpperCase();
+    const targetPlayerId = playerId || playerRef.current?.id;
+
+    // 2. Remove persisted room references
     sessionStorage.removeItem('active_room_code');
+    sessionStorage.removeItem('imposter_active_room');
+
+    // 3. Reset room and UI states
     setRoomState(null);
     setDisconnectAlert(null);
+    setPendingRejoinRequest(null);
+    setRejoinState(null);
 
+    // 4. Emit socket leave immediately
     if (socketRef.current && code) {
-      socketRef.current.emit('leave_room', { roomCode: code, playerId });
+      socketRef.current.emit('leave_room', { roomCode: code, playerId: targetPlayerId });
     }
-    if (code && playerId) {
+
+    // 5. Authoritative backend REST call
+    if (code && targetPlayerId) {
       try {
-        await roomApi.leaveRoom(code, playerId);
+        await roomApi.leaveRoom(code, targetPlayerId);
       } catch (e) {
-        // Safe to ignore REST error if socket already handled it
+        // Safe if socket already handled it or network glitch
       }
     }
+
+    // 6. Transition to NO_ROOM
+    roomLifecycleRef.current = 'NO_ROOM';
+    setRoomLifecycleState('NO_ROOM');
+    isLeavingRef.current = false;
   };
 
   const returnToLobby = (roomCode, playerId) => {
@@ -438,6 +516,9 @@ export function SocketProvider({ children }) {
         isConnected,
         roomState,
         setRoomState,
+        roomLifecycleState,
+        setRoomLifecycleState,
+        isLeaving: isLeavingRef.current,
         disconnectAlert,
         kickedNotice,
         clearKickedNotice,
