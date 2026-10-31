@@ -158,6 +158,7 @@ function setupNamespace(nsp) {
         if (!normalizedCode || !playerId) return;
 
         // Immediately notify voice peers that this participant departed
+        await roomRepository.removeVoiceParticipant(normalizedCode, playerId);
         nsp.to(`room:${normalizedCode}`).emit('voice_peer_left', {
           peerSocketId: socket.id,
           playerId
@@ -315,6 +316,7 @@ function setupNamespace(nsp) {
           if (targetSocket) targetSocket.leave(`room:${normalizedCode}`);
 
           // Voice cleanup for kicked player
+          await roomRepository.removeVoiceParticipant(normalizedCode, targetPlayerId);
           nsp.to(`room:${normalizedCode}`).emit('voice_peer_left', {
             peerSocketId: targetSocketId,
             playerId: targetPlayerId
@@ -530,14 +532,49 @@ function setupNamespace(nsp) {
 
     // 12. WebRTC Voice Chat Signaling
     socket.on('voice_signal_join', async ({ roomCode, playerId }) => {
-      const normalizedCode = (roomCode || '').toUpperCase();
-      socket.to(`room:${normalizedCode}`).emit('voice_peer_joined', {
-        peerSocketId: socket.id,
-        playerId
-      });
+      try {
+        const normalizedCode = (roomCode || '').toUpperCase();
+        if (!normalizedCode || !playerId) return;
+
+        const room = await roomRepository.getRoom(normalizedCode);
+        if (!room) return;
+
+        const player = room.players?.find(p => p.id === playerId);
+        if (!player || player.permanentlyDeparted) return;
+
+        socket.join(`room:${normalizedCode}`);
+        socket.playerId = playerId;
+
+        // Record voice participant mapping in Redis
+        await roomRepository.addVoiceParticipant(normalizedCode, playerId, socket.id);
+
+        // Fetch current active voice participants in this room
+        const allParticipants = await roomRepository.getVoiceParticipants(normalizedCode);
+        const remoteParticipants = allParticipants.filter(
+          p => p.playerId !== playerId && p.socketId !== socket.id
+        );
+
+        // Send existing voice participants to newly joined/reconnected socket
+        socket.emit('voice_participants_list', {
+          roomCode: normalizedCode,
+          participants: remoteParticipants
+        });
+
+        // Notify other room participants that this player joined/reconnected voice
+        socket.to(`room:${normalizedCode}`).emit('voice_peer_joined', {
+          peerSocketId: socket.id,
+          playerId,
+          username: player.username
+        });
+
+        console.log(`🎙️ [Voice] Player "${player.username}" (${playerId}) joined voice room ${normalizedCode} (socket: ${socket.id})`);
+      } catch (err) {
+        console.error('Error in voice_signal_join:', err);
+      }
     });
 
     socket.on('voice_signal_offer', ({ targetSocketId, offer, callerId }) => {
+      if (!targetSocketId || !offer) return;
       nsp.to(targetSocketId).emit('voice_signal_offer', {
         callerSocketId: socket.id,
         callerId,
@@ -546,6 +583,7 @@ function setupNamespace(nsp) {
     });
 
     socket.on('voice_signal_answer', ({ targetSocketId, answer, responderId }) => {
+      if (!targetSocketId || !answer) return;
       nsp.to(targetSocketId).emit('voice_signal_answer', {
         responderSocketId: socket.id,
         responderId,
@@ -554,6 +592,7 @@ function setupNamespace(nsp) {
     });
 
     socket.on('voice_signal_ice_candidate', ({ targetSocketId, candidate, senderId }) => {
+      if (!targetSocketId || !candidate) return;
       nsp.to(targetSocketId).emit('voice_signal_ice_candidate', {
         senderSocketId: socket.id,
         senderId,
@@ -598,6 +637,7 @@ function setupNamespace(nsp) {
           roomCode: normalizedCode
         });
 
+        await roomRepository.removeVoiceParticipant(normalizedCode, playerId);
         nsp.to(`room:${normalizedCode}`).emit('voice_peer_left', {
           peerSocketId: socket.id,
           playerId

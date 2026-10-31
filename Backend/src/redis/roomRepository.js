@@ -55,6 +55,7 @@ class RoomRepository {
 
     // Delete timer keys
     await this.clearTurnTimer(normalizedCode);
+    await this.clearVoiceParticipants(normalizedCode);
 
     // Delete room state and room code from active index
     await redis.del(`room:${normalizedCode}`);
@@ -235,6 +236,64 @@ class RoomRepository {
     const redis = getRedisClient();
     const key = `rejoin_req:${roomCode.toUpperCase()}:${playerId}`;
     await redis.del(key);
+  }
+
+  /**
+   * Voice Chat Participants Tracking in Redis
+   */
+  async addVoiceParticipant(roomCode, playerId, socketId) {
+    if (!roomCode || !playerId || !socketId) return;
+    const redis = getRedisClient();
+    const key = `voice:participants:${roomCode.toUpperCase()}`;
+    const raw = await redis.get(key);
+    let participants = {};
+    if (raw) {
+      try {
+        participants = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        participants = {};
+      }
+    }
+    participants[playerId] = socketId;
+    await redis.set(key, JSON.stringify(participants), 'EX', 86400);
+  }
+
+  async getVoiceParticipants(roomCode) {
+    if (!roomCode) return [];
+    const redis = getRedisClient();
+    const key = `voice:participants:${roomCode.toUpperCase()}`;
+    const raw = await redis.get(key);
+    if (!raw) return [];
+    try {
+      const participants = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Object.entries(participants).map(([playerId, socketId]) => ({
+        playerId,
+        socketId
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async removeVoiceParticipant(roomCode, playerId) {
+    if (!roomCode || !playerId) return;
+    const redis = getRedisClient();
+    const key = `voice:participants:${roomCode.toUpperCase()}`;
+    const raw = await redis.get(key);
+    if (!raw) return;
+    try {
+      const participants = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      delete participants[playerId];
+      await redis.set(key, JSON.stringify(participants), 'EX', 86400);
+    } catch {
+      // ignore
+    }
+  }
+
+  async clearVoiceParticipants(roomCode) {
+    if (!roomCode) return;
+    const redis = getRedisClient();
+    await redis.del(`voice:participants:${roomCode.toUpperCase()}`);
   }
 }
 
