@@ -1,0 +1,29 @@
+{
+  "name": "imposter-backend",
+  "version": "1.0.0",
+  "description": "Imposter Multiplayer Game Backend with Node.js, Express, Socket.IO, Redis, and MongoDB",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon --exec \"node -r dotenv/config src/server.js\"",
+    "seed": "node src/scripts/seedCategories.js",
+    "clear-redis": "node src/clearRedis.js"
+  },
+  "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
+    "@upstash/redis": "^1.40.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.5.1",
+    "socket.io": "^4.7.5",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

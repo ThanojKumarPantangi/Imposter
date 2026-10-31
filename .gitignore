@@ -1,0 +1,46 @@
+# Node & Web
+node_modules/
+dist/
+.vite/
+.turbo/
+build/
+coverage/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Android & Gradle
+.gradle/
+local.properties
+android/.gradle/
+android/app/build/
+android/core/*/build/
+android/feature/*/build/
+android/build/
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
+# Database data mounts
+.mongo-data/
+.redis-data/
