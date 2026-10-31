@@ -214,23 +214,23 @@ export function GameView() {
       {/* Secret Card Section (Private to the user) */}
       <div className="mb-6">
         <div
-          className={`glass-card p-5 sm:p-6 border relative overflow-hidden transition-all ${
-            isImposter
+          className={`glass-card p-5 sm:p-6 border relative overflow-hidden transition-all ${isImposter
               ? 'border-rose-500/50 bg-rose-950/20 imposter-glow'
               : 'border-cyan-500/50 bg-cyan-950/20 civilian-glow'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-4">
             <div
-              className={`p-3.5 rounded-2xl flex-shrink-0 ${
-                isImposter ? 'bg-rose-500/20 text-rose-400' : 'bg-cyan-500/20 text-cyan-400'
-              }`}
+              className={`p-3.5 rounded-2xl flex-shrink-0 ${isImposter ? 'bg-rose-500/20 text-rose-400' : 'bg-cyan-500/20 text-cyan-400'
+                }`}
             >
               <Shield className="w-7 h-7" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Your Secret Role</span>
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Role:
+                </span>
                 <span className={isImposter ? 'badge-imposter' : 'badge-civilian'}>
                   {me.role || 'SPECTATOR'}
                 </span>
@@ -243,19 +243,27 @@ export function GameView() {
 
               <div>
                 {isImposter ? (
-                  <div>
-                    <span className="text-xs text-rose-300 font-semibold block mb-0.5">Your Persistent Hint:</span>
-                    <span className="text-lg sm:text-xl font-black text-rose-200">{roomState.myHint}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-rose-300 font-semibold">
+                      Hint:
+                    </span>
+                    <span className="text-lg sm:text-xl font-black text-rose-200 break-words">
+                      {roomState.myHint}
+                    </span>
                   </div>
                 ) : isCivilian ? (
-                  <div>
-                    <span className="text-xs text-cyan-300 font-semibold block mb-0.5">Your Secret Word:</span>
-                    <span className="text-2xl sm:text-3xl font-black text-cyan-200 tracking-wide font-display break-words">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-cyan-300 font-semibold">
+                      Secret Word:
+                    </span>
+                    <span className="text-xl sm:text-2xl font-black text-cyan-200 tracking-wide font-display break-words">
                       {roomState.myWord || '—'}
                     </span>
                   </div>
                 ) : (
-                  <span className="text-sm font-semibold text-slate-400">Spectator Mode (You were eliminated)</span>
+                  <span className="text-sm font-semibold text-slate-400">
+                    Spectator Mode
+                  </span>
                 )}
               </div>
             </div>
@@ -298,11 +306,10 @@ export function GameView() {
           <div className="lg:col-span-2 space-y-6">
             {/* Active Player Status Card */}
             <div
-              className={`glass-card p-5 sm:p-6 border ${
-                isMyTurn
+              className={`glass-card p-5 sm:p-6 border ${isMyTurn
                   ? 'border-cyan-500/60 bg-cyan-950/20 ring-1 ring-cyan-500'
                   : 'border-slate-800'
-              }`}
+                }`}
             >
               <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
                 <div className="flex items-center gap-3">
@@ -311,12 +318,12 @@ export function GameView() {
                   </div>
                   <div>
                     <h3 className="font-display font-bold text-base sm:text-lg text-white">
-                      {isMyTurn ? '🌟 It is YOUR turn to submit a clue!' : `Waiting for ${roomState.players.find(p => p.id === roomState.activeTurnPlayerId)?.username || 'active player'}...`}
+                      {isMyTurn ? '🌟 It is YOUR turn to submit a clue!' : `${roomState.players.find(p => p.id === roomState.activeTurnPlayerId)?.username || 'active player'}'s turn...`}
                     </h3>
                     <p className="text-xs text-slate-400">
                       {isImposter
-                        ? 'Enter a plausible clue or type the exact secret word to win instantly!'
-                        : 'Enter a single word related to your secret word without giving it away.'}
+                        ? 'Give a clue or guess the secret word to win!'
+                        : 'Give a one-word clue without revealing the secret!'}
                     </p>
                   </div>
                 </div>
@@ -342,7 +349,7 @@ export function GameView() {
                   </div>
                   {isImposter && (
                     <div className="text-[11px] text-rose-400 font-semibold bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
-                      💡 <strong>Imposter Tip:</strong> If you deduce the secret word, typing the exact word here wins the match for Imposters immediately!
+                      💡 <strong>Imposter Tip:</strong> Guess the secret word and enter it here to win instantly!
                     </div>
                   )}
                 </form>
@@ -476,15 +483,14 @@ export function GameView() {
                 return (
                   <div
                     key={p.id}
-                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-                      isActive
+                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${isActive
                         ? 'bg-cyan-950/40 border-cyan-500 text-white font-bold ring-1 ring-cyan-500'
                         : isDisconnected
-                        ? 'bg-rose-950/30 border-rose-500/60 text-white ring-1 ring-rose-500/40 shadow-sm shadow-rose-950'
-                        : isEliminated
-                        ? 'bg-dark-950/40 border-slate-900 opacity-40'
-                        : 'bg-dark-800/60 border-slate-800 text-slate-300'
-                    }`}
+                          ? 'bg-rose-950/30 border-rose-500/60 text-white ring-1 ring-rose-500/40 shadow-sm shadow-rose-950'
+                          : isEliminated
+                            ? 'bg-dark-950/40 border-slate-900 opacity-40'
+                            : 'bg-dark-800/60 border-slate-800 text-slate-300'
+                      }`}
                   >
                     <div className="flex items-center gap-2.5">
                       <PlayerAvatar player={p} size="sm" showStatus={false} />
@@ -545,13 +551,12 @@ export function GameView() {
                   key={p.id}
                   disabled={isSelf || hasVoted || !isAlive}
                   onClick={() => setSelectedVoteTarget(p.id)}
-                  className={`p-4 rounded-2xl border text-left transition-all ${
-                    isSelected
+                  className={`p-4 rounded-2xl border text-left transition-all ${isSelected
                       ? 'bg-rose-950/40 border-rose-500 text-white ring-2 ring-rose-500 shadow-lg shadow-rose-500/20'
                       : isSelf
-                      ? 'bg-dark-950/40 border-slate-800 opacity-60 cursor-not-allowed'
-                      : 'bg-dark-800/80 border-slate-700/80 hover:border-slate-600 hover:bg-dark-800'
-                  }`}
+                        ? 'bg-dark-950/40 border-slate-800 opacity-60 cursor-not-allowed'
+                        : 'bg-dark-800/80 border-slate-700/80 hover:border-slate-600 hover:bg-dark-800'
+                    }`}
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <PlayerAvatar player={p} size="sm" showStatus={false} />
@@ -639,12 +644,12 @@ export function GameView() {
             {roomState.winnerResult.winCondition === 'IMPOSTER_GUESSED_WORD'
               ? '💥 An Imposter correctly entered the exact secret word during their turn!'
               : roomState.winnerResult.winCondition === 'ALL_IMPOSTERS_ELIMINATED'
-              ? '🎉 All Imposters were successfully identified and eliminated!'
-              : roomState.winnerResult.winCondition === 'IMPOSTERS_PARITY'
-              ? '🎭 Imposters have reached equal numbers with the Civilians!'
-              : roomState.winnerResult.winCondition === 'FINAL_SHOWDOWN_DECISIVE'
-              ? '🎭 Imposters outmaneuvered the Civilians in the final showdown!'
-              : 'Match completed!'}
+                ? '🎉 All Imposters were successfully identified and eliminated!'
+                : roomState.winnerResult.winCondition === 'IMPOSTERS_PARITY'
+                  ? '🎭 Imposters have reached equal numbers with the Civilians!'
+                  : roomState.winnerResult.winCondition === 'FINAL_SHOWDOWN_DECISIVE'
+                    ? '🎭 Imposters outmaneuvered the Civilians in the final showdown!'
+                    : 'Match completed!'}
           </p>
 
           {/* Full Secret Reveal Box */}

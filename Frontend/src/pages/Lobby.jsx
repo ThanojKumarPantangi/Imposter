@@ -183,13 +183,12 @@ export function Lobby() {
                 return (
                   <div
                     key={p.id}
-                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
-                      isSelf
+                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${isSelf
                         ? 'bg-cyan-950/20 border-cyan-500/30 shadow-md'
                         : !p.isConnected
-                        ? 'bg-rose-950/20 border-rose-500/40 opacity-75'
-                        : 'bg-dark-800/60 border-slate-800'
-                    }`}
+                          ? 'bg-rose-950/20 border-rose-500/40 opacity-75'
+                          : 'bg-dark-800/60 border-slate-800'
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       <PlayerAvatar player={p} size="sm" />
@@ -240,7 +239,7 @@ export function Lobby() {
               ) : !hasCategories ? (
                 <span className="text-amber-400 font-medium">⚠️ At least one word category must be selected</span>
               ) : (
-                <span className="text-emerald-400 font-medium">✅ Lobby is ready to start!</span>
+                <span className="text-emerald-400 font-medium">✅ Lobby Ready!</span>
               )}
             </div>
 
@@ -326,11 +325,10 @@ export function Lobby() {
                           key={num}
                           type="button"
                           onClick={() => updateSettings(normalizedCode, player.id, { impostersCount: num })}
-                          className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                            isSelected
+                          className={`py-2 rounded-xl text-xs font-bold border transition-all ${isSelected
                               ? 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500'
                               : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
-                          }`}
+                            }`}
                         >
                           {num} {num === 1 ? 'Imposter' : 'Imposters'}
                         </button>
@@ -350,11 +348,10 @@ export function Lobby() {
                         key={sec}
                         type="button"
                         onClick={() => updateSettings(normalizedCode, player.id, { turnDurationSeconds: sec })}
-                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                          settings.turnDurationSeconds === sec
+                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${settings.turnDurationSeconds === sec
                             ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
                             : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                       >
                         {sec}s
                       </button>
@@ -373,11 +370,10 @@ export function Lobby() {
                         key={sec}
                         type="button"
                         onClick={() => updateSettings(normalizedCode, player.id, { votingDurationSeconds: sec })}
-                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                          settings.votingDurationSeconds === sec
+                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${settings.votingDurationSeconds === sec
                             ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
                             : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                       >
                         {sec}s
                       </button>
@@ -399,11 +395,10 @@ export function Lobby() {
                         key={sec}
                         type="button"
                         onClick={() => updateSettings(normalizedCode, player.id, { lobbyDisconnectTimeout: sec })}
-                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                          (settings.lobbyDisconnectTimeout || 5) === sec
+                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${(settings.lobbyDisconnectTimeout || 5) === sec
                             ? 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500'
                             : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                       >
                         {sec}s
                       </button>
@@ -428,11 +423,10 @@ export function Lobby() {
                         key={sec}
                         type="button"
                         onClick={() => updateSettings(normalizedCode, player.id, { gameDisconnectTimeout: sec })}
-                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                          (settings.gameDisconnectTimeout || settings.gameDisconnectGracePeriod || 15) === sec
+                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${(settings.gameDisconnectTimeout || settings.gameDisconnectGracePeriod || 15) === sec
                             ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 ring-1 ring-cyan-500'
                             : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
-                        }`}
+                          }`}
                       >
                         {sec}s
                       </button>
