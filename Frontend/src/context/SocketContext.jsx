@@ -167,6 +167,23 @@ export function SocketProvider({ children }) {
       showToast('⚙️ Game settings updated by host');
     });
 
+    socket.on('room_categories_updated', (data) => {
+      setRoomState(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          settings: {
+            ...prev.settings,
+            categorySlugs: data.categorySlugs,
+            categoryNames: data.categoryNames,
+            selectedCategories: data.categorySlugs,
+            categoryName: data.categoryNames?.join(', ')
+          }
+        };
+      });
+      showToast(`🏷️ Shared categories updated (${data.categorySlugs?.length || 0} selected)`);
+    });
+
     socket.on('player_categories_updated', (data) => {
       showToast(`🏷️ ${data.username} updated categories (${data.categoriesCount} selected)`);
     });
@@ -234,10 +251,10 @@ export function SocketProvider({ children }) {
     }
   };
 
-  const updatePlayerCategories = (roomCode, playerId, categorySlugs, categoryNames) => {
+  const updateRoomCategories = (roomCode, playerId, categorySlugs, categoryNames) => {
     if (socketRef.current) {
       sounds.playClick();
-      socketRef.current.emit('update_player_categories', {
+      socketRef.current.emit('update_room_categories', {
         roomCode: (roomCode || '').toUpperCase(),
         playerId,
         categorySlugs,
@@ -245,6 +262,8 @@ export function SocketProvider({ children }) {
       });
     }
   };
+
+  const updatePlayerCategories = updateRoomCategories;
 
   const updateLobbyUsername = (roomCode, playerId, newUsername) => {
     if (socketRef.current) {
@@ -302,6 +321,7 @@ export function SocketProvider({ children }) {
         leaveRoom,
         returnToLobby,
         updateSettings,
+        updateRoomCategories,
         updatePlayerCategories,
         updateLobbyUsername,
         kickPlayer,

@@ -160,24 +160,38 @@ function setupNamespace(nsp) {
       }
     });
 
-    // 5b. Update Player-Specific Categories (Any player in lobby)
-    socket.on('update_player_categories', async ({ roomCode, playerId, categorySlugs, categoryNames }) => {
+    // 5b. Update Shared Room Categories (Any player in lobby)
+    const handleCategoryUpdate = async ({ roomCode, playerId, categorySlugs, categoryNames }) => {
       try {
         if (!roomCode || !playerId) return socket.emit('error', { message: 'Room code and player ID are required' });
         const normalizedCode = roomCode.toUpperCase();
 
         const socketPlayerId = await roomRepository.getPlayerBySocket(socket.id);
         if (socketPlayerId && socketPlayerId !== playerId) {
-          return socket.emit('error', { message: 'Unauthorized: You can only modify your own category selections' });
+          return socket.emit('error', { message: 'Unauthorized: Socket identity mismatch' });
         }
 
-        const result = await gameEngine.updatePlayerCategories(
+        const result = await gameEngine.updateRoomCategories(
           normalizedCode,
           playerId,
           categorySlugs,
           categoryNames
         );
 
+        // Broadcast authoritative shared room categories to all room members
+        nsp.to(`room:${normalizedCode}`).emit('room_categories_updated', {
+          categorySlugs: result.categorySlugs,
+          categoryNames: result.categoryNames,
+          selectedCategories: result.categorySlugs,
+          categoriesCount: result.categorySlugs.length,
+          updatedBy: playerId,
+          updatedByUsername: result.player.username
+        });
+
+        // Also broadcast settings_updated for real-time room synchronization
+        nsp.to(`room:${normalizedCode}`).emit('settings_updated', result.room.settings);
+
+        // Backward compatibility event for older clients
         nsp.to(`room:${normalizedCode}`).emit('player_categories_updated', {
           playerId,
           username: result.player.username,
@@ -188,7 +202,11 @@ function setupNamespace(nsp) {
       } catch (err) {
         socket.emit('error', { message: err.message });
       }
-    });
+    };
+
+    socket.on('update_room_categories', handleCategoryUpdate);
+    socket.on('update_player_categories', handleCategoryUpdate);
+    socket.on('update_categories', handleCategoryUpdate);
 
     // 6. Update Username (Without disconnecting socket or resetting game)
     socket.on('update_username', async ({ playerId, newUsername }) => {

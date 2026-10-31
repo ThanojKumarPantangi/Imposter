@@ -42,12 +42,10 @@ class GameEngine {
       code: roomCode,
       hostId: hostPlayer.id,
       status: 'WAITING',
-      playerCategoryPreferences: {
-        [hostPlayer.id]: categorySlugs
-      },
       settings: {
         categorySlugs,
         categoryNames,
+        selectedCategories: categorySlugs,
         categorySlug: categorySlugs[0],
         categoryName: categoryNames.join(', '),
         impostersCount: options.impostersCount || 1,
@@ -66,8 +64,6 @@ class GameEngine {
           isConnected: true,
           isAlive: true,
           permanentlyDeparted: false,
-          selectedCategorySlugs: categorySlugs,
-          selectedCategoryNames: categoryNames,
           role: null,
           secretWord: null,
           hint: null,
@@ -130,19 +126,7 @@ class GameEngine {
       existing.permanentlyDeparted = false;
       existing.username = player.username;
       existing.avatar = player.avatar || existing.avatar;
-      if (!existing.selectedCategorySlugs || existing.selectedCategorySlugs.length === 0) {
-        const saved = (room.playerCategoryPreferences && room.playerCategoryPreferences[player.id]) || (room.settings && room.settings.categorySlugs) || ['fruits'];
-        existing.selectedCategorySlugs = [...saved];
-        existing.selectedCategoryNames = (room.settings && room.settings.categoryNames) || ['Fruits'];
-      }
     } else {
-      const defaultSlugs = (room.settings && Array.isArray(room.settings.categorySlugs) && room.settings.categorySlugs.length > 0)
-        ? [...room.settings.categorySlugs]
-        : ['fruits'];
-      const defaultNames = (room.settings && Array.isArray(room.settings.categoryNames) && room.settings.categoryNames.length > 0)
-        ? [...room.settings.categoryNames]
-        : ['Fruits'];
-
       room.players.push({
         id: player.id,
         username: player.username,
@@ -151,16 +135,11 @@ class GameEngine {
         isConnected: true,
         isAlive: true,
         permanentlyDeparted: false,
-        selectedCategorySlugs: defaultSlugs,
-        selectedCategoryNames: defaultNames,
         role: null,
         secretWord: null,
         hint: null,
         clues: []
       });
-
-      if (!room.playerCategoryPreferences) room.playerCategoryPreferences = {};
-      room.playerCategoryPreferences[player.id] = defaultSlugs;
     }
 
     await roomRepository.saveRoom(normalizedCode, room);
@@ -182,34 +161,21 @@ class GameEngine {
       if (newSettings.categorySlugs.length === 0) {
         throw new Error('At least one category must be selected');
       }
-      room.settings.categorySlugs = Array.from(new Set(newSettings.categorySlugs));
+      const cleanSlugs = Array.from(new Set(newSettings.categorySlugs));
+      room.settings.categorySlugs = cleanSlugs;
+      room.settings.selectedCategories = cleanSlugs;
+      room.settings.categorySlug = cleanSlugs[0];
       if (newSettings.categoryNames && Array.isArray(newSettings.categoryNames)) {
         room.settings.categoryNames = newSettings.categoryNames;
         room.settings.categoryName = newSettings.categoryNames.join(', ');
       }
-      room.settings.categorySlug = room.settings.categorySlugs[0];
-
-      // Also update host's own category preference if they change categories through settings
-      if (!room.playerCategoryPreferences) room.playerCategoryPreferences = {};
-      room.playerCategoryPreferences[hostId] = room.settings.categorySlugs;
-      const hostPlayer = room.players.find(p => p.id === hostId);
-      if (hostPlayer) {
-        hostPlayer.selectedCategorySlugs = room.settings.categorySlugs;
-        if (room.settings.categoryNames) hostPlayer.selectedCategoryNames = room.settings.categoryNames;
-      }
     } else if (newSettings.categorySlug) {
       room.settings.categorySlug = newSettings.categorySlug;
       room.settings.categorySlugs = [newSettings.categorySlug];
+      room.settings.selectedCategories = [newSettings.categorySlug];
       if (newSettings.categoryName) {
         room.settings.categoryName = newSettings.categoryName;
         room.settings.categoryNames = [newSettings.categoryName];
-      }
-      if (!room.playerCategoryPreferences) room.playerCategoryPreferences = {};
-      room.playerCategoryPreferences[hostId] = room.settings.categorySlugs;
-      const hostPlayer = room.players.find(p => p.id === hostId);
-      if (hostPlayer) {
-        hostPlayer.selectedCategorySlugs = room.settings.categorySlugs;
-        if (room.settings.categoryNames) hostPlayer.selectedCategoryNames = room.settings.categoryNames;
       }
     }
 
@@ -239,9 +205,9 @@ class GameEngine {
   }
 
   /**
-   * Update Player-Specific Category Preferences (Any player in lobby)
+   * Update Shared Room Categories (Any active player in lobby)
    */
-  async updatePlayerCategories(roomCode, playerId, categorySlugs, categoryNames = []) {
+  async updateRoomCategories(roomCode, playerId, categorySlugs, categoryNames = []) {
     if (!roomCode) throw new Error('Room code is required');
     const normalizedCode = roomCode.toUpperCase();
     const room = await roomRepository.getRoom(normalizedCode);
@@ -269,16 +235,28 @@ class GameEngine {
       ? categoryNames
       : cleanSlugs.map(s => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, ' '));
 
-    if (!room.playerCategoryPreferences) {
-      room.playerCategoryPreferences = {};
-    }
-    room.playerCategoryPreferences[playerId] = cleanSlugs;
-
-    player.selectedCategorySlugs = cleanSlugs;
-    player.selectedCategoryNames = cleanNames;
+    // Update the ONE authoritative shared room categories in Redis
+    room.settings.categorySlugs = cleanSlugs;
+    room.settings.selectedCategories = cleanSlugs;
+    room.settings.categorySlug = cleanSlugs[0];
+    room.settings.categoryNames = cleanNames;
+    room.settings.categoryName = cleanNames.join(', ');
 
     await roomRepository.saveRoom(normalizedCode, room);
-    return { room, player, categorySlugs: cleanSlugs, categoryNames: cleanNames };
+    return {
+      room,
+      player,
+      categorySlugs: cleanSlugs,
+      categoryNames: cleanNames,
+      selectedCategories: cleanSlugs
+    };
+  }
+
+  /**
+   * Backward-compatible alias for updateRoomCategories
+   */
+  async updatePlayerCategories(roomCode, playerId, categorySlugs, categoryNames = []) {
+    return this.updateRoomCategories(roomCode, playerId, categorySlugs, categoryNames);
   }
 
   /**
@@ -317,16 +295,13 @@ class GameEngine {
       return { ready: false, reason: 'Need more Civilians than Imposters' };
     }
 
-    // Validate that every eligible player has selected at least one category
-    for (const player of room.players) {
-      const pSlugs = (room.playerCategoryPreferences && room.playerCategoryPreferences[player.id])
-        || player.selectedCategorySlugs;
-      if (!pSlugs || !Array.isArray(pSlugs) || pSlugs.length === 0) {
-        return {
-          ready: false,
-          reason: `Player "${player.username}" has not selected any word category`
-        };
-      }
+    // Validate that at least one valid category is selected for the room
+    const sharedSlugs = (room.settings && (room.settings.categorySlugs || room.settings.selectedCategories)) || [];
+    if (!Array.isArray(sharedSlugs) || sharedSlugs.length === 0) {
+      return {
+        ready: false,
+        reason: 'At least one word category must be selected for the room'
+      };
     }
 
     return { ready: true };
@@ -451,21 +426,18 @@ class GameEngine {
     const chosenImposterIndices = new Set(eligibleIndices.slice(0, imposterTarget));
     const newImposterIds = [];
 
-    // Word selection: Draw words and hints for EACH player from their OWN selected categories!
+    // Word selection: Draw word and hint from the SHARED room categories!
+    const roomSlugs = (room.settings && (room.settings.categorySlugs || room.settings.selectedCategories)) || ['fruits'];
+    const eligibleWords = await this.getWordsForCategories(roomSlugs);
+    const chosenWordIndex = crypto.randomInt(0, eligibleWords.length);
+    const chosenWordEntry = eligibleWords[chosenWordIndex];
+
     for (let idx = 0; idx < room.players.length; idx++) {
       const player = room.players[idx];
       player.isAlive = true;
       player.permanentlyDeparted = false;
       player.eliminatedAtRound = null;
       player.clues = [];
-
-      const playerSlugs = (room.playerCategoryPreferences && room.playerCategoryPreferences[player.id])
-        || player.selectedCategorySlugs
-        || ['fruits'];
-
-      const playerWords = await this.getWordsForCategories(playerSlugs);
-      const chosenWordIndex = crypto.randomInt(0, playerWords.length);
-      const chosenWordEntry = playerWords[chosenWordIndex];
 
       if (chosenImposterIndices.has(idx)) {
         player.role = 'IMPOSTER';
@@ -483,11 +455,9 @@ class GameEngine {
       }
     }
 
-    // Set initial room baseline from first player
-    const initialPlayer = room.players[0];
-    room.secretWord = initialPlayer.secretWord || initialPlayer.assignedSecretWord;
-    room.hint = initialPlayer.hint;
-    room.settings.categoryName = initialPlayer.categoryName;
+    room.secretWord = chosenWordEntry.word;
+    room.hint = chosenWordEntry.hint;
+    room.settings.categoryName = chosenWordEntry.categoryName;
 
     room.lastImposters = newImposterIds;
     room.status = 'ROLE_REVEAL';
@@ -1046,9 +1016,6 @@ class GameEngine {
 
     cloned.players = cloned.players.map(p => {
       const isSelf = p.id === playerId;
-      const slugs = (room.playerCategoryPreferences && room.playerCategoryPreferences[p.id])
-        || p.selectedCategorySlugs
-        || [];
       return {
         id: p.id,
         username: p.username,
@@ -1058,27 +1025,12 @@ class GameEngine {
         isAlive: p.isAlive,
         permanentlyDeparted: p.permanentlyDeparted,
         role: (isSelf || isFinished) ? p.role : null,
-        clues: p.clues,
-        // Current player sees their own categories; peers see count and clean names
-        selectedCategorySlugs: isSelf ? slugs : undefined,
-        selectedCategoryNames: isSelf ? p.selectedCategoryNames : undefined,
-        selectedCategoriesCount: slugs.length
+        clues: p.clues
       };
     });
 
     const player = room.players.find(p => p.id === playerId);
     if (player) {
-      const mySlugs = (room.playerCategoryPreferences && room.playerCategoryPreferences[playerId])
-        || player.selectedCategorySlugs
-        || (room.settings && room.settings.categorySlugs)
-        || ['fruits'];
-      const myNames = player.selectedCategoryNames
-        || (room.settings && room.settings.categoryNames)
-        || ['Fruits'];
-
-      cloned.myCategorySlugs = mySlugs;
-      cloned.myCategoryNames = myNames;
-
       if (!isFinished) {
         if (player.role === 'IMPOSTER') {
           cloned.secretWord = null;
@@ -1098,7 +1050,17 @@ class GameEngine {
       cloned.secretWord = room.secretWord;
     }
 
-    // Never leak raw Redis internal player preferences mapping directly
+    // Authoritative shared room categories
+    if (cloned.settings) {
+      const slugs = cloned.settings.categorySlugs || cloned.settings.selectedCategories || ['fruits'];
+      cloned.settings.categorySlugs = slugs;
+      cloned.settings.selectedCategories = slugs;
+      cloned.settings.categoryNames = cloned.settings.categoryNames || ['Fruits'];
+    }
+
+    // Backward compatibility aliases
+    cloned.myCategorySlugs = (cloned.settings && cloned.settings.categorySlugs) || ['fruits'];
+    cloned.myCategoryNames = (cloned.settings && cloned.settings.categoryNames) || ['Fruits'];
     delete cloned.playerCategoryPreferences;
 
     return cloned;

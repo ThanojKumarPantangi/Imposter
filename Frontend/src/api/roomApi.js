@@ -1,4 +1,5 @@
 import { apiRequest } from './client';
+import { getCachedCategories } from './categoryCache';
 
 export const roomApi = {
   createRoom: (player, settings) => {
@@ -38,8 +39,9 @@ export const roomApi = {
     return apiRequest(`/rooms/${encodeURIComponent(roomCode)}${q}`);
   },
 
+  // Centralized cached category definitions (called once, reused everywhere)
   getCategories: () => {
-    return apiRequest('/rooms/categories');
+    return getCachedCategories();
   },
 
   updateSettings: (roomCode, hostId, settings) => {
@@ -49,8 +51,17 @@ export const roomApi = {
     });
   },
 
+  // Any player in lobby can update the shared room categories
+  updateRoomCategories: (roomCode, playerId, categorySlugs, categoryNames) => {
+    return apiRequest('/rooms/categories', {
+      method: 'POST',
+      body: JSON.stringify({ roomCode, playerId, categorySlugs, categoryNames })
+    });
+  },
+
+  // Backward compatibility alias
   updatePlayerCategories: (roomCode, playerId, categorySlugs, categoryNames) => {
-    return apiRequest('/rooms/player-categories', {
+    return apiRequest('/rooms/categories', {
       method: 'POST',
       body: JSON.stringify({ roomCode, playerId, categorySlugs, categoryNames })
     });

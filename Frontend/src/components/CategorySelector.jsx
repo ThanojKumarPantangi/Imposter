@@ -29,22 +29,12 @@ export function CategorySelector({
     async function load() {
       try {
         const res = await roomApi.getCategories();
-        if (isMounted && res?.success && Array.isArray(res.categories)) {
-          setCategories(res.categories);
+        const list = Array.isArray(res) ? res : (res?.categories || []);
+        if (isMounted && list.length > 0) {
+          setCategories(list);
         }
       } catch (err) {
-        console.warn('Failed to load categories from API, using fallback data:', err);
-        if (isMounted) {
-          setCategories([
-            { slug: 'fruits', name: 'Fruits', group: 'FOOD_DRINK', description: 'Fresh fruits, berries, and tropical produce' },
-            { slug: 'vegetables', name: 'Vegetables', group: 'FOOD_DRINK', description: 'Garden harvest, leafy greens, and root veg' },
-            { slug: 'world-cuisines', name: 'World Cuisines', group: 'FOOD_DRINK', description: 'Global specialties, street food, and dishes', featured: true },
-            { slug: 'animals', name: 'Animals & Pets', group: 'ANIMALS_NATURE', description: 'Wild mammals, marine life, and domestic companions' },
-            { slug: 'movies', name: 'Movies & Cinema', group: 'ARTS_ENTERTAINMENT', description: 'Blockbusters, iconic directors, and film genres', featured: true },
-            { slug: 'gaming', name: 'Video Games', group: 'ARTS_ENTERTAINMENT', description: 'Retro classics, esports titles, and game lore' },
-            { slug: 'science', name: 'Science & Cosmos', group: 'ACADEMIC', description: 'Space exploration, elements, physics, and biology' },
-          ]);
-        }
+        console.warn('Failed to load categories, using fallback:', err);
       } finally {
         if (isMounted) setLoading(false);
       }

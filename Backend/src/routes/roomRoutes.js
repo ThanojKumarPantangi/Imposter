@@ -8,6 +8,7 @@ import {
   getCategories,
   getRoom,
   updateSettings,
+  updateRoomCategories,
   updatePlayerCategories
 } from '../controllers/roomController.js';
 
@@ -19,6 +20,7 @@ router.get('/active', getActiveRoom);
 router.post('/leave', leaveRoom);
 router.post('/return-to-lobby', returnToLobby);
 router.post('/settings', updateSettings);
+router.post('/categories', updateRoomCategories);
 router.post('/player-categories', updatePlayerCategories);
 router.get('/categories', getCategories);
 router.get('/:roomCode', getRoom);

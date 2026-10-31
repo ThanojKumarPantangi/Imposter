@@ -442,7 +442,7 @@ describe('🎮 Authoritative Imposter Multiplayer Test Suite', () => {
       assert.equal(refreshed.settings.impostersCount, 2);
     });
 
-    test('59-62. Independent per-player category selection without overwriting peers', async () => {
+    test('59-62. One Shared Room Category Selection per room — any member can change, all players synchronized', async () => {
       const host = { id: 'h_cat', username: 'HostCat' };
       const p2 = { id: 'p2_cat', username: 'Player2Cat' };
       const p3 = { id: 'p3_cat', username: 'Player3Cat' };
@@ -450,40 +450,70 @@ describe('🎮 Authoritative Imposter Multiplayer Test Suite', () => {
       await gameEngine.joinRoom(room.code, p2);
       await gameEngine.joinRoom(room.code, p3);
 
-      // Host chooses Fruits and Vegetables
-      await gameEngine.updatePlayerCategories(room.code, host.id, ['fruits', 'vegetables'], ['Fruits', 'Vegetables']);
-      // Player 2 chooses Animals and Gaming
-      await gameEngine.updatePlayerCategories(room.code, p2.id, ['animals', 'gaming'], ['Animals', 'Gaming']);
-      // Player 3 chooses Movies
-      await gameEngine.updatePlayerCategories(room.code, p3.id, ['movies'], ['Movies']);
+      // Normal player (p2) updates shared room categories to 3 categories
+      const update1 = await gameEngine.updateRoomCategories(
+        room.code,
+        p2.id,
+        ['fruits', 'vegetables', 'gaming'],
+        ['Fruits', 'Vegetables', 'Video Games']
+      );
 
-      const latestRoom = await roomRepository.getRoom(room.code);
+      assert.deepEqual(update1.categorySlugs, ['fruits', 'vegetables', 'gaming']);
+      assert.equal(update1.categorySlugs.length, 3);
 
-      // Verify per-player preferences in Redis
-      assert.deepEqual(latestRoom.playerCategoryPreferences[host.id], ['fruits', 'vegetables']);
-      assert.deepEqual(latestRoom.playerCategoryPreferences[p2.id], ['animals', 'gaming']);
-      assert.deepEqual(latestRoom.playerCategoryPreferences[p3.id], ['movies']);
+      const latestRoom1 = await roomRepository.getRoom(room.code);
+      // Verify authoritative shared categories in Redis settings
+      assert.deepEqual(latestRoom1.settings.categorySlugs, ['fruits', 'vegetables', 'gaming']);
+      assert.deepEqual(latestRoom1.settings.selectedCategories, ['fruits', 'vegetables', 'gaming']);
+
+      // Verify all players see the exact same 3 categories in sanitized views
+      const sanitizedHost = gameEngine.sanitizeRoomForPlayer(latestRoom1, host.id);
+      const sanitizedP2 = gameEngine.sanitizeRoomForPlayer(latestRoom1, p2.id);
+      const sanitizedP3 = gameEngine.sanitizeRoomForPlayer(latestRoom1, p3.id);
+
+      assert.deepEqual(sanitizedHost.settings.categorySlugs, ['fruits', 'vegetables', 'gaming']);
+      assert.deepEqual(sanitizedP2.settings.categorySlugs, ['fruits', 'vegetables', 'gaming']);
+      assert.deepEqual(sanitizedP3.settings.categorySlugs, ['fruits', 'vegetables', 'gaming']);
+      assert.equal(sanitizedHost.settings.categorySlugs.length, 3);
+      assert.equal(sanitizedP2.settings.categorySlugs.length, 3);
+      assert.equal(sanitizedP3.settings.categorySlugs.length, 3);
+
+      // Another player (p3) deselects gaming -> 2 categories remain
+      await gameEngine.updateRoomCategories(
+        room.code,
+        p3.id,
+        ['fruits', 'vegetables'],
+        ['Fruits', 'Vegetables']
+      );
+
+      const latestRoom2 = await roomRepository.getRoom(room.code);
+      assert.deepEqual(latestRoom2.settings.categorySlugs, ['fruits', 'vegetables']);
+
+      const sanitizedHostAfter = gameEngine.sanitizeRoomForPlayer(latestRoom2, host.id);
+      const sanitizedP2After = gameEngine.sanitizeRoomForPlayer(latestRoom2, p2.id);
+      assert.deepEqual(sanitizedHostAfter.settings.categorySlugs, ['fruits', 'vegetables']);
+      assert.deepEqual(sanitizedP2After.settings.categorySlugs, ['fruits', 'vegetables']);
+      assert.equal(sanitizedHostAfter.settings.categorySlugs.length, 2);
+      assert.equal(sanitizedP2After.settings.categorySlugs.length, 2);
 
       // Verify empty selection is rejected
       await assert.rejects(
         async () => {
-          await gameEngine.updatePlayerCategories(room.code, p2.id, []);
+          await gameEngine.updateRoomCategories(room.code, p2.id, []);
         },
         /You must select at least one word category/
       );
 
-      // Verify category preferences survive sanitized room views
-      const sanitizedP2 = gameEngine.sanitizeRoomForPlayer(latestRoom, p2.id);
-      assert.deepEqual(sanitizedP2.myCategorySlugs, ['animals', 'gaming']);
-      assert.equal(sanitizedP2.secretWord, null, 'Secret word not set before start');
-      assert.equal(sanitizedP2.playerCategoryPreferences, undefined, 'Raw preferences map hidden');
-
-      // Verify peer category count visible
-      const p2HostCard = sanitizedP2.players.find(p => p.id === host.id);
-      assert.equal(p2HostCard.selectedCategoriesCount, 2);
+      // Verify unauthorized non-member is rejected
+      await assert.rejects(
+        async () => {
+          await gameEngine.updateRoomCategories(room.code, 'stranger_id', ['fruits']);
+        },
+        /Player is not an active member of this room/
+      );
     });
 
-    test('63-66. Match start validation blocks players with 0 categories & uses player word pools', async () => {
+    test('63-66. Match start uses shared room category word pool; secret word is identical for all Civilians', async () => {
       const host = { id: 'h_val', username: 'HostVal' };
       const p2 = { id: 'p2_val', username: 'Player2Val' };
       const p3 = { id: 'p3_val', username: 'Player3Val' };
@@ -491,61 +521,55 @@ describe('🎮 Authoritative Imposter Multiplayer Test Suite', () => {
       await gameEngine.joinRoom(room.code, p2);
       await gameEngine.joinRoom(room.code, p3);
 
-      // Retrieve full updated room with all 3 joined players
-      const roomWithAll = await roomRepository.getRoom(room.code);
-
-      // Manually simulate an empty preference for p3
-      roomWithAll.playerCategoryPreferences[p3.id] = [];
-      const p3Obj = roomWithAll.players.find(p => p.id === p3.id);
-      p3Obj.selectedCategorySlugs = [];
-      await roomRepository.saveRoom(room.code, roomWithAll);
-
-      // Check validation
-      const readiness = gameEngine.canStartGame(roomWithAll);
-      assert.equal(readiness.ready, false);
-      assert.ok(readiness.reason.includes('has not selected any word category'));
-
-      // Restore p3 valid category preference
-      await gameEngine.updatePlayerCategories(room.code, p3.id, ['animals'], ['Animals']);
+      // Player 2 sets room categories to Animals and Movies
+      await gameEngine.updateRoomCategories(room.code, p2.id, ['animals', 'movies'], ['Animals & Pets', 'Movies & Cinema']);
 
       // Start game
       const started = await gameEngine.startGame(room.code, host.id);
       assert.equal(started.status, 'ROLE_REVEAL');
 
-      // Verify each player has role assigned and word/hint generated
       const imposter = started.players.find(p => p.role === 'IMPOSTER');
-      const civilian = started.players.find(p => p.role === 'CIVILIAN');
+      const civilians = started.players.filter(p => p.role === 'CIVILIAN');
 
       assert.ok(imposter, 'Must have at least 1 imposter');
-      assert.ok(civilian, 'Must have civilians');
+      assert.equal(civilians.length, 2, 'Must have 2 civilians');
+
+      // Imposter receives null secretWord and the hint
       assert.equal(imposter.secretWord, null, 'Imposter must not receive secretWord directly');
       assert.ok(imposter.hint, 'Imposter must receive hint');
-      assert.ok(civilian.secretWord, 'Civilian must receive secret word');
-      assert.ok(civilian.hint, 'Civilian must receive hint');
 
-      // Verify category update during active match is rejected
+      // All Civilians receive the EXACT SAME secret word and hint
+      assert.ok(civilians[0].secretWord, 'Civilian 1 has secret word');
+      assert.ok(civilians[1].secretWord, 'Civilian 2 has secret word');
+      assert.equal(civilians[0].secretWord, civilians[1].secretWord, 'All Civilians must receive identical secret word');
+      assert.equal(civilians[0].hint, civilians[1].hint, 'All Civilians must receive identical hint');
+      assert.equal(civilians[0].hint, imposter.hint, 'Civilian and Imposter share the same hint');
+
+      // Category update during active match is rejected
       await assert.rejects(
         async () => {
-          await gameEngine.updatePlayerCategories(room.code, p2.id, ['movies'], ['Movies']);
+          await gameEngine.updateRoomCategories(room.code, p2.id, ['fruits'], ['Fruits']);
         },
         /Categories can only be modified in the lobby/
       );
     });
 
-    test('67-68. Player permanent leave cleans up their category preferences', async () => {
-      const host = { id: 'h_clean', username: 'HostClean' };
-      const p2 = { id: 'p2_clean', username: 'P2Clean' };
+    test('67-68. Empty shared category settings blocks match start', async () => {
+      const host = { id: 'h_empty', username: 'HostEmpty' };
+      const p2 = { id: 'p2_empty', username: 'P2Empty' };
+      const p3 = { id: 'p3_empty', username: 'P3Empty' };
       const room = await gameEngine.createRoom(host);
       await gameEngine.joinRoom(room.code, p2);
+      await gameEngine.joinRoom(room.code, p3);
 
-      await gameEngine.updatePlayerCategories(room.code, p2.id, ['fruits', 'movies'], ['Fruits', 'Movies']);
-      let r = await roomRepository.getRoom(room.code);
-      assert.ok(r.playerCategoryPreferences[p2.id]);
+      const r = await roomRepository.getRoom(room.code);
+      r.settings.categorySlugs = [];
+      r.settings.selectedCategories = [];
+      await roomRepository.saveRoom(room.code, r);
 
-      // p2 leaves lobby
-      await gameEngine.leaveRoom(room.code, p2.id);
-      r = await roomRepository.getRoom(room.code);
-      assert.equal(r.playerCategoryPreferences[p2.id], undefined, 'Left player category preference must be removed');
+      const readiness = gameEngine.canStartGame(r);
+      assert.equal(readiness.ready, false);
+      assert.ok(readiness.reason.includes('At least one word category must be selected for the room'));
     });
   });
 });

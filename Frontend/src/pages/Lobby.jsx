@@ -21,6 +21,7 @@ export function Lobby() {
     roomState,
     disconnectAlert,
     updateSettings,
+    updateRoomCategories,
     updatePlayerCategories,
     kickPlayer,
     startGame,
@@ -67,15 +68,15 @@ export function Lobby() {
     lobbyDisconnectTimeout: 5
   };
 
-  // Personal category preference for the current player
-  const myCategorySlugs = roomState?.myCategorySlugs || ['fruits'];
-  const myCategoryNames = roomState?.myCategoryNames || ['Fruits'];
+  // Shared room category selection across ALL players in this room
+  const sharedCategorySlugs = roomState?.settings?.categorySlugs || roomState?.settings?.selectedCategories || ['fruits'];
+  const sharedCategoryNames = roomState?.settings?.categoryNames || ['Fruits'];
 
   // Check start readiness
   const hasDisconnected = players.some(p => !p.isConnected) || !!disconnectAlert;
   const minPlayersMet = players.length >= 3;
-  const missingCategoriesPlayer = players.find(p => (p.selectedCategoriesCount !== undefined && p.selectedCategoriesCount === 0));
-  const canStart = isHost && minPlayersMet && !hasDisconnected && !missingCategoriesPlayer;
+  const hasCategories = Array.isArray(sharedCategorySlugs) && sharedCategorySlugs.length > 0;
+  const canStart = isHost && minPlayersMet && !hasDisconnected && hasCategories;
 
   const copyRoomLink = () => {
     sounds.playClick();
@@ -91,8 +92,8 @@ export function Lobby() {
         setStartError('Need at least 3 players to start the game.');
       } else if (hasDisconnected) {
         setStartError('Cannot start while a player is temporarily disconnected.');
-      } else if (missingCategoriesPlayer) {
-        setStartError(`Player "${missingCategoriesPlayer.username}" has not selected any word category.`);
+      } else if (!hasCategories) {
+        setStartError('At least one word category must be selected for the room.');
       }
       return;
     }
@@ -170,7 +171,6 @@ export function Lobby() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               {players.map((p) => {
                 const isSelf = p.id === player?.id;
-                const catCount = p.selectedCategoriesCount !== undefined ? p.selectedCategoriesCount : 1;
                 return (
                   <div
                     key={p.id}
@@ -201,10 +201,6 @@ export function Lobby() {
                           ) : (
                             <span className="text-emerald-400 font-medium">Ready</span>
                           )}
-                          <span className="text-slate-600">•</span>
-                          <span className="text-cyan-400/90 font-medium text-[10px]">
-                            {catCount} {catCount === 1 ? 'category' : 'categories'}
-                          </span>
                         </div>
                       </div>
                     </div>
@@ -232,8 +228,8 @@ export function Lobby() {
                 <span className="text-amber-400 font-medium">⚠️ Waiting for {3 - players.length} more players to join</span>
               ) : hasDisconnected ? (
                 <span className="text-rose-400 font-medium">⚠️ Start Game is locked while a player is disconnected</span>
-              ) : missingCategoriesPlayer ? (
-                <span className="text-amber-400 font-medium">⚠️ Player "{missingCategoriesPlayer.username}" has not selected any word category</span>
+              ) : !hasCategories ? (
+                <span className="text-amber-400 font-medium">⚠️ At least one word category must be selected</span>
               ) : (
                 <span className="text-emerald-400 font-medium">✅ Lobby is ready to start!</span>
               )}
@@ -259,21 +255,21 @@ export function Lobby() {
         {/* Right Column: Preferences & Host Settings */}
         <div className="glass-card p-6 flex flex-col justify-between">
           <div>
-            {/* Section 1: Player-Specific Word Category Selection (Available to ALL Players) */}
+            {/* Section 1: Shared Word Category Selection (Available to ALL Players in Lobby) */}
             <div className="mb-6 p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/30">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-cyan-400" />
                   <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">
-                    My Word Categories ({myCategorySlugs.length})
+                    Word Categories ({sharedCategorySlugs.length})
                   </span>
                 </div>
                 <span className="text-[10px] text-cyan-400 font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
-                  Per Player
+                  Shared Room
                 </span>
               </div>
               <p className="text-xs text-slate-300 font-medium mb-3 truncate">
-                {myCategoryNames.join(', ')}
+                {sharedCategoryNames.join(', ')}
               </p>
               <button
                 type="button"
@@ -281,10 +277,10 @@ export function Lobby() {
                 className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-950/40"
               >
                 <Layers className="w-4 h-4" />
-                <span>Select / Change My Categories</span>
+                <span>Select / Change Categories</span>
               </button>
               <span className="text-[10px] text-slate-500 mt-2 block leading-relaxed">
-                Your turn's word pool will be drawn from your chosen categories.
+                The match word pool is drawn from these categories. Any player in the lobby can select or change them.
               </span>
             </div>
 
@@ -446,12 +442,13 @@ export function Lobby() {
         </div>
       </div>
 
-      {/* Multi-Category Picker Modal (Personal preference for each player) */}
+      {/* Multi-Category Picker Modal (Shared room categories) */}
       {showCategorySelector && (
         <CategorySelector
-          selectedSlugs={myCategorySlugs}
+          selectedSlugs={sharedCategorySlugs}
           onSelect={(chosenCats) => {
-            updatePlayerCategories(
+            const updater = updateRoomCategories || updatePlayerCategories;
+            updater(
               normalizedCode,
               player.id,
               chosenCats.map(c => c.slug),

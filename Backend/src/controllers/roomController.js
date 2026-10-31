@@ -139,23 +139,31 @@ export const updateSettings = async (req, res) => {
   }
 };
 
-export const updatePlayerCategories = async (req, res) => {
+export const updateRoomCategories = async (req, res) => {
   try {
     const { roomCode, playerId, categorySlugs, categoryNames } = req.body;
     if (!roomCode || !playerId) {
       return res.status(400).json({ success: false, error: 'Room code and player ID are required' });
     }
-    const result = await gameEngine.updatePlayerCategories(
+    const result = await gameEngine.updateRoomCategories(
       roomCode.toUpperCase(),
       playerId,
       categorySlugs,
       categoryNames
     );
-    return res.json({ success: true, categorySlugs: result.categorySlugs, categoryNames: result.categoryNames });
+    return res.json({
+      success: true,
+      categorySlugs: result.categorySlugs,
+      categoryNames: result.categoryNames,
+      selectedCategories: result.categorySlugs,
+      settings: result.room.settings
+    });
   } catch (error) {
     return res.status(400).json({ success: false, error: error.message });
   }
 };
+
+export const updatePlayerCategories = updateRoomCategories;
 
 export default {
   createRoom,
@@ -166,5 +174,6 @@ export default {
   getRoom,
   getCategories,
   updateSettings,
+  updateRoomCategories,
   updatePlayerCategories
 };
