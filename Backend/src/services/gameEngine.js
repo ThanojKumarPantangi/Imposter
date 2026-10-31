@@ -196,10 +196,20 @@ class GameEngine {
       room.settings.impostersCount = impCount;
     }
     if (newSettings.turnDurationSeconds !== undefined) {
-      room.settings.turnDurationSeconds = parseInt(newSettings.turnDurationSeconds, 10);
+      const allowed = [15, 30, 45, 60];
+      const t = parseInt(newSettings.turnDurationSeconds, 10);
+      if (!allowed.includes(t)) {
+        throw new Error('turnDurationSeconds must be one of: 15, 30, 45, 60 seconds');
+      }
+      room.settings.turnDurationSeconds = t;
     }
     if (newSettings.votingDurationSeconds !== undefined) {
-      room.settings.votingDurationSeconds = parseInt(newSettings.votingDurationSeconds, 10);
+      const allowed = [30, 45, 60];
+      const t = parseInt(newSettings.votingDurationSeconds, 10);
+      if (!allowed.includes(t)) {
+        throw new Error('votingDurationSeconds must be one of: 30, 45, 60 seconds');
+      }
+      room.settings.votingDurationSeconds = t;
     }
     if (newSettings.lobbyDisconnectTimeout !== undefined) {
       const allowed = [3, 5, 10, 15, 30];
@@ -678,6 +688,9 @@ class GameEngine {
     const room = await roomRepository.getRoom(roomCode);
     if (!room) throw new Error('Room not found');
     if (room.status !== 'CLUE_ROUND') throw new Error('Not currently in clue submission phase');
+    if (room.turnDeadline && Date.now() > room.turnDeadline + 500) {
+      throw new Error('Turn clue timer has expired. Late clue submission rejected.');
+    }
     if (room.activeTurnPlayerId !== playerId) throw new Error('It is not your turn');
 
     const player = room.players.find(p => p.id === playerId);
@@ -700,6 +713,10 @@ class GameEngine {
       }
     }
 
+    if (!Array.isArray(room.clueHistory)) {
+      room.clueHistory = [];
+    }
+
     if (player.role === 'IMPOSTER') {
       const targetWord = player.assignedSecretWord || room.secretWord;
       if (targetWord && cleanClue.toLowerCase() === targetWord.toLowerCase()) {
@@ -717,6 +734,9 @@ class GameEngine {
       }
     }
 
+    if (!Array.isArray(player.clues)) {
+      player.clues = [];
+    }
     player.clues.push(cleanClue);
     room.clueHistory.push({
       playerId: player.id,
@@ -743,6 +763,10 @@ class GameEngine {
 
     const player = room.players.find(p => p.id === activeTurnPlayerId);
     const username = player ? player.username : 'Player';
+
+    if (!Array.isArray(room.clueHistory)) {
+      room.clueHistory = [];
+    }
 
     // Record skipped clue with explicit status
     room.clueHistory.push({
@@ -797,6 +821,7 @@ class GameEngine {
     room.votes = {};
     room.votingDeadline = Date.now() + (room.settings.votingDurationSeconds * 1000);
     await roomRepository.clearTurnTimer(room.code);
+    await roomRepository.setVotingTimer(room.code, room.votingDeadline, room.settings.votingDurationSeconds);
 
     await roomRepository.saveRoom(room.code, room);
     return { room, phaseChanged: true, wasSkipped: meta.wasSkipped, skippedPlayer: meta.skippedPlayer };
@@ -809,6 +834,9 @@ class GameEngine {
     const room = await roomRepository.getRoom(roomCode);
     if (!room) throw new Error('Room not found');
     if (room.status !== 'VOTING') throw new Error('Not currently in voting phase');
+    if (room.votingDeadline && Date.now() > room.votingDeadline + 500) {
+      throw new Error('Voting timer has expired. Late vote rejected.');
+    }
 
     const voter = room.players.find(p => p.id === voterId);
     if (!voter || !voter.isAlive || voter.permanentlyDeparted) {
@@ -897,6 +925,7 @@ class GameEngine {
     const room = await roomRepository.getRoom(roomCode);
     if (!room) return null;
     if (room.status === 'FINISHED') return { room, finishedVoting: true, gameOver: true, winnerResult: room.winnerResult };
+    if (room.status !== 'VOTING') return { room, finishedVoting: true, gameOver: false, isFinalShowdown: false };
 
     const voteCounts = {};
     for (const [voterId, targetId] of Object.entries(room.votes)) {
@@ -938,6 +967,8 @@ class GameEngine {
     };
 
     room.status = 'RESULTS';
+    room.votingDeadline = null;
+    await roomRepository.clearVotingTimer(roomCode);
 
     // Run Centralized Winner Resolution
     const winEvaluation = this.evaluateWinner(room);
@@ -1104,6 +1135,7 @@ class GameEngine {
     room.winnerResult = null;
 
     await roomRepository.clearTurnTimer(normalizedCode);
+    await roomRepository.clearVotingTimer(normalizedCode);
     await roomRepository.saveRoom(normalizedCode, room);
 
     return room;
@@ -1127,7 +1159,10 @@ class GameEngine {
       imposters: impostersList
     };
 
+    room.turnDeadline = null;
+    room.votingDeadline = null;
     await roomRepository.clearTurnTimer(room.code);
+    await roomRepository.clearVotingTimer(room.code);
     await roomRepository.saveRoom(room.code, room);
 
     if (mongoose.connection && mongoose.connection.readyState === 1) {

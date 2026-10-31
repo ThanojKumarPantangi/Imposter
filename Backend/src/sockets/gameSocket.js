@@ -36,6 +36,7 @@ export function registerGameSocket(io) {
   const gameNamespace = io.of('/game');
   setupNamespace(gameNamespace);
   setupNamespace(io.of('/'));
+  recoverActiveRoomTimers(gameNamespace);
 }
 
 function setupNamespace(nsp) {
@@ -46,6 +47,18 @@ function setupNamespace(nsp) {
         socket.playerId = playerId;
         socket.join(`user:${playerId}`);
         await roomRepository.mapSocketToPlayer(socket.id, playerId);
+      }
+    });
+
+    // Authoritative Server Clock Synchronization channel
+    socket.on('sync_time', (data, callback) => {
+      const serverTime = Date.now();
+      const clientSendTime = data?.clientSendTime;
+      const payload = { serverTime, clientSendTime };
+      if (typeof callback === 'function') {
+        callback(payload);
+      } else {
+        socket.emit('sync_time_response', payload);
       }
     });
 
@@ -696,11 +709,17 @@ function setupNamespace(nsp) {
         // Record voice participant mapping in Redis
         await roomRepository.addVoiceParticipant(normalizedCode, playerId, socket.id);
 
-        // Fetch current active voice participants in this room
+        // Fetch current active voice participants in this room and verify socket vitality
         const allParticipants = await roomRepository.getVoiceParticipants(normalizedCode);
-        const remoteParticipants = allParticipants.filter(
-          p => p.playerId !== playerId && p.socketId !== socket.id
-        );
+        const remoteParticipants = allParticipants.filter((p) => {
+          if (p.playerId === playerId || p.socketId === socket.id) return false;
+          const liveSocket = nsp.sockets.get(p.socketId);
+          if (!liveSocket) {
+            roomRepository.removeVoiceParticipant(normalizedCode, p.playerId).catch(() => {});
+            return false;
+          }
+          return true;
+        });
 
         // Send existing voice participants to newly joined/reconnected socket
         socket.emit('voice_participants_list', {
@@ -805,12 +824,17 @@ function setupNamespace(nsp) {
 
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
 
-          setTimeout(async () => {
+          const dcTimer = setTimeout(async () => {
+            const activeDeadline = await roomRepository.getLobbyDisconnectTimer(normalizedCode, playerId);
+            if (!activeDeadline) return; // Player reconnected or timer was cleared
+            if (Date.now() < activeDeadline - 200) return; // Deadline hasn't arrived
+
             const currentRoom = await roomRepository.getRoom(normalizedCode);
             if (!currentRoom || currentRoom.status !== 'WAITING') return;
 
             const p = currentRoom.players.find(x => x.id === playerId);
             if (p && !p.isConnected) {
+              await roomRepository.clearLobbyDisconnectTimer(normalizedCode, playerId);
               const result = await gameEngine.leaveRoom(normalizedCode, playerId);
               if (result && result.roomDeleted) {
                 nsp.to(`room:${normalizedCode}`).emit('room_closed', {
@@ -827,6 +851,7 @@ function setupNamespace(nsp) {
               }
             }
           }, (timeoutSeconds + 0.5) * 1000);
+          if (dcTimer?.unref) dcTimer.unref();
         } else if (room.status !== 'FINISHED') {
           // Active Game Disconnect Grace Period (Preserves game state, roles, clues)
           const gracePeriodSeconds = room.settings.gameDisconnectTimeout || room.settings.gameDisconnectGracePeriod || 15;
@@ -851,12 +876,17 @@ function setupNamespace(nsp) {
 
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
 
-          setTimeout(async () => {
+          const gameDcTimer = setTimeout(async () => {
+            const activeDeadline = await roomRepository.getGameDisconnectTimer(normalizedCode, playerId);
+            if (!activeDeadline) return; // Player reconnected
+            if (Date.now() < activeDeadline - 200) return;
+
             const currentRoom = await roomRepository.getRoom(normalizedCode);
             if (!currentRoom || currentRoom.status === 'FINISHED' || currentRoom.status === 'WAITING') return;
 
             const p = currentRoom.players.find(x => x.id === playerId);
             if (p && !p.isConnected && !p.permanentlyDeparted) {
+              await roomRepository.clearGameDisconnectTimer(normalizedCode, playerId);
               console.log(`⏱️ [GracePeriod] Player "${p.username}" exceeded reconnect grace period. Marking permanent departure.`);
               const result = await gameEngine.leaveRoom(normalizedCode, playerId);
 
@@ -878,6 +908,7 @@ function setupNamespace(nsp) {
               }
             }
           }, (gracePeriodSeconds + 0.5) * 1000);
+          if (gameDcTimer?.unref) gameDcTimer.unref();
         }
       } catch (e) {
         console.error('Error handling disconnect:', e);
@@ -930,6 +961,12 @@ function scheduleTurnTimeout(nsp, roomCode) {
             return;
           }
 
+          const redisTurnDeadline = await roomRepository.getTurnTimer(normalizedCode);
+          if (redisTurnDeadline && Date.now() < redisTurnDeadline - 200) {
+            scheduleTurnTimeout(nsp, normalizedCode);
+            return;
+          }
+
           const result = await gameEngine.handleTurnTimeout(normalizedCode, activePlayerId, turnIndex);
           if (result) {
             const skippedPlayer = result.skippedPlayer || freshRoom.players.find(p => p.id === activePlayerId);
@@ -976,6 +1013,7 @@ function scheduleTurnTimeout(nsp, roomCode) {
         }
       }, remainingMs);
 
+      if (timerId?.unref) timerId.unref();
       activeTurnTimers.set(normalizedCode, timerId);
     } catch (e) {
       console.error('Error scheduling turn timeout:', e);
@@ -1007,11 +1045,26 @@ function scheduleVotingTimeout(nsp, roomCode, durationSeconds = 45) {
         ? Math.max(100, (room.votingDeadline - Date.now()) + 50)
         : (configuredDuration + 0.5) * 1000;
 
+      if (room.votingDeadline) {
+        await roomRepository.setVotingTimer(normalizedCode, room.votingDeadline, configuredDuration);
+      }
+
       const timerId = setTimeout(async () => {
         activeVotingTimers.delete(normalizedCode);
         const freshRoom = await roomRepository.getRoom(normalizedCode);
         if (freshRoom && freshRoom.status === 'VOTING' && freshRoom.currentRound === votingRound) {
+          if (freshRoom.votingDeadline && Date.now() < freshRoom.votingDeadline - 200) {
+            scheduleVotingTimeout(nsp, normalizedCode, configuredDuration);
+            return;
+          }
+          const redisVotingDeadline = await roomRepository.getVotingTimer(normalizedCode);
+          if (redisVotingDeadline && Date.now() < redisVotingDeadline - 200) {
+            scheduleVotingTimeout(nsp, normalizedCode, configuredDuration);
+            return;
+          }
+
           const tallyResult = await gameEngine.tallyVotesAndProcessElimination(normalizedCode);
+          if (!tallyResult) return;
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
           if (tallyResult.gameOver) {
             clearRoomPhaseTimers(normalizedCode);
@@ -1023,6 +1076,7 @@ function scheduleVotingTimeout(nsp, roomCode, durationSeconds = 45) {
         }
       }, remainingMs);
 
+      if (timerId?.unref) timerId.unref();
       activeVotingTimers.set(normalizedCode, timerId);
     } catch (e) {
       console.error('Error scheduling voting timeout:', e);
@@ -1079,6 +1133,32 @@ async function broadcastPersonalizedRoomState(nsp, roomCode) {
   }
 }
 
+/**
+ * Recover active room timers on backend startup
+ */
+export async function recoverActiveRoomTimers(nsp) {
+  try {
+    const activeCodes = await roomRepository.getAllActiveRoomCodes();
+    if (!activeCodes || activeCodes.length === 0) return;
+
+    for (const code of activeCodes) {
+      const room = await roomRepository.getRoom(code);
+      if (!room) continue;
+
+      if (room.status === 'CLUE_ROUND' && room.turnDeadline) {
+        console.log(`⏱️ [Recovery] Resuming authoritative turn timer for room ${code}`);
+        scheduleTurnTimeout(nsp, code);
+      } else if (room.status === 'VOTING' && room.votingDeadline) {
+        console.log(`⏱️ [Recovery] Resuming authoritative voting timer for room ${code}`);
+        scheduleVotingTimeout(nsp, code, room.settings?.votingDurationSeconds || 45);
+      }
+    }
+  } catch (err) {
+    console.error('Error recovering active room timers:', err);
+  }
+}
+
 export default {
-  registerGameSocket
+  registerGameSocket,
+  recoverActiveRoomTimers
 };

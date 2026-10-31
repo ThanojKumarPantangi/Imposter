@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Clock } from 'lucide-react';
+import { serverTimeSync } from '../utils/serverTimeSync';
 
 export function CountdownTimer({ deadline, totalSeconds = 30, onExpire, label }) {
   const onExpireRef = useRef(onExpire);
@@ -11,7 +12,7 @@ export function CountdownTimer({ deadline, totalSeconds = 30, onExpire, label })
 
   const [timeLeft, setTimeLeft] = useState(() => {
     if (!deadline) return 0;
-    return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    return serverTimeSync.getRemainingSeconds(deadline);
   });
 
   useEffect(() => {
@@ -21,7 +22,7 @@ export function CountdownTimer({ deadline, totalSeconds = 30, onExpire, label })
       return;
     }
 
-    const calc = () => Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    const calc = () => serverTimeSync.getRemainingSeconds(deadline);
     const initialRem = calc();
     setTimeLeft(initialRem);
     if (initialRem <= 0) {
@@ -43,7 +44,15 @@ export function CountdownTimer({ deadline, totalSeconds = 30, onExpire, label })
       }
     }, 250);
 
-    return () => clearInterval(interval);
+    const unsubscribe = serverTimeSync.subscribe(() => {
+      const rem = calc();
+      setTimeLeft(rem);
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [deadline]);
 
   if (!deadline) {

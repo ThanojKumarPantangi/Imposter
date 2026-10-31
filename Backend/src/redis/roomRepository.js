@@ -55,6 +55,7 @@ class RoomRepository {
 
     // Delete timer keys
     await this.clearTurnTimer(normalizedCode);
+    await this.clearVotingTimer(normalizedCode);
     await this.clearVoiceParticipants(normalizedCode);
 
     // Delete room state and room code from active index
@@ -194,10 +195,39 @@ class RoomRepository {
     await redis.set(`timer:turn:${roomCode.toUpperCase()}`, deadline.toString(), 'EX', timeoutSeconds + 10);
   }
 
+  async getTurnTimer(roomCode) {
+    if (!roomCode) return null;
+    const redis = getRedisClient();
+    const val = await redis.get(`timer:turn:${roomCode.toUpperCase()}`);
+    return val ? parseInt(val, 10) : null;
+  }
+
   async clearTurnTimer(roomCode) {
     if (!roomCode) return;
     const redis = getRedisClient();
     await redis.del(`timer:turn:${roomCode.toUpperCase()}`);
+  }
+
+  /**
+   * Voting timer tracking in Redis
+   */
+  async setVotingTimer(roomCode, deadline, timeoutSeconds = 45) {
+    if (!roomCode) return;
+    const redis = getRedisClient();
+    await redis.set(`timer:voting:${roomCode.toUpperCase()}`, deadline.toString(), 'EX', timeoutSeconds + 10);
+  }
+
+  async getVotingTimer(roomCode) {
+    if (!roomCode) return null;
+    const redis = getRedisClient();
+    const val = await redis.get(`timer:voting:${roomCode.toUpperCase()}`);
+    return val ? parseInt(val, 10) : null;
+  }
+
+  async clearVotingTimer(roomCode) {
+    if (!roomCode) return;
+    const redis = getRedisClient();
+    await redis.del(`timer:voting:${roomCode.toUpperCase()}`);
   }
 
   /**

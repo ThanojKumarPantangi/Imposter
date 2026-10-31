@@ -10,12 +10,13 @@ import { useSocket } from '../context/SocketContext';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { sounds } from '../utils/sound';
+import { serverTimeSync } from '../utils/serverTimeSync';
 
 function DisconnectCountdownBadge({ deadline, timeout = 15, isGameOver = false }) {
   const [secondsLeft, setSecondsLeft] = useState(() => {
     if (isGameOver) return 0;
     if (!deadline) return timeout;
-    return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    return serverTimeSync.getRemainingSeconds(deadline);
   });
 
   useEffect(() => {
@@ -26,13 +27,17 @@ function DisconnectCountdownBadge({ deadline, timeout = 15, isGameOver = false }
         setSecondsLeft(timeout);
         return;
       }
-      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      const remaining = serverTimeSync.getRemainingSeconds(deadline);
       setSecondsLeft(remaining);
     };
 
     tick();
     const timer = setInterval(tick, 500);
-    return () => clearInterval(timer);
+    const unsubscribe = serverTimeSync.subscribe(tick);
+    return () => {
+      clearInterval(timer);
+      unsubscribe();
+    };
   }, [deadline, timeout, isGameOver]);
 
   if (isGameOver) return null;

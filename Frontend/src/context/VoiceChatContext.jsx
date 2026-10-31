@@ -38,7 +38,7 @@ export function VoiceChatProvider({ children }) {
   const { socket, roomState, roomLifecycleState } = useSocket();
   const { player } = useAuth();
 
-  // Restore persisted preferences or defaults: Mic default OFF, Speaker default ON
+  // Restore persisted preferences: Mic default OFF, Speaker default ON
   const savedMic = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('voice_mic_enabled') === 'true' : false;
   const savedSpeaker = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('voice_speaker_enabled') !== 'false' : true;
 
@@ -47,7 +47,7 @@ export function VoiceChatProvider({ children }) {
   const [inVoiceRoom, setInVoiceRoom] = useState(false);
   const [voiceError, setVoiceError] = useState(null);
 
-  // Synchronous refs to prevent stale closure bugs in WebRTC events
+  // Synchronous refs to prevent stale closure bugs in WebRTC and async socket events
   const micEnabledRef = useRef(savedMic);
   const speakerEnabledRef = useRef(savedSpeaker);
   const localStreamRef = useRef(null);
@@ -63,12 +63,43 @@ export function VoiceChatProvider({ children }) {
     speakerEnabledRef.current = speakerEnabled;
   }, [speakerEnabled]);
 
+  // Helper: Attach active local audio track across all active peer connections
+  async function attachTrackToAllPeers(audioTrack) {
+    if (!audioTrack || audioTrack.readyState !== 'live') return;
+    for (const [peerSocketId, peer] of Object.entries(peersRef.current)) {
+      const { pc } = peer;
+      try {
+        const transceiver = pc.getTransceivers().find(
+          t => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio'
+        );
+        if (transceiver && transceiver.sender) {
+          if (transceiver.direction !== 'sendrecv') {
+            transceiver.direction = 'sendrecv';
+          }
+          await transceiver.sender.replaceTrack(audioTrack);
+        } else {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'audio' || !s.track);
+          if (sender) {
+            await sender.replaceTrack(audioTrack);
+          } else if (localStreamRef.current) {
+            pc.addTrack(audioTrack, localStreamRef.current);
+          }
+        }
+      } catch (err) {
+        console.warn(`[WebRTC] Error attaching audio track to peer ${peerSocketId}:`, err);
+      }
+    }
+  }
+
   // Acquire or retrieve local microphone stream
   async function acquireLocalStream() {
     let stream = localStreamRef.current;
     const track = stream?.getAudioTracks()[0];
     if (stream && stream.active && track && track.readyState === 'live') {
       track.enabled = true;
+      if (micEnabledRef.current) {
+        await attachTrackToAllPeers(track);
+      }
       return stream;
     }
 
@@ -85,6 +116,9 @@ export function VoiceChatProvider({ children }) {
     const audioTrack = stream.getAudioTracks()[0];
     if (audioTrack) {
       audioTrack.enabled = true;
+      if (micEnabledRef.current) {
+        await attachTrackToAllPeers(audioTrack);
+      }
     }
     return stream;
   }
@@ -122,7 +156,7 @@ export function VoiceChatProvider({ children }) {
 
     const pc = new RTCPeerConnection(ICE_SERVERS);
 
-    // Attach active local audio track if mic is currently ON
+    // Attach active local audio track if mic is currently ON and stream is available
     const audioTrack = localStreamRef.current?.getAudioTracks()[0];
     if (audioTrack && audioTrack.readyState === 'live' && micEnabledRef.current) {
       pc.addTrack(audioTrack, localStreamRef.current);
@@ -161,16 +195,18 @@ export function VoiceChatProvider({ children }) {
     // Receive remote audio track
     pc.ontrack = (event) => {
       console.log(`🔊 [WebRTC] ontrack received for peer ${peerSocketId}, track kind:`, event.track.kind);
-      const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
+      const stream = (event.streams && event.streams[0]) || new MediaStream([event.track]);
 
       let audio = remoteAudiosRef.current[peerSocketId];
       if (!audio) {
-        audio = new Audio();
-        audio.autoplay = true;
-        audio.playsInline = true;
-        audio.id = `remote-audio-${peerSocketId}`;
-        // Append to DOM to prevent Chrome from garbage-collecting unattached Audio elements
-        document.body.appendChild(audio);
+        audio = document.getElementById(`remote-audio-${peerSocketId}`);
+        if (!audio) {
+          audio = new Audio();
+          audio.autoplay = true;
+          audio.playsInline = true;
+          audio.id = `remote-audio-${peerSocketId}`;
+          document.body.appendChild(audio);
+        }
         remoteAudiosRef.current[peerSocketId] = audio;
       }
 
@@ -179,22 +215,11 @@ export function VoiceChatProvider({ children }) {
       audio.volume = 1.0;
 
       const playAudio = () => {
-        if (!audio.srcObject) return;
+        if (!audio || !audio.srcObject) return;
         const playPromise = audio.play();
         if (playPromise !== undefined) {
           playPromise.catch((err) => {
-            console.log('🔇 Autoplay waiting for user gesture:', err?.message);
-            const resumeAudio = () => {
-              if (audio && audio.srcObject) {
-                audio.play().catch(() => {});
-              }
-              window.removeEventListener('click', resumeAudio);
-              window.removeEventListener('keydown', resumeAudio);
-              window.removeEventListener('touchstart', resumeAudio);
-            };
-            window.addEventListener('click', resumeAudio, { once: true });
-            window.addEventListener('keydown', resumeAudio, { once: true });
-            window.addEventListener('touchstart', resumeAudio, { once: true });
+            console.log('🔇 [Voice] Autoplay waiting for user gesture:', err?.message);
           });
         }
       };
@@ -273,20 +298,29 @@ export function VoiceChatProvider({ children }) {
       return;
     }
 
+    let isCancelled = false;
     setInVoiceRoom(true);
 
-    // Auto-restore microphone stream if previously saved as ON
-    if (micEnabledRef.current) {
-      acquireLocalStream().catch(err => {
-        console.warn('Could not auto-restore mic stream on room join/refresh:', err.message);
-        setMicEnabled(false);
-        micEnabledRef.current = false;
-        sessionStorage.setItem('voice_mic_enabled', 'false');
-      });
-    }
+    // Asynchronous voice setup: If mic was previously ON, acquire it FIRST before emitting join!
+    const initVoiceSession = async () => {
+      if (micEnabledRef.current) {
+        try {
+          await acquireLocalStream();
+        } catch (err) {
+          console.warn('Could not auto-restore mic stream on room join/refresh:', err.message);
+          setMicEnabled(false);
+          micEnabledRef.current = false;
+          sessionStorage.setItem('voice_mic_enabled', 'false');
+        }
+      }
 
-    // Join voice signaling room on backend
-    socket.emit('voice_signal_join', { roomCode: roomState.code, playerId: player.id });
+      if (isCancelled) return;
+
+      // Join voice signaling room on backend
+      socket.emit('voice_signal_join', { roomCode: roomState.code, playerId: player.id });
+    };
+
+    initVoiceSession();
 
     // Handle authoritative list of active participants returned by backend
     const handleVoiceParticipantsList = async ({ participants }) => {
@@ -364,7 +398,15 @@ export function VoiceChatProvider({ children }) {
             t => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio'
           );
           if (transceiver && transceiver.sender) {
+            if (transceiver.direction !== 'sendrecv') {
+              transceiver.direction = 'sendrecv';
+            }
             await transceiver.sender.replaceTrack(audioTrack);
+          } else {
+            const sender = pc.getSenders().find(s => s.track?.kind === 'audio');
+            if (sender) {
+              await sender.replaceTrack(audioTrack);
+            }
           }
         }
 
@@ -440,12 +482,28 @@ export function VoiceChatProvider({ children }) {
     const handleSocketConnect = () => {
       console.log('🔄 [Voice] Socket reconnected, re-initializing voice peers with new socket ID:', socket.id);
       cleanupAllPeers();
-      socket.emit('voice_signal_join', { roomCode: roomState.code, playerId: player.id });
+      initVoiceSession();
     };
 
     socket.on('connect', handleSocketConnect);
 
+    // Global user interaction listener to unlock blocked browser audio playback
+    const unlockAllRemoteAudios = () => {
+      if (!speakerEnabledRef.current) return;
+      Object.values(remoteAudiosRef.current).forEach(audio => {
+        if (audio && audio.srcObject && audio.paused) {
+          audio.play().catch(() => {});
+        }
+      });
+    };
+
+    window.addEventListener('click', unlockAllRemoteAudios);
+    window.addEventListener('keydown', unlockAllRemoteAudios);
+    window.addEventListener('touchstart', unlockAllRemoteAudios);
+    window.addEventListener('pointerdown', unlockAllRemoteAudios);
+
     return () => {
+      isCancelled = true;
       socket.off('voice_participants_list', handleVoiceParticipantsList);
       socket.off('voice_peer_joined', handlePeerJoined);
       socket.off('voice_signal_offer', handleSignalOffer);
@@ -453,6 +511,12 @@ export function VoiceChatProvider({ children }) {
       socket.off('voice_signal_ice_candidate', handleSignalIceCandidate);
       socket.off('voice_peer_left', handlePeerLeft);
       socket.off('connect', handleSocketConnect);
+
+      window.removeEventListener('click', unlockAllRemoteAudios);
+      window.removeEventListener('keydown', unlockAllRemoteAudios);
+      window.removeEventListener('touchstart', unlockAllRemoteAudios);
+      window.removeEventListener('pointerdown', unlockAllRemoteAudios);
+
       cleanupAllPeers();
     };
   }, [socket, roomState?.code, player?.id, roomLifecycleState]);
@@ -467,20 +531,25 @@ export function VoiceChatProvider({ children }) {
         const audioTrack = stream.getAudioTracks()[0];
         if (audioTrack) {
           audioTrack.enabled = true;
+          await attachTrackToAllPeers(audioTrack);
 
-          // Attach or replace track across all active peer connections
-          for (const { pc } of Object.values(peersRef.current)) {
+          // If any peer connection transceiver direction was recvonly, renegotiate
+          for (const [peerSocketId, peer] of Object.entries(peersRef.current)) {
+            const { pc } = peer;
             const transceiver = pc.getTransceivers().find(
               t => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio'
             );
-            if (transceiver && transceiver.sender) {
-              await transceiver.sender.replaceTrack(audioTrack);
-            } else {
-              const sender = pc.getSenders().find(s => s.track?.kind === 'audio');
-              if (sender) {
-                await sender.replaceTrack(audioTrack);
-              } else {
-                pc.addTrack(audioTrack, stream);
+            if (transceiver && transceiver.currentDirection === 'recvonly' && pc.signalingState === 'stable') {
+              try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socket.emit('voice_signal_offer', {
+                  targetSocketId: peerSocketId,
+                  offer,
+                  callerId: player.id
+                });
+              } catch (renegErr) {
+                console.warn('[WebRTC] Renegotiation error on mic unmute:', renegErr);
               }
             }
           }
@@ -578,3 +647,5 @@ export function useVoiceChat() {
   }
   return context;
 }
+
+export default VoiceChatContext;

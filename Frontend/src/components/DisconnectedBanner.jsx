@@ -1,23 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { WifiOff, AlertTriangle } from 'lucide-react';
+import { serverTimeSync } from '../utils/serverTimeSync';
 
 export function DisconnectedBanner({ alertData }) {
   if (!alertData) return null;
 
   const { username, deadline, timeoutSeconds } = alertData;
-  const [secondsRemaining, setSecondsRemaining] = useState(timeoutSeconds || 5);
+  const [secondsRemaining, setSecondsRemaining] = useState(() => {
+    if (deadline) return serverTimeSync.getRemainingSeconds(deadline);
+    return timeoutSeconds || 5;
+  });
 
   useEffect(() => {
     function tick() {
       if (deadline) {
-        const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+        const left = serverTimeSync.getRemainingSeconds(deadline);
         setSecondsRemaining(left);
       }
     }
 
     tick();
     const interval = setInterval(tick, 500);
-    return () => clearInterval(interval);
+    const unsubscribe = serverTimeSync.subscribe(tick);
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [deadline]);
 
   return (

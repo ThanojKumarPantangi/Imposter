@@ -2,7 +2,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'http';
 import { Server } from 'socket.io';
-import { io as ClientIo } from 'file:///d:/Game/Frontend/node_modules/socket.io-client/build/esm/index.js';
+import { io as ClientIo } from '../../Frontend/node_modules/socket.io-client/build/esm/index.js';
 import gameEngine from '../src/services/gameEngine.js';
 import roomRepository from '../src/redis/roomRepository.js';
 import { registerGameSocket } from '../src/sockets/gameSocket.js';
@@ -30,6 +30,7 @@ describe('🎙️ WebRTC Voice Chat Signaling & Redis State Test Suite', () => {
   after(async () => {
     ioServer?.close();
     httpServer?.close();
+    setTimeout(() => process.exit(0), 300).unref();
   });
 
   test('1. Voice participants lifecycle, Redis mappings, and cleanup', async () => {

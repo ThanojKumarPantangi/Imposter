@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { roomApi } from '../api/roomApi';
 import { sounds } from '../utils/sound';
+import { serverTimeSync } from '../utils/serverTimeSync';
 
 const SocketContext = createContext(null);
 
@@ -51,6 +52,9 @@ export function SocketProvider({ children }) {
       console.log('⚡ [Socket] Connected to server, ID:', socket.id);
       setIsConnected(true);
 
+      // Perform initial authoritative clock synchronization
+      serverTimeSync.syncWithSocket(socket);
+
       const currentPlayer = playerRef.current;
       const currentLifecycle = roomLifecycleRef.current;
       const savedRoomCode = sessionStorage.getItem('active_room_code');
@@ -94,6 +98,7 @@ export function SocketProvider({ children }) {
         setRoomLifecycleState('ACTIVE_ROOM');
         setRoomState(data.room);
         sessionStorage.setItem('active_room_code', data.room.code);
+        serverTimeSync.syncWithSocket(socket);
         console.log('🔄 [Socket] Restored active room session:', data.room.code);
       } else {
         sessionStorage.removeItem('active_room_code');
@@ -400,7 +405,14 @@ export function SocketProvider({ children }) {
       showToast(`⚠️ ${err.message}`);
     });
 
+    const periodicSync = setInterval(() => {
+      if (socket.connected) {
+        serverTimeSync.syncWithSocket(socket);
+      }
+    }, 20000);
+
     return () => {
+      clearInterval(periodicSync);
       if (socket) socket.disconnect();
     };
   }, []); // Run ONCE on mount, NEVER disconnect when player updates profile!
@@ -621,7 +633,8 @@ export function SocketProvider({ children }) {
         startGame,
         submitClue,
         submitVote,
-        requestSync
+        requestSync,
+        serverTimeSync
       }}
     >
       {children}
