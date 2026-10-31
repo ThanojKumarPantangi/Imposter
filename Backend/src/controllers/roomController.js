@@ -31,6 +31,65 @@ export const joinRoom = async (req, res) => {
   }
 };
 
+export const getActiveRoom = async (req, res) => {
+  try {
+    const playerId = req.query.playerId;
+    if (!playerId) {
+      return res.status(400).json({ success: false, error: 'Player ID required' });
+    }
+
+    const roomCode = await roomRepository.getPlayerRoomMapping(playerId);
+    if (!roomCode) {
+      return res.json({ success: true, activeRoom: null });
+    }
+
+    const room = await roomRepository.getRoom(roomCode);
+    if (!room) {
+      await roomRepository.removePlayerRoomMapping(playerId);
+      return res.json({ success: true, activeRoom: null });
+    }
+
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || player.permanentlyDeparted) {
+      await roomRepository.removePlayerRoomMapping(playerId);
+      return res.json({ success: true, activeRoom: null });
+    }
+
+    const sanitized = gameEngine.sanitizeRoomForPlayer(room, playerId);
+    return res.json({ success: true, roomCode, activeRoom: sanitized });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const leaveRoom = async (req, res) => {
+  try {
+    const { roomCode, playerId } = req.body;
+    if (!roomCode || !playerId) {
+      return res.status(400).json({ success: false, error: 'Room code and Player ID required' });
+    }
+
+    const result = await gameEngine.leaveRoom(roomCode, playerId);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const returnToLobby = async (req, res) => {
+  try {
+    const { roomCode, playerId } = req.body;
+    if (!roomCode || !playerId) {
+      return res.status(400).json({ success: false, error: 'Room code and Player ID required' });
+    }
+
+    const room = await gameEngine.returnToLobby(roomCode, playerId);
+    return res.json({ success: true, room });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+};
+
 export const getRoom = async (req, res) => {
   try {
     const { roomCode } = req.params;
@@ -50,7 +109,7 @@ export const getRoom = async (req, res) => {
 export const getCategories = async (req, res) => {
   try {
     const categories = await Category.find({ status: 'PUBLISHED' })
-      .select('id numericId slug name group icon iconKey description tags minPlayableWords wordsCount displayOrder featured')
+      .select('id numericId slug name group icon iconKey description tags minPlayableWords wordsCount displayOrder featured words')
       .sort({ displayOrder: 1, name: 1 })
       .lean();
 
@@ -63,6 +122,9 @@ export const getCategories = async (req, res) => {
 export default {
   createRoom,
   joinRoom,
+  getActiveRoom,
+  leaveRoom,
+  returnToLobby,
   getRoom,
   getCategories
 };

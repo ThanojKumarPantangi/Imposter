@@ -51,10 +51,13 @@ export function Home() {
       const res = await roomApi.createRoom(player, {
         categorySlug: 'fruits',
         categoryName: 'Fruits',
+        categorySlugs: ['fruits'],
+        categoryNames: ['Fruits'],
         impostersCount: 1,
         turnDurationSeconds: 30,
         votingDurationSeconds: 45,
-        lobbyDisconnectTimeout: 5
+        lobbyDisconnectTimeout: 5,
+        gameDisconnectGracePeriod: 30
       });
 
       if (res.success && res.room) {

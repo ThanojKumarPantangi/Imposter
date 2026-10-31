@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Copy, Check, Play, UserX, Settings, Layers, Clock, ShieldAlert,
@@ -23,7 +23,8 @@ export function Lobby() {
     updateSettings,
     kickPlayer,
     startGame,
-    joinRoom
+    joinRoom,
+    leaveRoom
   } = useSocket();
 
   const [copied, setCopied] = useState(false);
@@ -47,16 +48,30 @@ export function Lobby() {
     }
   }, [roomState?.status, normalizedCode]);
 
+  // Leave room cleanly when clicking Leave or navigating to Home
+  const handleLeaveRoom = useCallback(async () => {
+    sounds.playClick();
+    if (player?.id) {
+      await leaveRoom(normalizedCode, player.id);
+    }
+    navigate('/');
+  }, [leaveRoom, normalizedCode, player?.id, navigate]);
+
   const isHost = roomState?.hostId === player?.id;
   const players = roomState?.players || [];
   const settings = roomState?.settings || {
     categoryName: 'Fruits',
     categorySlug: 'fruits',
+    categorySlugs: ['fruits'],
+    categoryNames: ['Fruits'],
     impostersCount: 1,
     turnDurationSeconds: 30,
     votingDurationSeconds: 45,
     lobbyDisconnectTimeout: 5
   };
+
+  const selectedSlugs = settings.categorySlugs || (settings.categorySlug ? [settings.categorySlug] : ['fruits']);
+  const selectedNames = settings.categoryNames || (settings.categoryName ? [settings.categoryName] : ['Fruits']);
 
   // Check start readiness
   const hasDisconnected = players.some(p => !p.isConnected) || !!disconnectAlert;
@@ -95,7 +110,7 @@ export function Lobby() {
       {/* Top Header */}
       <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
         <button
-          onClick={() => navigate('/')}
+          onClick={handleLeaveRoom}
           className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white px-3 py-2 rounded-xl bg-dark-900 border border-slate-800 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -124,7 +139,7 @@ export function Lobby() {
         <VoiceControls />
       </div>
 
-      {/* Disconnected Player Countdown Banner (Specification 8 & 9) */}
+      {/* Disconnected Player Countdown Banner */}
       <DisconnectedBanner alertData={disconnectAlert} />
 
       {startError && (
@@ -188,7 +203,7 @@ export function Lobby() {
                       </div>
                     </div>
 
-                    {/* Host Kick Option (Specification Section 10) */}
+                    {/* Host Kick Option */}
                     {isHost && !isSelf && (
                       <button
                         onClick={() => setPlayerToKick(p)}
@@ -242,10 +257,10 @@ export function Lobby() {
             </div>
 
             <div className="space-y-4">
-              {/* Word Category */}
+              {/* Word Categories (Multi-select) */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Word Category
+                  Word Categories ({selectedSlugs.length})
                 </label>
                 <button
                   type="button"
@@ -253,11 +268,15 @@ export function Lobby() {
                   onClick={() => setShowCategorySelector(true)}
                   className="w-full flex items-center justify-between p-3 rounded-xl bg-dark-950 border border-slate-700 hover:border-slate-600 text-left transition-all disabled:opacity-80"
                 >
-                  <div>
-                    <span className="text-sm font-bold text-white block">{settings.categoryName || 'Fruits'}</span>
-                    <span className="text-[11px] text-slate-400">Tap to browse categories</span>
+                  <div className="flex-1 pr-2">
+                    <span className="text-sm font-bold text-white block truncate">
+                      {selectedNames.join(', ')}
+                    </span>
+                    <span className="text-[11px] text-cyan-400 font-semibold">
+                      {isHost ? 'Tap to choose multiple categories' : `${selectedSlugs.length} categories active`}
+                    </span>
                   </div>
-                  <Layers className="w-4 h-4 text-cyan-400" />
+                  <Layers className="w-4 h-4 text-cyan-400 flex-shrink-0" />
                 </button>
               </div>
 
@@ -336,13 +355,13 @@ export function Lobby() {
                 </div>
               </div>
 
-              {/* Lobby Disconnect Timeout (Specification 8.4) */}
+              {/* Lobby Disconnect Timeout */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Lobby Disconnect Timeout
                   </label>
-                  <span className="text-[10px] text-rose-400 font-semibold">New</span>
+                  <span className="text-[10px] text-rose-400 font-semibold">Configurable</span>
                 </div>
                 <div className="grid grid-cols-5 gap-1.5">
                   {[3, 5, 10, 15, 30].map((sec) => (
@@ -370,14 +389,16 @@ export function Lobby() {
         </div>
       </div>
 
-      {/* Category Picker Modal */}
+      {/* Multi-Category Picker Modal */}
       {showCategorySelector && (
         <CategorySelector
-          selectedSlug={settings.categorySlug}
-          onSelect={(cat) => {
+          selectedSlugs={selectedSlugs}
+          onSelect={(chosenCats) => {
             updateSettings(normalizedCode, player.id, {
-              categorySlug: cat.slug,
-              categoryName: cat.name
+              categorySlugs: chosenCats.map(c => c.slug),
+              categoryNames: chosenCats.map(c => c.name),
+              categorySlug: chosenCats[0]?.slug,
+              categoryName: chosenCats.map(c => c.name).join(', ')
             });
           }}
           onClose={() => setShowCategorySelector(false)}
@@ -395,3 +416,5 @@ export function Lobby() {
     </div>
   );
 }
+
+export default Lobby;

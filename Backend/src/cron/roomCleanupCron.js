@@ -10,7 +10,17 @@ export async function cleanupStaleRooms() {
         await roomRepository.deleteRoom(code);
         continue;
       }
-      if (room.updatedAt && now - room.updatedAt > 48 * 60 * 60 * 1000) {
+
+      // Check if room has zero active players
+      const activePlayers = (room.players || []).filter(p => !p.permanentlyDeparted);
+      if (activePlayers.length === 0) {
+        console.log(`[Cron] Cleaning up zero-member room: ${code}`);
+        await roomRepository.deleteRoom(code);
+        continue;
+      }
+
+      // Check if stale (untouched for > 24 hours)
+      if (room.updatedAt && now - room.updatedAt > 24 * 60 * 60 * 1000) {
         console.log(`[Cron] Cleaning up stale room: ${code}`);
         await roomRepository.deleteRoom(code);
       }

@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import roomRepository from '../redis/roomRepository.js';
 import Category from '../models/Category.js';
@@ -12,7 +14,7 @@ class GameEngine {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
     for (let i = 0; i < 4; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
+      code += chars.charAt(crypto.randomInt(0, chars.length));
     }
     return code;
   }
@@ -28,18 +30,29 @@ class GameEngine {
       attempts++;
     }
 
+    const categorySlugs = Array.isArray(options.categorySlugs) && options.categorySlugs.length > 0
+      ? options.categorySlugs
+      : (options.categorySlug ? [options.categorySlug] : ['fruits']);
+
+    const categoryNames = Array.isArray(options.categoryNames) && options.categoryNames.length > 0
+      ? options.categoryNames
+      : (options.categoryName ? [options.categoryName] : ['Fruits']);
+
     const room = {
       code: roomCode,
       hostId: hostPlayer.id,
       status: 'WAITING',
       settings: {
-        categorySlug: options.categorySlug || 'fruits',
-        categoryName: options.categoryName || 'Fruits',
+        categorySlugs,
+        categoryNames,
+        categorySlug: categorySlugs[0],
+        categoryName: categoryNames.join(', '),
         impostersCount: options.impostersCount || 1,
         turnDurationSeconds: options.turnDurationSeconds || 30,
         votingDurationSeconds: options.votingDurationSeconds || 45,
         lobbyDisconnectTimeout: options.lobbyDisconnectTimeout || 5,
-        maxPlayers: options.maxPlayers || 20
+        gameDisconnectGracePeriod: options.gameDisconnectGracePeriod || 30,
+        maxPlayers: options.maxPlayers || 50
       },
       players: [
         {
@@ -49,6 +62,7 @@ class GameEngine {
           isHost: true,
           isConnected: true,
           isAlive: true,
+          permanentlyDeparted: false,
           role: null,
           secretWord: null,
           hint: null,
@@ -67,7 +81,9 @@ class GameEngine {
       votingDeadline: null,
       eliminationResult: null,
       winnerResult: null,
-      createdAt: Date.now()
+      lastImposters: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
 
     await roomRepository.saveRoom(roomCode, room);
@@ -80,9 +96,11 @@ class GameEngine {
    * Player joins an existing room
    */
   async joinRoom(roomCode, player) {
-    const room = await roomRepository.getRoom(roomCode);
+    if (!roomCode) throw new Error('Room code is required');
+    const normalizedCode = roomCode.toUpperCase();
+    const room = await roomRepository.getRoom(normalizedCode);
     if (!room) {
-      throw new Error('Room not found with code ' + roomCode);
+      throw new Error('Room not found with code ' + normalizedCode);
     }
 
     if (room.status !== 'WAITING') {
@@ -91,28 +109,31 @@ class GameEngine {
         throw new Error('Game is already in progress and you are not a participant in this room');
       }
       existingPlayer.isConnected = true;
-      await roomRepository.saveRoom(roomCode, room);
-      await roomRepository.setPlayerRoomMapping(player.id, roomCode);
+      existingPlayer.permanentlyDeparted = false;
+      await roomRepository.saveRoom(normalizedCode, room);
+      await roomRepository.setPlayerRoomMapping(player.id, normalizedCode);
       return room;
     }
 
-    if (room.players.length >= room.settings.maxPlayers) {
+    if (room.players.length >= (room.settings.maxPlayers || 50)) {
       throw new Error('Room has reached maximum capacity');
     }
 
     let existing = room.players.find(p => p.id === player.id);
     if (existing) {
       existing.isConnected = true;
+      existing.permanentlyDeparted = false;
       existing.username = player.username;
       existing.avatar = player.avatar || existing.avatar;
     } else {
       room.players.push({
         id: player.id,
         username: player.username,
-        avatar: player.avatar || `avatar-${Math.floor(1 + Math.random() * 8)}`,
+        avatar: player.avatar || `avatar-${crypto.randomInt(1, 9)}`,
         isHost: false,
         isConnected: true,
         isAlive: true,
+        permanentlyDeparted: false,
         role: null,
         secretWord: null,
         hint: null,
@@ -120,8 +141,8 @@ class GameEngine {
       });
     }
 
-    await roomRepository.saveRoom(roomCode, room);
-    await roomRepository.setPlayerRoomMapping(player.id, roomCode);
+    await roomRepository.saveRoom(normalizedCode, room);
+    await roomRepository.setPlayerRoomMapping(player.id, normalizedCode);
 
     return room;
   }
@@ -135,10 +156,27 @@ class GameEngine {
     if (room.hostId !== hostId) throw new Error('Only the room host can modify settings');
     if (room.status !== 'WAITING') throw new Error('Settings can only be changed in the lobby');
 
-    if (newSettings.categorySlug) room.settings.categorySlug = newSettings.categorySlug;
-    if (newSettings.categoryName) room.settings.categoryName = newSettings.categoryName;
+    if (newSettings.categorySlugs && Array.isArray(newSettings.categorySlugs)) {
+      if (newSettings.categorySlugs.length === 0) {
+        throw new Error('At least one category must be selected');
+      }
+      room.settings.categorySlugs = Array.from(new Set(newSettings.categorySlugs));
+      if (newSettings.categoryNames && Array.isArray(newSettings.categoryNames)) {
+        room.settings.categoryNames = newSettings.categoryNames;
+        room.settings.categoryName = newSettings.categoryNames.join(', ');
+      }
+      room.settings.categorySlug = room.settings.categorySlugs[0];
+    } else if (newSettings.categorySlug) {
+      room.settings.categorySlug = newSettings.categorySlug;
+      room.settings.categorySlugs = [newSettings.categorySlug];
+      if (newSettings.categoryName) {
+        room.settings.categoryName = newSettings.categoryName;
+        room.settings.categoryNames = [newSettings.categoryName];
+      }
+    }
+
     if (newSettings.impostersCount) {
-      const impCount = Math.max(1, Math.min(parseInt(newSettings.impostersCount, 10), Math.floor((room.players.length || 3) / 2)));
+      const impCount = Math.max(1, Math.min(parseInt(newSettings.impostersCount, 10), Math.max(1, Math.floor((room.players.length || 3) / 2))));
       room.settings.impostersCount = impCount;
     }
     if (newSettings.turnDurationSeconds) room.settings.turnDurationSeconds = parseInt(newSettings.turnDurationSeconds, 10);
@@ -149,6 +187,9 @@ class GameEngine {
       if (allowed.includes(t)) {
         room.settings.lobbyDisconnectTimeout = t;
       }
+    }
+    if (newSettings.gameDisconnectGracePeriod) {
+      room.settings.gameDisconnectGracePeriod = parseInt(newSettings.gameDisconnectGracePeriod, 10);
     }
 
     await roomRepository.saveRoom(roomCode, room);
@@ -164,20 +205,7 @@ class GameEngine {
     if (room.hostId !== hostId) throw new Error('Only the room host can remove players');
     if (hostId === targetPlayerId) throw new Error('Host cannot kick themselves');
 
-    const index = room.players.findIndex(p => p.id === targetPlayerId);
-    if (index === -1) throw new Error('Player not found in this room');
-
-    const removedPlayer = room.players.splice(index, 1)[0];
-
-    await roomRepository.removePlayerRoomMapping(targetPlayerId);
-    await roomRepository.clearLobbyDisconnectTimer(roomCode, targetPlayerId);
-
-    if (room.status !== 'WAITING' && room.status !== 'FINISHED') {
-      await this.evaluateDepartureVictory(room, removedPlayer);
-    }
-
-    await roomRepository.saveRoom(roomCode, room);
-    return { room, removedPlayer };
+    return await this.leaveRoom(roomCode, targetPlayerId, true);
   }
 
   /**
@@ -186,7 +214,7 @@ class GameEngine {
   canStartGame(room) {
     if (!room || room.status !== 'WAITING') return { ready: false, reason: 'Game not in lobby state' };
     if (room.players.length < 3) return { ready: false, reason: 'Minimum 3 players required to start' };
-    
+
     const disconnected = room.players.filter(p => !p.isConnected);
     if (disconnected.length > 0) {
       return {
@@ -205,7 +233,7 @@ class GameEngine {
   }
 
   /**
-   * Start Game
+   * Start Game with Multi-Category support and Fair Imposter Assignment
    */
   async startGame(roomCode, hostId) {
     const room = await roomRepository.getRoom(roomCode);
@@ -217,53 +245,99 @@ class GameEngine {
       throw new Error(readiness.reason);
     }
 
-    const category = await Category.findOne({
-      $or: [
-        { slug: room.settings.categorySlug },
-        { id: room.settings.categorySlug },
-        { name: room.settings.categoryName }
-      ]
-    });
+    // 1. Gather all selected categories
+    const slugs = Array.isArray(room.settings.categorySlugs) && room.settings.categorySlugs.length > 0
+      ? room.settings.categorySlugs
+      : (room.settings.categorySlug ? [room.settings.categorySlug] : ['fruits']);
 
-    let selectedWord = 'Apple';
-    let selectedHint = 'Crisp fruit, often red or green';
-
-    if (category && category.words && category.words.length > 0) {
-      const activeWords = category.words.filter(w => w.enabled !== false);
-      const chosen = activeWords[Math.floor(Math.random() * activeWords.length)];
-      selectedWord = chosen.word;
-      selectedHint = chosen.hint;
-      room.settings.categoryName = category.name;
+    let categories = [];
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      try {
+        categories = await Category.find({
+          $or: [
+            { slug: { $in: slugs } },
+            { id: { $in: slugs } }
+          ]
+        }).maxTimeMS(3000);
+      } catch (err) {
+        console.warn('Could not query Category collection:', err.message);
+      }
     }
 
-    room.secretWord = selectedWord;
-    room.hint = selectedHint;
-
-    const playerCount = room.players.length;
-    const imposterTarget = Math.min(room.settings.impostersCount || 1, Math.floor(playerCount / 2));
-    
-    const indices = Array.from({ length: playerCount }, (_, i) => i);
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
-
-    const imposterIndices = new Set(indices.slice(0, imposterTarget));
-
-    room.players.forEach((player, idx) => {
-      player.isAlive = true;
-      player.clues = [];
-      if (imposterIndices.has(idx)) {
-        player.role = 'IMPOSTER';
-        player.hint = selectedHint;
-        player.secretWord = null;
-      } else {
-        player.role = 'CIVILIAN';
-        player.secretWord = selectedWord;
-        player.hint = selectedHint;
+    let combinedWords = [];
+    categories.forEach(cat => {
+      if (cat.words && cat.words.length > 0) {
+        const active = cat.words.filter(w => w.enabled !== false);
+        active.forEach(w => {
+          combinedWords.push({
+            word: w.word,
+            hint: w.hint,
+            categoryName: cat.name
+          });
+        });
       }
     });
 
+    // Fallback if no words found
+    if (combinedWords.length === 0) {
+      combinedWords.push({
+        word: 'Apple',
+        hint: 'Crisp fruit, often red or green',
+        categoryName: 'Fruits'
+      });
+    }
+
+    // Uniform random selection from combined pool
+    const chosenWordIndex = crypto.randomInt(0, combinedWords.length);
+    const chosenWordEntry = combinedWords[chosenWordIndex];
+
+    room.secretWord = chosenWordEntry.word;
+    room.hint = chosenWordEntry.hint;
+    room.settings.categoryName = chosenWordEntry.categoryName;
+
+    const playerCount = room.players.length;
+    const imposterTarget = Math.min(room.settings.impostersCount || 1, Math.floor(playerCount / 2));
+
+    // Fair Imposter Assignment:
+    // Create candidate pool of indices. If playerCount > imposterTarget + 1 and previous imposters exist,
+    // prefer selecting from non-previous imposters first to avoid repetition, while maintaining true randomness.
+    const lastImposterIds = new Set(room.lastImposters || []);
+    let eligibleIndices = Array.from({ length: playerCount }, (_, i) => i);
+
+    // Shuffle indices with crypto unbiased Fisher-Yates
+    for (let i = eligibleIndices.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(0, i + 1);
+      [eligibleIndices[i], eligibleIndices[j]] = [eligibleIndices[j], eligibleIndices[i]];
+    }
+
+    // If candidate set has non-last imposters and we have enough players to rotate
+    if (lastImposterIds.size > 0 && playerCount > imposterTarget * 2) {
+      const nonRecent = eligibleIndices.filter(idx => !lastImposterIds.has(room.players[idx].id));
+      const recent = eligibleIndices.filter(idx => lastImposterIds.has(room.players[idx].id));
+      eligibleIndices = [...nonRecent, ...recent];
+    }
+
+    const chosenImposterIndices = new Set(eligibleIndices.slice(0, imposterTarget));
+    const newImposterIds = [];
+
+    room.players.forEach((player, idx) => {
+      player.isAlive = true;
+      player.permanentlyDeparted = false;
+      player.eliminatedAtRound = null;
+      player.clues = [];
+      if (chosenImposterIndices.has(idx)) {
+        player.role = 'IMPOSTER';
+        player.hint = room.hint;
+        player.secretWord = null;
+        newImposterIds.push(player.id);
+      } else {
+        player.role = 'CIVILIAN';
+        player.secretWord = room.secretWord;
+        player.hint = room.hint;
+      }
+    });
+
+    room.lastImposters = newImposterIds;
     room.status = 'ROLE_REVEAL';
     room.currentRound = 1;
     room.clueHistory = [];
@@ -276,21 +350,29 @@ class GameEngine {
   }
 
   /**
-   * Transition from ROLE_REVEAL to CLUE_ROUND
+   * Transition from ROLE_REVEAL to CLUE_ROUND with randomized starting player
    */
   async startClueRound(roomCode) {
     const room = await roomRepository.getRoom(roomCode);
     if (!room) return null;
 
-    const livingPlayers = room.players.filter(p => p.isAlive);
+    const livingPlayers = room.players.filter(p => p.isAlive && !p.permanentlyDeparted);
     if (livingPlayers.length === 0) return room;
 
-    room.turnOrder = livingPlayers.map(p => p.id);
+    // Random starting player selection (Unbiased, host not always first)
+    const shuffledLiving = [...livingPlayers];
+    for (let i = shuffledLiving.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(0, i + 1);
+      [shuffledLiving[i], shuffledLiving[j]] = [shuffledLiving[j], shuffledLiving[i]];
+    }
+
+    room.turnOrder = shuffledLiving.map(p => p.id);
     room.activeTurnIndex = 0;
     room.activeTurnPlayerId = room.turnOrder[0];
     room.turnDeadline = Date.now() + (room.settings.turnDurationSeconds * 1000);
     room.status = 'CLUE_ROUND';
 
+    await roomRepository.setTurnTimer(roomCode, room.turnDeadline, room.settings.turnDurationSeconds);
     await roomRepository.saveRoom(roomCode, room);
     return room;
   }
@@ -305,13 +387,17 @@ class GameEngine {
     if (room.activeTurnPlayerId !== playerId) throw new Error('It is not your turn');
 
     const player = room.players.find(p => p.id === playerId);
-    if (!player || !player.isAlive) throw new Error('Active player not eligible');
+    if (!player || !player.isAlive || player.permanentlyDeparted) {
+      throw new Error('Active player not eligible');
+    }
 
     const cleanClue = (clueText || '').trim();
     if (!cleanClue) throw new Error('Clue cannot be empty');
 
-    const isDuplicate = room.clueHistory.some(c => c.clue.toLowerCase() === cleanClue.toLowerCase());
-    if (isDuplicate) throw new Error('This word has already been entered in this game. Choose another related word.');
+    const isDuplicate = room.clueHistory.some(c => c.clue && c.clue.toLowerCase() === cleanClue.toLowerCase());
+    if (isDuplicate) {
+      throw new Error('This word has already been entered in this game. Choose another related word.');
+    }
 
     if (player.role === 'CIVILIAN') {
       if (cleanClue.toLowerCase() === room.secretWord.toLowerCase()) {
@@ -326,6 +412,7 @@ class GameEngine {
           username: player.username,
           clue: cleanClue,
           round: room.currentRound,
+          skipped: false,
           timestamp: Date.now(),
           isWinningGuess: true
         });
@@ -340,25 +427,70 @@ class GameEngine {
       username: player.username,
       clue: cleanClue,
       round: room.currentRound,
+      skipped: false,
       timestamp: Date.now()
     });
 
+    return await this.advanceTurnOrder(room);
+  }
+
+  /**
+   * Authoritative Turn Timeout (Skipped turn)
+   */
+  async handleTurnTimeout(roomCode, activeTurnPlayerId, expectedTurnIndex) {
+    const room = await roomRepository.getRoom(roomCode);
+    if (!room) return null;
+    if (room.status !== 'CLUE_ROUND') return null;
+    if (room.activeTurnPlayerId !== activeTurnPlayerId) return null;
+    if (room.activeTurnIndex !== expectedTurnIndex) return null;
+
+    const player = room.players.find(p => p.id === activeTurnPlayerId);
+    const username = player ? player.username : 'Player';
+
+    // Record skipped clue
+    room.clueHistory.push({
+      playerId: activeTurnPlayerId,
+      username: username,
+      clue: null,
+      skipped: true,
+      round: room.currentRound,
+      timestamp: Date.now()
+    });
+
+    console.log(`⏱️ [GameEngine] Turn expired for ${username} in ${roomCode}. Turn SKIPPED.`);
+    return await this.advanceTurnOrder(room, { wasSkipped: true, skippedPlayer: player });
+  }
+
+  /**
+   * Advance turn order to next living eligible player or transition to VOTING
+   */
+  async advanceTurnOrder(room, meta = {}) {
     room.activeTurnIndex += 1;
-    if (room.activeTurnIndex < room.turnOrder.length) {
-      room.activeTurnPlayerId = room.turnOrder[room.activeTurnIndex];
-      room.turnDeadline = Date.now() + (room.settings.turnDurationSeconds * 1000);
-      await roomRepository.saveRoom(roomCode, room);
-      return { room, phaseChanged: false };
+
+    // Find next eligible living player
+    while (room.activeTurnIndex < room.turnOrder.length) {
+      const nextPlayerId = room.turnOrder[room.activeTurnIndex];
+      const p = room.players.find(x => x.id === nextPlayerId);
+      if (p && p.isAlive && !p.permanentlyDeparted) {
+        room.activeTurnPlayerId = nextPlayerId;
+        room.turnDeadline = Date.now() + (room.settings.turnDurationSeconds * 1000);
+        await roomRepository.setTurnTimer(room.code, room.turnDeadline, room.settings.turnDurationSeconds);
+        await roomRepository.saveRoom(room.code, room);
+        return { room, phaseChanged: false, wasSkipped: meta.wasSkipped, skippedPlayer: meta.skippedPlayer };
+      }
+      room.activeTurnIndex += 1;
     }
 
+    // All living players have had their turn -> Transition to VOTING
     room.status = 'VOTING';
     room.activeTurnPlayerId = null;
     room.turnDeadline = null;
     room.votes = {};
     room.votingDeadline = Date.now() + (room.settings.votingDurationSeconds * 1000);
+    await roomRepository.clearTurnTimer(room.code);
 
-    await roomRepository.saveRoom(roomCode, room);
-    return { room, phaseChanged: true };
+    await roomRepository.saveRoom(room.code, room);
+    return { room, phaseChanged: true, wasSkipped: meta.wasSkipped, skippedPlayer: meta.skippedPlayer };
   }
 
   /**
@@ -370,16 +502,20 @@ class GameEngine {
     if (room.status !== 'VOTING') throw new Error('Not currently in voting phase');
 
     const voter = room.players.find(p => p.id === voterId);
-    if (!voter || !voter.isAlive) throw new Error('Only living players can vote');
+    if (!voter || !voter.isAlive || voter.permanentlyDeparted) {
+      throw new Error('Only living players can vote');
+    }
 
     const target = room.players.find(p => p.id === targetPlayerId);
-    if (!target || !target.isAlive) throw new Error('Vote target must be an active living player');
+    if (!target || !target.isAlive || target.permanentlyDeparted) {
+      throw new Error('Vote target must be an active living player');
+    }
 
     if (voterId === targetPlayerId) throw new Error('You cannot vote for yourself');
 
     room.votes[voterId] = targetPlayerId;
 
-    const livingCount = room.players.filter(p => p.isAlive).length;
+    const livingCount = room.players.filter(p => p.isAlive && !p.permanentlyDeparted).length;
     const votesCount = Object.keys(room.votes).length;
 
     await roomRepository.saveRoom(roomCode, room);
@@ -392,11 +528,66 @@ class GameEngine {
   }
 
   /**
-   * Tally votes
+   * Centralized Winner Resolution
+   * Evaluates victory conditions strictly on currently LIVING, non-departed players.
+   */
+  evaluateWinner(room) {
+    const livingCivilians = room.players.filter(p => p.isAlive && !p.permanentlyDeparted && p.role === 'CIVILIAN');
+    const livingImposters = room.players.filter(p => p.isAlive && !p.permanentlyDeparted && p.role === 'IMPOSTER');
+
+    // Rule 1: No living Imposters -> Civilians win immediately!
+    if (livingImposters.length === 0) {
+      return {
+        gameOver: true,
+        winnerRole: 'CIVILIAN',
+        winCondition: 'ALL_IMPOSTERS_ELIMINATED'
+      };
+    }
+
+    // Rule 2: No living Civilians -> Imposters win immediately!
+    if (livingCivilians.length === 0) {
+      return {
+        gameOver: true,
+        winnerRole: 'IMPOSTER',
+        winCondition: 'ALL_CIVILIANS_ELIMINATED'
+      };
+    }
+
+    // Rule 3: Imposters reach numerical parity or majority over Civilians
+    // Examples: 1 Imposter vs 1 Civilian -> Imposters win!
+    //           2 Imposters vs 2 Civilians -> Imposters win!
+    //           2 Imposters vs 1 Civilian -> Imposters win!
+    if (livingImposters.length >= livingCivilians.length) {
+      return {
+        gameOver: true,
+        winnerRole: 'IMPOSTER',
+        winCondition: 'IMPOSTERS_PARITY'
+      };
+    }
+
+    // Rule 4: Final Showdown threshold (1 Imposter vs 2 Civilians = 3 living players)
+    // The game MUST CONTINUE for another clue round and then decisive vote!
+    if (livingImposters.length === 1 && livingCivilians.length === 2) {
+      return {
+        gameOver: false,
+        isFinalShowdown: true
+      };
+    }
+
+    // Rule 5: Any other case -> Continue normally
+    return {
+      gameOver: false,
+      isFinalShowdown: false
+    };
+  }
+
+  /**
+   * Tally votes and process elimination with centralized victory evaluation
    */
   async tallyVotesAndProcessElimination(roomCode) {
     const room = await roomRepository.getRoom(roomCode);
     if (!room) return null;
+    if (room.status === 'FINISHED') return { room, finishedVoting: true, gameOver: true, winnerResult: room.winnerResult };
 
     const voteCounts = {};
     for (const [voterId, targetId] of Object.entries(room.votes)) {
@@ -420,7 +611,7 @@ class GameEngine {
     let eliminatedPlayer = null;
     if (eliminatedPlayerId && !isTie) {
       eliminatedPlayer = room.players.find(p => p.id === eliminatedPlayerId);
-      if (eliminatedPlayer) {
+      if (eliminatedPlayer && eliminatedPlayer.isAlive) {
         eliminatedPlayer.isAlive = false;
         eliminatedPlayer.eliminatedAtRound = room.currentRound;
       }
@@ -439,58 +630,175 @@ class GameEngine {
 
     room.status = 'RESULTS';
 
-    const livingImposters = room.players.filter(p => p.isAlive && p.role === 'IMPOSTER');
-    const livingCivilians = room.players.filter(p => p.isAlive && p.role === 'CIVILIAN');
-
-    if (livingImposters.length === 0) {
-      return await this.endGameWithWinner(room, 'CIVILIAN', 'ALL_IMPOSTERS_ELIMINATED');
-    }
-
-    const totalLiving = livingImposters.length + livingCivilians.length;
-    if (totalLiving <= 2) {
-      if (livingImposters.length >= livingCivilians.length) {
-        return await this.endGameWithWinner(room, 'IMPOSTER', 'FINAL_SHOWDOWN_DECISIVE');
-      }
-    } else if (totalLiving === 3 && eliminatedPlayer && eliminatedPlayer.role === 'CIVILIAN') {
-      return await this.endGameWithWinner(room, 'IMPOSTER', 'FINAL_SHOWDOWN_DECISIVE');
-    }
-
-    if (livingImposters.length >= livingCivilians.length) {
-      return await this.endGameWithWinner(room, 'IMPOSTER', 'IMPOSTERS_PARITY');
+    // Run Centralized Winner Resolution
+    const winEvaluation = this.evaluateWinner(room);
+    if (winEvaluation.gameOver) {
+      return await this.endGameWithWinner(room, winEvaluation.winnerRole, winEvaluation.winCondition);
     }
 
     room.currentRound += 1;
     await roomRepository.saveRoom(roomCode, room);
 
-    return { room, finishedVoting: true, gameOver: false };
+    return { room, finishedVoting: true, gameOver: false, isFinalShowdown: winEvaluation.isFinalShowdown };
   }
 
   /**
-   * Evaluate departure victory
+   * Centralized Player Departure (Intentional leave or Grace Period Expiration)
    */
-  async evaluateDepartureVictory(room, departedPlayer) {
-    if (!departedPlayer.isAlive) return;
-
-    const livingImposters = room.players.filter(p => p.isAlive && p.role === 'IMPOSTER');
-    const livingCivilians = room.players.filter(p => p.isAlive && p.role === 'CIVILIAN');
-
-    if (livingImposters.length === 0) {
-      await this.endGameWithWinner(room, 'CIVILIAN', 'PERMANENT_DEPARTURE');
-      return;
+  async leaveRoom(roomCode, playerId, isKick = false) {
+    if (!roomCode || !playerId) return null;
+    const normalizedCode = roomCode.toUpperCase();
+    const room = await roomRepository.getRoom(normalizedCode);
+    if (!room) {
+      await roomRepository.removePlayerRoomMapping(playerId);
+      return { roomDeleted: true };
     }
 
-    if (departedPlayer.role === 'CIVILIAN' && (livingCivilians.length + livingImposters.length) <= 2) {
-      await this.endGameWithWinner(room, 'IMPOSTER', 'PERMANENT_DEPARTURE');
-      return;
+    const playerIndex = room.players.findIndex(p => p.id === playerId);
+    if (playerIndex === -1) {
+      await roomRepository.removePlayerRoomMapping(playerId);
+      return { room, departedPlayer: null };
     }
 
-    if (livingImposters.length >= livingCivilians.length) {
-      await this.endGameWithWinner(room, 'IMPOSTER', 'PERMANENT_DEPARTURE');
+    const departedPlayer = room.players[playerIndex];
+    await roomRepository.removePlayerRoomMapping(playerId);
+    await roomRepository.clearLobbyDisconnectTimer(normalizedCode, playerId);
+    await roomRepository.clearGameDisconnectTimer(normalizedCode, playerId);
+
+    // 1. In WAITING (Lobby) phase
+    if (room.status === 'WAITING') {
+      room.players.splice(playerIndex, 1);
+
+      if (room.players.length === 0) {
+        await roomRepository.deleteRoom(normalizedCode);
+        return { roomDeleted: true, departedPlayer };
+      }
+
+      // Transfer host if departed player was host
+      if (departedPlayer.isHost && room.players.length > 0) {
+        room.players[0].isHost = true;
+        room.hostId = room.players[0].id;
+      }
+
+      await roomRepository.saveRoom(normalizedCode, room);
+      return { room, departedPlayer, roomDeleted: false };
     }
+
+    // 2. In Active Game phase
+    if (room.status !== 'FINISHED') {
+      const wasLiving = departedPlayer.isAlive && !departedPlayer.permanentlyDeparted;
+      departedPlayer.permanentlyDeparted = true;
+      departedPlayer.isAlive = false;
+      departedPlayer.isConnected = false;
+
+      // Eliminated spectators leaving do NOT affect living player counts or victory
+      if (!wasLiving) {
+        const remainingActive = room.players.filter(p => !p.permanentlyDeparted);
+        if (remainingActive.length === 0) {
+          await roomRepository.deleteRoom(normalizedCode);
+          return { roomDeleted: true, departedPlayer };
+        }
+        await roomRepository.saveRoom(normalizedCode, room);
+        return { room, departedPlayer, roomDeleted: false };
+      }
+
+      // Living player departed:
+      // If currently their turn in CLUE_ROUND, advance turn
+      if (room.status === 'CLUE_ROUND' && room.activeTurnPlayerId === playerId) {
+        await this.advanceTurnOrder(room, { wasSkipped: true, skippedPlayer: departedPlayer });
+      }
+
+      // Re-evaluate victory conditions with centralized rules
+      const winEval = this.evaluateWinner(room);
+      if (winEval.gameOver) {
+        const endResult = await this.endGameWithWinner(room, winEval.winnerRole, winEval.winCondition);
+        return { ...endResult, departedPlayer, roomDeleted: false };
+      }
+
+      const remainingActive = room.players.filter(p => !p.permanentlyDeparted);
+      if (remainingActive.length === 0) {
+        await roomRepository.deleteRoom(normalizedCode);
+        return { roomDeleted: true, departedPlayer };
+      }
+
+      await roomRepository.saveRoom(normalizedCode, room);
+      return { room, departedPlayer, roomDeleted: false };
+    }
+
+    // 3. In FINISHED phase
+    departedPlayer.permanentlyDeparted = true;
+    departedPlayer.isConnected = false;
+    const remainingActive = room.players.filter(p => !p.permanentlyDeparted);
+    if (remainingActive.length === 0) {
+      await roomRepository.deleteRoom(normalizedCode);
+      return { roomDeleted: true, departedPlayer };
+    }
+
+    await roomRepository.saveRoom(normalizedCode, room);
+    return { room, departedPlayer, roomDeleted: false };
   }
 
   /**
-   * Finalize Game
+   * Return to Lobby (Preserves room code, host, settings, and active members)
+   */
+  async returnToLobby(roomCode, playerId) {
+    if (!roomCode) throw new Error('Room code is required');
+    const normalizedCode = roomCode.toUpperCase();
+    const room = await roomRepository.getRoom(normalizedCode);
+    if (!room) throw new Error('Room not found or expired');
+
+    if (room.status !== 'FINISHED' && room.status !== 'WAITING') {
+      throw new Error('Game is still in progress');
+    }
+
+    // Only keep players who have not permanently departed
+    room.players = room.players.filter(p => !p.permanentlyDeparted);
+    if (room.players.length === 0) {
+      await roomRepository.deleteRoom(normalizedCode);
+      throw new Error('Room has no remaining members');
+    }
+
+    // Reset player active in-game fields
+    room.players.forEach(p => {
+      p.isAlive = true;
+      p.role = null;
+      p.secretWord = null;
+      p.hint = null;
+      p.clues = [];
+      p.eliminatedAtRound = null;
+      p.permanentlyDeparted = false;
+    });
+
+    // Ensure valid host
+    const hostExists = room.players.some(p => p.id === room.hostId);
+    if (!hostExists && room.players.length > 0) {
+      room.players[0].isHost = true;
+      room.hostId = room.players[0].id;
+    }
+
+    // Reset match fields to WAITING
+    room.status = 'WAITING';
+    room.currentRound = 1;
+    room.turnOrder = [];
+    room.activeTurnIndex = 0;
+    room.activeTurnPlayerId = null;
+    room.turnDeadline = null;
+    room.secretWord = null;
+    room.hint = null;
+    room.clueHistory = [];
+    room.votes = {};
+    room.votingDeadline = null;
+    room.eliminationResult = null;
+    room.winnerResult = null;
+
+    await roomRepository.clearTurnTimer(normalizedCode);
+    await roomRepository.saveRoom(normalizedCode, room);
+
+    return room;
+  }
+
+  /**
+   * Finalize Game and persist to MongoDB
    */
   async endGameWithWinner(room, winnerRole, winCondition) {
     room.status = 'FINISHED';
@@ -507,54 +815,57 @@ class GameEngine {
       imposters: impostersList
     };
 
+    await roomRepository.clearTurnTimer(room.code);
     await roomRepository.saveRoom(room.code, room);
 
-    try {
-      const historyRecord = new GameHistory({
-        roomCode: room.code,
-        hostId: room.hostId,
-        categoryName: room.settings.categoryName,
-        secretWord: room.secretWord,
-        hint: room.hint,
-        winnerRole,
-        winCondition,
-        impostersCount: impostersList.length,
-        roundsCount: room.currentRound,
-        players: room.players.map(p => ({
-          playerId: p.id,
-          username: p.username,
-          role: p.role,
-          isWinner: p.role === winnerRole,
-          isAlive: p.isAlive,
-          eliminatedAtRound: p.eliminatedAtRound || null,
-          clues: p.clues,
-          votesReceived: (room.eliminationResult && room.eliminationResult.voteCounts && room.eliminationResult.voteCounts[p.id]) || 0
-        }))
-      });
-      await historyRecord.save();
-
-      for (const p of room.players) {
-        const isWinner = p.role === winnerRole;
-        await Guest.findByIdAndUpdate(p.id, {
-          $inc: {
-            'stats.gamesPlayed': 1,
-            'stats.wins': isWinner ? 1 : 0,
-            'stats.civilianWins': isWinner && p.role === 'CIVILIAN' ? 1 : 0,
-            'stats.imposterWins': isWinner && p.role === 'IMPOSTER' ? 1 : 0,
-            'stats.cluesGiven': (p.clues || []).length
-          }
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      try {
+        const historyRecord = new GameHistory({
+          roomCode: room.code,
+          hostId: room.hostId || (room.players && room.players[0] && room.players[0].id) || 'system',
+          categoryName: (room.settings && room.settings.categoryName) || 'General',
+          secretWord: room.secretWord || 'Word',
+          hint: room.hint || 'Hint',
+          winnerRole,
+          winCondition,
+          impostersCount: impostersList.length,
+          roundsCount: room.currentRound || 1,
+          players: room.players.map(p => ({
+            playerId: p.id,
+            username: p.username,
+            role: p.role,
+            isWinner: p.role === winnerRole,
+            isAlive: p.isAlive,
+            eliminatedAtRound: p.eliminatedAtRound || null,
+            clues: p.clues,
+            votesReceived: (room.eliminationResult && room.eliminationResult.voteCounts && room.eliminationResult.voteCounts[p.id]) || 0
+          }))
         });
+        await historyRecord.save();
+
+        for (const p of room.players) {
+          const isWinner = p.role === winnerRole;
+          await Guest.findByIdAndUpdate(p.id, {
+            $inc: {
+              'stats.gamesPlayed': 1,
+              'stats.wins': isWinner ? 1 : 0,
+              'stats.civilianWins': isWinner && p.role === 'CIVILIAN' ? 1 : 0,
+              'stats.imposterWins': isWinner && p.role === 'IMPOSTER' ? 1 : 0,
+              'stats.cluesGiven': (p.clues || []).length
+            }
+          });
+        }
+        console.log(`💾 [GameEngine] Stored completed match in MongoDB for room ${room.code}`);
+      } catch (err) {
+        console.error('Error saving game history to MongoDB:', err.message);
       }
-      console.log(`💾 [GameEngine] Stored completed match in MongoDB for room ${room.code}`);
-    } catch (err) {
-      console.error('Error saving game history to MongoDB:', err);
     }
 
     return { room, gameOver: true, winnerResult: room.winnerResult };
   }
 
   /**
-   * Sanitize room state
+   * Sanitize room state for private client view
    */
   sanitizeRoomForPlayer(room, playerId) {
     if (!room) return null;
@@ -570,6 +881,7 @@ class GameEngine {
         isHost: p.isHost,
         isConnected: p.isConnected,
         isAlive: p.isAlive,
+        permanentlyDeparted: p.permanentlyDeparted,
         role: (isSelf || isFinished) ? p.role : null,
         clues: p.clues
       };

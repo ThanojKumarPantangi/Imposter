@@ -49,11 +49,34 @@ class RoomRepository {
       for (const p of room.players) {
         await this.removePlayerRoomMapping(p.id);
         await this.clearLobbyDisconnectTimer(normalizedCode, p.id);
+        await this.clearGameDisconnectTimer(normalizedCode, p.id);
       }
     }
 
+    // Delete timer keys
+    await this.clearTurnTimer(normalizedCode);
+
+    // Delete room state and room code from active index
     await redis.del(`room:${normalizedCode}`);
     await redis.srem('active_room_codes', normalizedCode);
+
+    // Also scan and delete any lingering timer keys for this room
+    try {
+      const lingeringKeys = await redis.keys(`*:*:${normalizedCode}:*`);
+      if (lingeringKeys && lingeringKeys.length > 0) {
+        await redis.del(...lingeringKeys);
+      }
+      const lingeringRoomKeys = await redis.keys(`*:${normalizedCode}`);
+      if (lingeringRoomKeys && lingeringRoomKeys.length > 0) {
+        // don't delete other unrelated keys
+        const keysToDelete = lingeringRoomKeys.filter(k => k.startsWith('timer:') || k.startsWith('voice:'));
+        if (keysToDelete.length > 0) {
+          await redis.del(...keysToDelete);
+        }
+      }
+    } catch (e) {
+      // ignore keys scan errors in restricted environments
+    }
   }
 
   /**
@@ -116,7 +139,7 @@ class RoomRepository {
     if (!roomCode || !playerId) return null;
     const redis = getRedisClient();
     const deadline = Date.now() + (timeoutSeconds * 1000);
-    const key = `timer:disconnect:${roomCode.toUpperCase()}:${playerId}`;
+    const key = `timer:disconnect:lobby:${roomCode.toUpperCase()}:${playerId}`;
     await redis.set(key, deadline.toString(), 'EX', timeoutSeconds + 10);
     return deadline;
   }
@@ -124,14 +147,56 @@ class RoomRepository {
   async getLobbyDisconnectTimer(roomCode, playerId) {
     if (!roomCode || !playerId) return null;
     const redis = getRedisClient();
-    const val = await redis.get(`timer:disconnect:${roomCode.toUpperCase()}:${playerId}`);
+    const val = await redis.get(`timer:disconnect:lobby:${roomCode.toUpperCase()}:${playerId}`);
     return val ? parseInt(val, 10) : null;
   }
 
   async clearLobbyDisconnectTimer(roomCode, playerId) {
     if (!roomCode || !playerId) return;
     const redis = getRedisClient();
+    await redis.del(`timer:disconnect:lobby:${roomCode.toUpperCase()}:${playerId}`);
+    // Also check legacy key
     await redis.del(`timer:disconnect:${roomCode.toUpperCase()}:${playerId}`);
+  }
+
+  /**
+   * Game disconnect grace period timer (persisted in Redis)
+   */
+  async setGameDisconnectTimer(roomCode, playerId, timeoutSeconds = 30) {
+    if (!roomCode || !playerId) return null;
+    const redis = getRedisClient();
+    const deadline = Date.now() + (timeoutSeconds * 1000);
+    const key = `timer:disconnect:game:${roomCode.toUpperCase()}:${playerId}`;
+    await redis.set(key, deadline.toString(), 'EX', timeoutSeconds + 10);
+    return deadline;
+  }
+
+  async getGameDisconnectTimer(roomCode, playerId) {
+    if (!roomCode || !playerId) return null;
+    const redis = getRedisClient();
+    const val = await redis.get(`timer:disconnect:game:${roomCode.toUpperCase()}:${playerId}`);
+    return val ? parseInt(val, 10) : null;
+  }
+
+  async clearGameDisconnectTimer(roomCode, playerId) {
+    if (!roomCode || !playerId) return;
+    const redis = getRedisClient();
+    await redis.del(`timer:disconnect:game:${roomCode.toUpperCase()}:${playerId}`);
+  }
+
+  /**
+   * Turn timer tracking in Redis
+   */
+  async setTurnTimer(roomCode, deadline, timeoutSeconds = 30) {
+    if (!roomCode) return;
+    const redis = getRedisClient();
+    await redis.set(`timer:turn:${roomCode.toUpperCase()}`, deadline.toString(), 'EX', timeoutSeconds + 10);
+  }
+
+  async clearTurnTimer(roomCode) {
+    if (!roomCode) return;
+    const redis = getRedisClient();
+    await redis.del(`timer:turn:${roomCode.toUpperCase()}`);
   }
 
   /**

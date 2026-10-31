@@ -1,10 +1,21 @@
 import express from 'express';
-import { createRoom, joinRoom, getCategories, getRoom } from '../controllers/roomController.js';
+import {
+  createRoom,
+  joinRoom,
+  getActiveRoom,
+  leaveRoom,
+  returnToLobby,
+  getCategories,
+  getRoom
+} from '../controllers/roomController.js';
 
 const router = express.Router();
 
 router.post('/create', createRoom);
 router.post('/join', joinRoom);
+router.get('/active', getActiveRoom);
+router.post('/leave', leaveRoom);
+router.post('/return-to-lobby', returnToLobby);
 router.get('/categories', getCategories);
 router.get('/:roomCode', getRoom);
 

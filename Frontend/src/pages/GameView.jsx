@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import {
   Shield, Eye, EyeOff, Send, Clock, Vote, Trophy, Skull,
-  AlertCircle, Sparkles, Volume2, ArrowRight, RotateCcw, Home as HomeIcon
+  AlertCircle, Sparkles, Volume2, ArrowRight, RotateCcw, Home as HomeIcon, ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -16,7 +16,14 @@ export function GameView() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const { player } = useAuth();
-  const { roomState, submitClue, submitVote, joinRoom } = useSocket();
+  const {
+    roomState,
+    submitClue,
+    submitVote,
+    joinRoom,
+    leaveRoom,
+    returnToLobby
+  } = useSocket();
 
   const [clueInput, setClueInput] = useState('');
   const [selectedVoteTarget, setSelectedVoteTarget] = useState(null);
@@ -26,19 +33,19 @@ export function GameView() {
 
   const normalizedCode = (roomCode || '').toUpperCase();
 
-  // Reconnect if needed
+  // Reconnect / sync if needed
   useEffect(() => {
     if (player && (!roomState || roomState.code !== normalizedCode)) {
       joinRoom(normalizedCode, player);
     }
   }, [normalizedCode, player]);
 
-  // If room resets to WAITING (play again), navigate to lobby
+  // If room resets to WAITING (play again/return to lobby), automatically navigate to lobby!
   useEffect(() => {
     if (roomState && roomState.status === 'WAITING') {
       navigate(`/lobby/${normalizedCode}`);
     }
-  }, [roomState?.status, normalizedCode]);
+  }, [roomState?.status, normalizedCode, navigate]);
 
   // Trigger confetti on victory
   useEffect(() => {
@@ -51,11 +58,32 @@ export function GameView() {
     }
   }, [roomState?.status]);
 
+  // Reset vote submission when entering a new voting round
+  useEffect(() => {
+    if (roomState?.status === 'VOTING') {
+      setHasVoted(false);
+      setSelectedVoteTarget(null);
+    }
+  }, [roomState?.status, roomState?.currentRound]);
+
+  const handleLeaveGame = useCallback(async () => {
+    sounds.playClick();
+    if (player?.id) {
+      await leaveRoom(normalizedCode, player.id);
+    }
+    navigate('/');
+  }, [leaveRoom, normalizedCode, player?.id, navigate]);
+
+  const handleReturnToLobby = () => {
+    sounds.playClick();
+    returnToLobby(normalizedCode, player?.id);
+  };
+
   if (!roomState) {
     return (
       <div className="max-w-xl mx-auto px-4 py-20 text-center">
         <div className="w-12 h-12 rounded-full border-4 border-rose-500 border-t-transparent animate-spin mx-auto mb-4" />
-        <p className="text-slate-400 font-semibold text-sm">Connecting to live game state...</p>
+        <p className="text-slate-400 font-semibold text-sm">Connecting to authoritative game state...</p>
       </div>
     );
   }
@@ -64,7 +92,7 @@ export function GameView() {
   const isMyTurn = roomState.status === 'CLUE_ROUND' && roomState.activeTurnPlayerId === player?.id;
   const isImposter = me.role === 'IMPOSTER';
   const isCivilian = me.role === 'CIVILIAN';
-  const isAlive = me.isAlive !== false;
+  const isAlive = me.isAlive !== false && !me.permanentlyDeparted;
 
   const handleClueSubmit = (e) => {
     e.preventDefault();
@@ -94,9 +122,20 @@ export function GameView() {
       {/* Top Game Bar */}
       <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleLeaveGame}
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl bg-dark-900 border border-slate-800 transition-colors"
+            title="Leave Match"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Leave</span>
+          </button>
+
           <div className="flex flex-col">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Category</span>
-            <span className="font-display font-bold text-base text-white">{roomState.settings?.categoryName || 'Fruits'}</span>
+            <span className="font-display font-bold text-base text-white truncate max-w-[160px] sm:max-w-xs">
+              {roomState.settings?.categoryName || 'Fruits'}
+            </span>
           </div>
           <div className="h-6 w-px bg-slate-800" />
           <div className="flex flex-col">
@@ -109,7 +148,7 @@ export function GameView() {
         {roomState.status === 'CLUE_ROUND' && roomState.turnDeadline && (
           <CountdownTimer
             deadline={roomState.turnDeadline}
-            totalSeconds={roomState.settings.turnDurationSeconds}
+            totalSeconds={roomState.settings?.turnDurationSeconds || 30}
             label="Turn Timer"
           />
         )}
@@ -117,7 +156,7 @@ export function GameView() {
         {roomState.status === 'VOTING' && roomState.votingDeadline && (
           <CountdownTimer
             deadline={roomState.votingDeadline}
-            totalSeconds={roomState.settings.votingDurationSeconds}
+            totalSeconds={roomState.settings?.votingDurationSeconds || 45}
             label="Voting Deadline"
           />
         )}
@@ -150,6 +189,11 @@ export function GameView() {
                   <span className={isImposter ? 'badge-imposter' : 'badge-civilian'}>
                     {me.role || 'SPECTATOR'}
                   </span>
+                  {!isAlive && (
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-400">
+                      Spectating
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 mt-1">
@@ -166,7 +210,7 @@ export function GameView() {
                       </span>
                     </div>
                   ) : (
-                    <span className="text-sm font-semibold text-slate-400">Spectator Mode</span>
+                    <span className="text-sm font-semibold text-slate-400">Spectator Mode (You were eliminated)</span>
                   )}
                 </div>
               </div>
@@ -272,7 +316,7 @@ export function GameView() {
               )}
             </div>
 
-            {/* Clue History Log */}
+            {/* Clue History Log with Skipped Turn Display */}
             <div className="glass-card p-6">
               <h4 className="font-display font-bold text-base text-white mb-4 flex items-center gap-2">
                 <span>Submitted Clues</span>
@@ -290,11 +334,21 @@ export function GameView() {
                   {roomState.clueHistory?.map((c, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between p-3 rounded-xl bg-dark-950 border border-slate-800/80"
+                      className={`flex items-center justify-between p-3 rounded-xl border ${
+                        c.skipped
+                          ? 'bg-amber-950/20 border-amber-500/30'
+                          : 'bg-dark-950 border-slate-800/80'
+                      }`}
                     >
                       <div className="flex items-center gap-2.5">
                         <span className="text-xs font-bold text-cyan-400">{c.username}:</span>
-                        <span className="text-sm font-black text-slate-100 font-display">"{c.clue}"</span>
+                        {c.skipped ? (
+                          <span className="text-xs font-semibold text-amber-400 italic">
+                            {c.username} skipped the turn — no clue submitted.
+                          </span>
+                        ) : (
+                          <span className="text-sm font-black text-slate-100 font-display">"{c.clue}"</span>
+                        )}
                       </div>
                       <span className="text-[10px] text-slate-500 uppercase font-semibold">
                         Round {c.round}
@@ -312,13 +366,14 @@ export function GameView() {
             <div className="space-y-2.5">
               {roomState.players.map((p) => {
                 const isActive = roomState.activeTurnPlayerId === p.id;
+                const isEliminated = !p.isAlive || p.permanentlyDeparted;
                 return (
                   <div
                     key={p.id}
                     className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
                       isActive
                         ? 'bg-cyan-950/40 border-cyan-500 text-white font-bold ring-1 ring-cyan-500'
-                        : !p.isAlive
+                        : isEliminated
                         ? 'bg-dark-950/40 border-slate-900 opacity-40'
                         : 'bg-dark-800/60 border-slate-800 text-slate-300'
                     }`}
@@ -328,7 +383,9 @@ export function GameView() {
                       <span className="text-sm">{p.username}</span>
                     </div>
                     <div>
-                      {!p.isAlive ? (
+                      {p.permanentlyDeparted ? (
+                        <span className="text-[10px] font-bold uppercase text-slate-600">Left Match</span>
+                      ) : !p.isAlive ? (
                         <span className="text-[10px] font-bold uppercase text-slate-500">Eliminated</span>
                       ) : isActive ? (
                         <span className="text-[10px] font-bold uppercase text-cyan-400 animate-pulse">Thinking...</span>
@@ -361,7 +418,7 @@ export function GameView() {
 
           {/* Player Voting Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-            {roomState.players.filter(p => p.isAlive).map((p) => {
+            {roomState.players.filter(p => p.isAlive && !p.permanentlyDeparted).map((p) => {
               const isSelf = p.id === player?.id;
               const isSelected = selectedVoteTarget === p.id;
               return (
@@ -388,7 +445,7 @@ export function GameView() {
                   </div>
                   {p.clues?.length > 0 && (
                     <div className="text-[11px] text-slate-400 mt-2 truncate">
-                      Clues: <span className="text-slate-200 font-semibold">{p.clues.join(', ')}</span>
+                      Clues: <span className="text-slate-200 font-semibold">{p.clues.filter(Boolean).join(', ')}</span>
                     </div>
                   )}
                 </button>
@@ -464,6 +521,8 @@ export function GameView() {
               ? '💥 An Imposter correctly entered the exact secret word during their turn!'
               : roomState.winnerResult.winCondition === 'ALL_IMPOSTERS_ELIMINATED'
               ? '🎉 All Imposters were successfully identified and eliminated!'
+              : roomState.winnerResult.winCondition === 'IMPOSTERS_PARITY'
+              ? '🎭 Imposters have reached equal numbers with the Civilians!'
               : roomState.winnerResult.winCondition === 'FINAL_SHOWDOWN_DECISIVE'
               ? '🎭 Imposters outmaneuvered the Civilians in the final showdown!'
               : 'Match completed!'}
@@ -506,14 +565,14 @@ export function GameView() {
 
           <div className="flex items-center justify-center gap-3">
             <button
-              onClick={() => navigate('/')}
+              onClick={handleLeaveGame}
               className="btn-secondary px-6 py-3 flex items-center gap-2 text-sm"
             >
               <HomeIcon className="w-4 h-4" />
               <span>Back to Home</span>
             </button>
             <button
-              onClick={() => navigate(`/lobby/${normalizedCode}`)}
+              onClick={handleReturnToLobby}
               className="btn-primary px-8 py-3 flex items-center gap-2 text-sm"
             >
               <RotateCcw className="w-4 h-4" />
@@ -525,3 +584,5 @@ export function GameView() {
     </div>
   );
 }
+
+export default GameView;
