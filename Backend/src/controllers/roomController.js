@@ -119,6 +119,44 @@ export const getCategories = async (req, res) => {
   }
 };
 
+export const updateSettings = async (req, res) => {
+  try {
+    const { roomCode, hostId, settings } = req.body;
+    if (!roomCode || !hostId) {
+      return res.status(400).json({ success: false, error: 'Room code and host ID are required' });
+    }
+    const room = await roomRepository.getRoom(roomCode.toUpperCase());
+    if (!room) {
+      return res.status(404).json({ success: false, error: 'Room not found' });
+    }
+    if (room.hostId !== hostId) {
+      return res.status(403).json({ success: false, error: 'Unauthorized: Only the room host can modify settings' });
+    }
+    const updated = await gameEngine.updateSettings(roomCode.toUpperCase(), hostId, settings || {});
+    return res.json({ success: true, settings: updated.settings });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+export const updatePlayerCategories = async (req, res) => {
+  try {
+    const { roomCode, playerId, categorySlugs, categoryNames } = req.body;
+    if (!roomCode || !playerId) {
+      return res.status(400).json({ success: false, error: 'Room code and player ID are required' });
+    }
+    const result = await gameEngine.updatePlayerCategories(
+      roomCode.toUpperCase(),
+      playerId,
+      categorySlugs,
+      categoryNames
+    );
+    return res.json({ success: true, categorySlugs: result.categorySlugs, categoryNames: result.categoryNames });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+};
+
 export default {
   createRoom,
   joinRoom,
@@ -126,5 +164,7 @@ export default {
   leaveRoom,
   returnToLobby,
   getRoom,
-  getCategories
+  getCategories,
+  updateSettings,
+  updatePlayerCategories
 };

@@ -139,13 +139,52 @@ function setupNamespace(nsp) {
       }
     });
 
-    // 5. Update Settings (Host Only)
+    // 5. Update Settings (Host Only - Authoritative Server Enforcement)
     socket.on('update_settings', async ({ roomCode, hostId, settings }) => {
       try {
+        if (!roomCode || !hostId) return socket.emit('error', { message: 'Room code and host ID are required' });
         const normalizedCode = roomCode.toUpperCase();
-        const room = await gameEngine.updateSettings(normalizedCode, hostId, settings);
+        const room = await roomRepository.getRoom(normalizedCode);
+        if (!room) return socket.emit('error', { message: 'Room not found' });
+
+        const socketPlayerId = await roomRepository.getPlayerBySocket(socket.id);
+        if (room.hostId !== hostId || (socketPlayerId && socketPlayerId !== hostId)) {
+          return socket.emit('error', { message: 'Unauthorized: Only the room host can modify game settings' });
+        }
+
+        const updatedRoom = await gameEngine.updateSettings(normalizedCode, hostId, settings || {});
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
-        nsp.to(`room:${normalizedCode}`).emit('settings_updated', room.settings);
+        nsp.to(`room:${normalizedCode}`).emit('settings_updated', updatedRoom.settings);
+      } catch (err) {
+        socket.emit('error', { message: err.message });
+      }
+    });
+
+    // 5b. Update Player-Specific Categories (Any player in lobby)
+    socket.on('update_player_categories', async ({ roomCode, playerId, categorySlugs, categoryNames }) => {
+      try {
+        if (!roomCode || !playerId) return socket.emit('error', { message: 'Room code and player ID are required' });
+        const normalizedCode = roomCode.toUpperCase();
+
+        const socketPlayerId = await roomRepository.getPlayerBySocket(socket.id);
+        if (socketPlayerId && socketPlayerId !== playerId) {
+          return socket.emit('error', { message: 'Unauthorized: You can only modify your own category selections' });
+        }
+
+        const result = await gameEngine.updatePlayerCategories(
+          normalizedCode,
+          playerId,
+          categorySlugs,
+          categoryNames
+        );
+
+        nsp.to(`room:${normalizedCode}`).emit('player_categories_updated', {
+          playerId,
+          username: result.player.username,
+          categoriesCount: result.categorySlugs.length
+        });
+
+        await broadcastPersonalizedRoomState(nsp, normalizedCode);
       } catch (err) {
         socket.emit('error', { message: err.message });
       }

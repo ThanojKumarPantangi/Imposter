@@ -42,6 +42,9 @@ class GameEngine {
       code: roomCode,
       hostId: hostPlayer.id,
       status: 'WAITING',
+      playerCategoryPreferences: {
+        [hostPlayer.id]: categorySlugs
+      },
       settings: {
         categorySlugs,
         categoryNames,
@@ -63,6 +66,8 @@ class GameEngine {
           isConnected: true,
           isAlive: true,
           permanentlyDeparted: false,
+          selectedCategorySlugs: categorySlugs,
+          selectedCategoryNames: categoryNames,
           role: null,
           secretWord: null,
           hint: null,
@@ -125,7 +130,19 @@ class GameEngine {
       existing.permanentlyDeparted = false;
       existing.username = player.username;
       existing.avatar = player.avatar || existing.avatar;
+      if (!existing.selectedCategorySlugs || existing.selectedCategorySlugs.length === 0) {
+        const saved = (room.playerCategoryPreferences && room.playerCategoryPreferences[player.id]) || (room.settings && room.settings.categorySlugs) || ['fruits'];
+        existing.selectedCategorySlugs = [...saved];
+        existing.selectedCategoryNames = (room.settings && room.settings.categoryNames) || ['Fruits'];
+      }
     } else {
+      const defaultSlugs = (room.settings && Array.isArray(room.settings.categorySlugs) && room.settings.categorySlugs.length > 0)
+        ? [...room.settings.categorySlugs]
+        : ['fruits'];
+      const defaultNames = (room.settings && Array.isArray(room.settings.categoryNames) && room.settings.categoryNames.length > 0)
+        ? [...room.settings.categoryNames]
+        : ['Fruits'];
+
       room.players.push({
         id: player.id,
         username: player.username,
@@ -134,11 +151,16 @@ class GameEngine {
         isConnected: true,
         isAlive: true,
         permanentlyDeparted: false,
+        selectedCategorySlugs: defaultSlugs,
+        selectedCategoryNames: defaultNames,
         role: null,
         secretWord: null,
         hint: null,
         clues: []
       });
+
+      if (!room.playerCategoryPreferences) room.playerCategoryPreferences = {};
+      room.playerCategoryPreferences[player.id] = defaultSlugs;
     }
 
     await roomRepository.saveRoom(normalizedCode, room);
@@ -148,7 +170,7 @@ class GameEngine {
   }
 
   /**
-   * Update Room Settings (Host only)
+   * Update Room Settings (Host only - Authoritative global controls)
    */
   async updateSettings(roomCode, hostId, newSettings) {
     const room = await roomRepository.getRoom(roomCode);
@@ -166,6 +188,15 @@ class GameEngine {
         room.settings.categoryName = newSettings.categoryNames.join(', ');
       }
       room.settings.categorySlug = room.settings.categorySlugs[0];
+
+      // Also update host's own category preference if they change categories through settings
+      if (!room.playerCategoryPreferences) room.playerCategoryPreferences = {};
+      room.playerCategoryPreferences[hostId] = room.settings.categorySlugs;
+      const hostPlayer = room.players.find(p => p.id === hostId);
+      if (hostPlayer) {
+        hostPlayer.selectedCategorySlugs = room.settings.categorySlugs;
+        if (room.settings.categoryNames) hostPlayer.selectedCategoryNames = room.settings.categoryNames;
+      }
     } else if (newSettings.categorySlug) {
       room.settings.categorySlug = newSettings.categorySlug;
       room.settings.categorySlugs = [newSettings.categorySlug];
@@ -173,27 +204,81 @@ class GameEngine {
         room.settings.categoryName = newSettings.categoryName;
         room.settings.categoryNames = [newSettings.categoryName];
       }
+      if (!room.playerCategoryPreferences) room.playerCategoryPreferences = {};
+      room.playerCategoryPreferences[hostId] = room.settings.categorySlugs;
+      const hostPlayer = room.players.find(p => p.id === hostId);
+      if (hostPlayer) {
+        hostPlayer.selectedCategorySlugs = room.settings.categorySlugs;
+        if (room.settings.categoryNames) hostPlayer.selectedCategoryNames = room.settings.categoryNames;
+      }
     }
 
-    if (newSettings.impostersCount) {
+    if (newSettings.impostersCount !== undefined) {
       const impCount = Math.max(1, Math.min(parseInt(newSettings.impostersCount, 10), Math.max(1, Math.floor((room.players.length || 3) / 2))));
       room.settings.impostersCount = impCount;
     }
-    if (newSettings.turnDurationSeconds) room.settings.turnDurationSeconds = parseInt(newSettings.turnDurationSeconds, 10);
-    if (newSettings.votingDurationSeconds) room.settings.votingDurationSeconds = parseInt(newSettings.votingDurationSeconds, 10);
-    if (newSettings.lobbyDisconnectTimeout) {
+    if (newSettings.turnDurationSeconds !== undefined) {
+      room.settings.turnDurationSeconds = parseInt(newSettings.turnDurationSeconds, 10);
+    }
+    if (newSettings.votingDurationSeconds !== undefined) {
+      room.settings.votingDurationSeconds = parseInt(newSettings.votingDurationSeconds, 10);
+    }
+    if (newSettings.lobbyDisconnectTimeout !== undefined) {
       const allowed = [3, 5, 10, 15, 30];
       const t = parseInt(newSettings.lobbyDisconnectTimeout, 10);
       if (allowed.includes(t)) {
         room.settings.lobbyDisconnectTimeout = t;
       }
     }
-    if (newSettings.gameDisconnectGracePeriod) {
+    if (newSettings.gameDisconnectGracePeriod !== undefined) {
       room.settings.gameDisconnectGracePeriod = parseInt(newSettings.gameDisconnectGracePeriod, 10);
     }
 
     await roomRepository.saveRoom(roomCode, room);
     return room;
+  }
+
+  /**
+   * Update Player-Specific Category Preferences (Any player in lobby)
+   */
+  async updatePlayerCategories(roomCode, playerId, categorySlugs, categoryNames = []) {
+    if (!roomCode) throw new Error('Room code is required');
+    const normalizedCode = roomCode.toUpperCase();
+    const room = await roomRepository.getRoom(normalizedCode);
+    if (!room) throw new Error('Room not found');
+
+    if (room.status !== 'WAITING') {
+      throw new Error('Categories can only be modified in the lobby before the match begins');
+    }
+
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || player.permanentlyDeparted) {
+      throw new Error('Player is not an active member of this room');
+    }
+
+    if (!Array.isArray(categorySlugs) || categorySlugs.length === 0) {
+      throw new Error('You must select at least one word category');
+    }
+
+    const cleanSlugs = Array.from(new Set(categorySlugs.map(s => String(s).trim()))).filter(Boolean);
+    if (cleanSlugs.length === 0) {
+      throw new Error('You must select at least one valid category');
+    }
+
+    const cleanNames = Array.isArray(categoryNames) && categoryNames.length === cleanSlugs.length
+      ? categoryNames
+      : cleanSlugs.map(s => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, ' '));
+
+    if (!room.playerCategoryPreferences) {
+      room.playerCategoryPreferences = {};
+    }
+    room.playerCategoryPreferences[playerId] = cleanSlugs;
+
+    player.selectedCategorySlugs = cleanSlugs;
+    player.selectedCategoryNames = cleanNames;
+
+    await roomRepository.saveRoom(normalizedCode, room);
+    return { room, player, categorySlugs: cleanSlugs, categoryNames: cleanNames };
   }
 
   /**
@@ -208,6 +293,9 @@ class GameEngine {
     return await this.leaveRoom(roomCode, targetPlayerId, true);
   }
 
+  /**
+   * Check if Start Game is ready
+   */
   /**
    * Check if Start Game is ready
    */
@@ -229,7 +317,101 @@ class GameEngine {
       return { ready: false, reason: 'Need more Civilians than Imposters' };
     }
 
+    // Validate that every eligible player has selected at least one category
+    for (const player of room.players) {
+      const pSlugs = (room.playerCategoryPreferences && room.playerCategoryPreferences[player.id])
+        || player.selectedCategorySlugs;
+      if (!pSlugs || !Array.isArray(pSlugs) || pSlugs.length === 0) {
+        return {
+          ready: false,
+          reason: `Player "${player.username}" has not selected any word category`
+        };
+      }
+    }
+
     return { ready: true };
+  }
+
+  /**
+   * Retrieve eligible words pool for specified category slugs
+   */
+  async getWordsForCategories(slugs = ['fruits']) {
+    const cleanSlugs = Array.isArray(slugs) && slugs.length > 0
+      ? slugs
+      : ['fruits'];
+
+    let categories = [];
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      try {
+        categories = await Category.find({
+          $or: [
+            { slug: { $in: cleanSlugs } },
+            { id: { $in: cleanSlugs } }
+          ]
+        }).maxTimeMS(3000);
+      } catch (err) {
+        console.warn('Could not query Category collection:', err.message);
+      }
+    }
+
+    let words = [];
+    categories.forEach(cat => {
+      if (cat.words && cat.words.length > 0) {
+        const active = cat.words.filter(w => w.enabled !== false);
+        active.forEach(w => {
+          words.push({
+            word: w.word,
+            hint: w.hint,
+            categoryName: cat.name,
+            categorySlug: cat.slug || cat.id
+          });
+        });
+      }
+    });
+
+    // Fallback if no words found or offline / mock test mode
+    if (words.length === 0) {
+      const fallbackMap = {
+        fruits: [
+          { word: 'Apple', hint: 'Crisp fruit, often red or green', categoryName: 'Fruits' },
+          { word: 'Banana', hint: 'Curved yellow fruit rich in potassium', categoryName: 'Fruits' },
+          { word: 'Mango', hint: 'Tropical sweet stone fruit', categoryName: 'Fruits' }
+        ],
+        vegetables: [
+          { word: 'Carrot', hint: 'Orange root vegetable loved by rabbits', categoryName: 'Vegetables' },
+          { word: 'Broccoli', hint: 'Tree-like green vegetable with florets', categoryName: 'Vegetables' }
+        ],
+        animals: [
+          { word: 'Elephant', hint: 'Largest living land animal with a trunk', categoryName: 'Animals & Pets' },
+          { word: 'Dolphin', hint: 'Highly intelligent aquatic mammal', categoryName: 'Animals & Pets' }
+        ],
+        movies: [
+          { word: 'Inception', hint: 'Dream heist thriller directed by Nolan', categoryName: 'Movies & Cinema' },
+          { word: 'Titanic', hint: 'Epic romantic disaster film with a ship', categoryName: 'Movies & Cinema' }
+        ],
+        gaming: [
+          { word: 'Minecraft', hint: 'Block-building sandbox survival game', categoryName: 'Video Games' },
+          { word: 'Portal', hint: 'Physics puzzle game with a gun making portals', categoryName: 'Video Games' }
+        ]
+      };
+
+      cleanSlugs.forEach(s => {
+        const norm = (s || '').toLowerCase();
+        if (fallbackMap[norm]) {
+          words.push(...fallbackMap[norm]);
+        }
+      });
+
+      if (words.length === 0) {
+        words.push({
+          word: 'Apple',
+          hint: 'Crisp fruit, often red or green',
+          categoryName: 'Fruits'
+        });
+      }
+    }
+
+    return words;
   }
 
   /**
@@ -244,56 +426,6 @@ class GameEngine {
     if (!readiness.ready) {
       throw new Error(readiness.reason);
     }
-
-    // 1. Gather all selected categories
-    const slugs = Array.isArray(room.settings.categorySlugs) && room.settings.categorySlugs.length > 0
-      ? room.settings.categorySlugs
-      : (room.settings.categorySlug ? [room.settings.categorySlug] : ['fruits']);
-
-    let categories = [];
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      try {
-        categories = await Category.find({
-          $or: [
-            { slug: { $in: slugs } },
-            { id: { $in: slugs } }
-          ]
-        }).maxTimeMS(3000);
-      } catch (err) {
-        console.warn('Could not query Category collection:', err.message);
-      }
-    }
-
-    let combinedWords = [];
-    categories.forEach(cat => {
-      if (cat.words && cat.words.length > 0) {
-        const active = cat.words.filter(w => w.enabled !== false);
-        active.forEach(w => {
-          combinedWords.push({
-            word: w.word,
-            hint: w.hint,
-            categoryName: cat.name
-          });
-        });
-      }
-    });
-
-    // Fallback if no words found
-    if (combinedWords.length === 0) {
-      combinedWords.push({
-        word: 'Apple',
-        hint: 'Crisp fruit, often red or green',
-        categoryName: 'Fruits'
-      });
-    }
-
-    // Uniform random selection from combined pool
-    const chosenWordIndex = crypto.randomInt(0, combinedWords.length);
-    const chosenWordEntry = combinedWords[chosenWordIndex];
-
-    room.secretWord = chosenWordEntry.word;
-    room.hint = chosenWordEntry.hint;
-    room.settings.categoryName = chosenWordEntry.categoryName;
 
     const playerCount = room.players.length;
     const imposterTarget = Math.min(room.settings.impostersCount || 1, Math.floor(playerCount / 2));
@@ -310,7 +442,6 @@ class GameEngine {
       [eligibleIndices[i], eligibleIndices[j]] = [eligibleIndices[j], eligibleIndices[i]];
     }
 
-    // If candidate set has non-last imposters and we have enough players to rotate
     if (lastImposterIds.size > 0 && playerCount > imposterTarget * 2) {
       const nonRecent = eligibleIndices.filter(idx => !lastImposterIds.has(room.players[idx].id));
       const recent = eligibleIndices.filter(idx => lastImposterIds.has(room.players[idx].id));
@@ -320,22 +451,43 @@ class GameEngine {
     const chosenImposterIndices = new Set(eligibleIndices.slice(0, imposterTarget));
     const newImposterIds = [];
 
-    room.players.forEach((player, idx) => {
+    // Word selection: Draw words and hints for EACH player from their OWN selected categories!
+    for (let idx = 0; idx < room.players.length; idx++) {
+      const player = room.players[idx];
       player.isAlive = true;
       player.permanentlyDeparted = false;
       player.eliminatedAtRound = null;
       player.clues = [];
+
+      const playerSlugs = (room.playerCategoryPreferences && room.playerCategoryPreferences[player.id])
+        || player.selectedCategorySlugs
+        || ['fruits'];
+
+      const playerWords = await this.getWordsForCategories(playerSlugs);
+      const chosenWordIndex = crypto.randomInt(0, playerWords.length);
+      const chosenWordEntry = playerWords[chosenWordIndex];
+
       if (chosenImposterIndices.has(idx)) {
         player.role = 'IMPOSTER';
-        player.hint = room.hint;
+        player.hint = chosenWordEntry.hint;
         player.secretWord = null;
+        player.assignedSecretWord = chosenWordEntry.word;
+        player.categoryName = chosenWordEntry.categoryName;
         newImposterIds.push(player.id);
       } else {
         player.role = 'CIVILIAN';
-        player.secretWord = room.secretWord;
-        player.hint = room.hint;
+        player.secretWord = chosenWordEntry.word;
+        player.assignedSecretWord = chosenWordEntry.word;
+        player.hint = chosenWordEntry.hint;
+        player.categoryName = chosenWordEntry.categoryName;
       }
-    });
+    }
+
+    // Set initial room baseline from first player
+    const initialPlayer = room.players[0];
+    room.secretWord = initialPlayer.secretWord || initialPlayer.assignedSecretWord;
+    room.hint = initialPlayer.hint;
+    room.settings.categoryName = initialPlayer.categoryName;
 
     room.lastImposters = newImposterIds;
     room.status = 'ROLE_REVEAL';
@@ -369,6 +521,15 @@ class GameEngine {
     room.turnOrder = shuffledLiving.map(p => p.id);
     room.activeTurnIndex = 0;
     room.activeTurnPlayerId = room.turnOrder[0];
+
+    // Synchronize active word & hint to active player's categories for this turn
+    const activePlayer = room.players.find(p => p.id === room.activeTurnPlayerId);
+    if (activePlayer) {
+      room.secretWord = activePlayer.secretWord || activePlayer.assignedSecretWord || room.secretWord;
+      room.hint = activePlayer.hint || room.hint;
+      room.settings.categoryName = activePlayer.categoryName || (room.settings && room.settings.categoryName);
+    }
+
     room.turnDeadline = Date.now() + (room.settings.turnDurationSeconds * 1000);
     room.status = 'CLUE_ROUND';
 
@@ -400,13 +561,15 @@ class GameEngine {
     }
 
     if (player.role === 'CIVILIAN') {
-      if (cleanClue.toLowerCase() === room.secretWord.toLowerCase()) {
+      const targetWord = player.secretWord || room.secretWord;
+      if (targetWord && cleanClue.toLowerCase() === targetWord.toLowerCase()) {
         throw new Error('Civilians cannot submit the exact secret word!');
       }
     }
 
     if (player.role === 'IMPOSTER') {
-      if (cleanClue.toLowerCase() === room.secretWord.toLowerCase()) {
+      const targetWord = player.assignedSecretWord || room.secretWord;
+      if (targetWord && cleanClue.toLowerCase() === targetWord.toLowerCase()) {
         room.clueHistory.push({
           playerId: player.id,
           username: player.username,
@@ -473,6 +636,12 @@ class GameEngine {
       const p = room.players.find(x => x.id === nextPlayerId);
       if (p && p.isAlive && !p.permanentlyDeparted) {
         room.activeTurnPlayerId = nextPlayerId;
+
+        // Synchronize active word & hint to next living player's turn
+        room.secretWord = p.secretWord || p.assignedSecretWord || room.secretWord;
+        room.hint = p.hint || room.hint;
+        room.settings.categoryName = p.categoryName || (room.settings && room.settings.categoryName);
+
         room.turnDeadline = Date.now() + (room.settings.turnDurationSeconds * 1000);
         await roomRepository.setTurnTimer(room.code, room.turnDeadline, room.settings.turnDurationSeconds);
         await roomRepository.saveRoom(room.code, room);
@@ -668,6 +837,9 @@ class GameEngine {
     // 1. In WAITING (Lobby) phase
     if (room.status === 'WAITING') {
       room.players.splice(playerIndex, 1);
+      if (room.playerCategoryPreferences && room.playerCategoryPreferences[playerId]) {
+        delete room.playerCategoryPreferences[playerId];
+      }
 
       if (room.players.length === 0) {
         await roomRepository.deleteRoom(normalizedCode);
@@ -874,6 +1046,9 @@ class GameEngine {
 
     cloned.players = cloned.players.map(p => {
       const isSelf = p.id === playerId;
+      const slugs = (room.playerCategoryPreferences && room.playerCategoryPreferences[p.id])
+        || p.selectedCategorySlugs
+        || [];
       return {
         id: p.id,
         username: p.username,
@@ -883,26 +1058,48 @@ class GameEngine {
         isAlive: p.isAlive,
         permanentlyDeparted: p.permanentlyDeparted,
         role: (isSelf || isFinished) ? p.role : null,
-        clues: p.clues
+        clues: p.clues,
+        // Current player sees their own categories; peers see count and clean names
+        selectedCategorySlugs: isSelf ? slugs : undefined,
+        selectedCategoryNames: isSelf ? p.selectedCategoryNames : undefined,
+        selectedCategoriesCount: slugs.length
       };
     });
 
     const player = room.players.find(p => p.id === playerId);
-    if (player && !isFinished) {
-      if (player.role === 'IMPOSTER') {
-        cloned.secretWord = null;
-        cloned.myRole = 'IMPOSTER';
-        cloned.myHint = room.hint;
-        cloned.myWord = null;
-      } else if (player.role === 'CIVILIAN') {
+    if (player) {
+      const mySlugs = (room.playerCategoryPreferences && room.playerCategoryPreferences[playerId])
+        || player.selectedCategorySlugs
+        || (room.settings && room.settings.categorySlugs)
+        || ['fruits'];
+      const myNames = player.selectedCategoryNames
+        || (room.settings && room.settings.categoryNames)
+        || ['Fruits'];
+
+      cloned.myCategorySlugs = mySlugs;
+      cloned.myCategoryNames = myNames;
+
+      if (!isFinished) {
+        if (player.role === 'IMPOSTER') {
+          cloned.secretWord = null;
+          cloned.myRole = 'IMPOSTER';
+          cloned.myHint = player.hint || room.hint;
+          cloned.myWord = null;
+        } else if (player.role === 'CIVILIAN') {
+          cloned.secretWord = player.secretWord || room.secretWord;
+          cloned.myRole = 'CIVILIAN';
+          cloned.myWord = player.secretWord || room.secretWord;
+          cloned.myHint = player.hint || room.hint;
+        }
+      } else {
         cloned.secretWord = room.secretWord;
-        cloned.myRole = 'CIVILIAN';
-        cloned.myWord = room.secretWord;
-        cloned.myHint = room.hint;
       }
     } else if (isFinished) {
       cloned.secretWord = room.secretWord;
     }
+
+    // Never leak raw Redis internal player preferences mapping directly
+    delete cloned.playerCategoryPreferences;
 
     return cloned;
   }

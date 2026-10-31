@@ -162,6 +162,15 @@ export function SocketProvider({ children }) {
       showToast(`✏️ Player renamed to "${data.newUsername}"`);
     });
 
+    socket.on('settings_updated', (newSettings) => {
+      setRoomState(prev => prev ? { ...prev, settings: newSettings } : prev);
+      showToast('⚙️ Game settings updated by host');
+    });
+
+    socket.on('player_categories_updated', (data) => {
+      showToast(`🏷️ ${data.username} updated categories (${data.categoriesCount} selected)`);
+    });
+
     socket.on('error', (err) => {
       console.error('Socket Error:', err.message);
       showToast(`⚠️ ${err.message}`);
@@ -225,6 +234,18 @@ export function SocketProvider({ children }) {
     }
   };
 
+  const updatePlayerCategories = (roomCode, playerId, categorySlugs, categoryNames) => {
+    if (socketRef.current) {
+      sounds.playClick();
+      socketRef.current.emit('update_player_categories', {
+        roomCode: (roomCode || '').toUpperCase(),
+        playerId,
+        categorySlugs,
+        categoryNames
+      });
+    }
+  };
+
   const updateLobbyUsername = (roomCode, playerId, newUsername) => {
     if (socketRef.current) {
       socketRef.current.emit('update_username', { playerId, newUsername });
@@ -281,6 +302,7 @@ export function SocketProvider({ children }) {
         leaveRoom,
         returnToLobby,
         updateSettings,
+        updatePlayerCategories,
         updateLobbyUsername,
         kickPlayer,
         startGame,

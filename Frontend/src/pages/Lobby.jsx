@@ -21,6 +21,7 @@ export function Lobby() {
     roomState,
     disconnectAlert,
     updateSettings,
+    updatePlayerCategories,
     kickPlayer,
     startGame,
     joinRoom,
@@ -60,23 +61,21 @@ export function Lobby() {
   const isHost = roomState?.hostId === player?.id;
   const players = roomState?.players || [];
   const settings = roomState?.settings || {
-    categoryName: 'Fruits',
-    categorySlug: 'fruits',
-    categorySlugs: ['fruits'],
-    categoryNames: ['Fruits'],
     impostersCount: 1,
     turnDurationSeconds: 30,
     votingDurationSeconds: 45,
     lobbyDisconnectTimeout: 5
   };
 
-  const selectedSlugs = settings.categorySlugs || (settings.categorySlug ? [settings.categorySlug] : ['fruits']);
-  const selectedNames = settings.categoryNames || (settings.categoryName ? [settings.categoryName] : ['Fruits']);
+  // Personal category preference for the current player
+  const myCategorySlugs = roomState?.myCategorySlugs || ['fruits'];
+  const myCategoryNames = roomState?.myCategoryNames || ['Fruits'];
 
   // Check start readiness
   const hasDisconnected = players.some(p => !p.isConnected) || !!disconnectAlert;
   const minPlayersMet = players.length >= 3;
-  const canStart = isHost && minPlayersMet && !hasDisconnected;
+  const missingCategoriesPlayer = players.find(p => (p.selectedCategoriesCount !== undefined && p.selectedCategoriesCount === 0));
+  const canStart = isHost && minPlayersMet && !hasDisconnected && !missingCategoriesPlayer;
 
   const copyRoomLink = () => {
     sounds.playClick();
@@ -92,6 +91,8 @@ export function Lobby() {
         setStartError('Need at least 3 players to start the game.');
       } else if (hasDisconnected) {
         setStartError('Cannot start while a player is temporarily disconnected.');
+      } else if (missingCategoriesPlayer) {
+        setStartError(`Player "${missingCategoriesPlayer.username}" has not selected any word category.`);
       }
       return;
     }
@@ -169,6 +170,7 @@ export function Lobby() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               {players.map((p) => {
                 const isSelf = p.id === player?.id;
+                const catCount = p.selectedCategoriesCount !== undefined ? p.selectedCategoriesCount : 1;
                 return (
                   <div
                     key={p.id}
@@ -191,14 +193,18 @@ export function Lobby() {
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-slate-400">
+                        <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
                           {p.isHost ? (
                             <span className="text-amber-400 font-semibold">Room Host</span>
                           ) : !p.isConnected ? (
                             <span className="text-rose-400 font-semibold animate-pulse">Reconnecting...</span>
                           ) : (
-                            <span>Ready</span>
+                            <span className="text-emerald-400 font-medium">Ready</span>
                           )}
+                          <span className="text-slate-600">•</span>
+                          <span className="text-cyan-400/90 font-medium text-[10px]">
+                            {catCount} {catCount === 1 ? 'category' : 'categories'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -226,6 +232,8 @@ export function Lobby() {
                 <span className="text-amber-400 font-medium">⚠️ Waiting for {3 - players.length} more players to join</span>
               ) : hasDisconnected ? (
                 <span className="text-rose-400 font-medium">⚠️ Start Game is locked while a player is disconnected</span>
+              ) : missingCategoriesPlayer ? (
+                <span className="text-amber-400 font-medium">⚠️ Player "{missingCategoriesPlayer.username}" has not selected any word category</span>
               ) : (
                 <span className="text-emerald-400 font-medium">✅ Lobby is ready to start!</span>
               )}
@@ -248,158 +256,207 @@ export function Lobby() {
           </div>
         </div>
 
-        {/* Right Column: Game Configuration (Host controls, synched to all) */}
+        {/* Right Column: Preferences & Host Settings */}
         <div className="glass-card p-6 flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-5">
-              <Settings className="w-5 h-5 text-rose-400" />
-              <h2 className="font-display font-bold text-lg text-white">Game Settings</h2>
+            {/* Section 1: Player-Specific Word Category Selection (Available to ALL Players) */}
+            <div className="mb-6 p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/30">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-cyan-400" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+                    My Word Categories ({myCategorySlugs.length})
+                  </span>
+                </div>
+                <span className="text-[10px] text-cyan-400 font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
+                  Per Player
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 font-medium mb-3 truncate">
+                {myCategoryNames.join(', ')}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowCategorySelector(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-cyan-950/40"
+              >
+                <Layers className="w-4 h-4" />
+                <span>Select / Change My Categories</span>
+              </button>
+              <span className="text-[10px] text-slate-500 mt-2 block leading-relaxed">
+                Your turn's word pool will be drawn from your chosen categories.
+              </span>
             </div>
 
-            <div className="space-y-4">
-              {/* Word Categories (Multi-select) */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Word Categories ({selectedSlugs.length})
-                </label>
-                <button
-                  type="button"
-                  disabled={!isHost}
-                  onClick={() => setShowCategorySelector(true)}
-                  className="w-full flex items-center justify-between p-3 rounded-xl bg-dark-950 border border-slate-700 hover:border-slate-600 text-left transition-all disabled:opacity-80"
-                >
-                  <div className="flex-1 pr-2">
-                    <span className="text-sm font-bold text-white block truncate">
-                      {selectedNames.join(', ')}
-                    </span>
-                    <span className="text-[11px] text-cyan-400 font-semibold">
-                      {isHost ? 'Tap to choose multiple categories' : `${selectedSlugs.length} categories active`}
-                    </span>
-                  </div>
-                  <Layers className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                </button>
+            {/* Section 2: Global Game Settings */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-rose-400" />
+                <h2 className="font-display font-bold text-lg text-white">Game Settings</h2>
               </div>
+              {isHost ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                  Host Controls
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                  Read Only
+                </span>
+              )}
+            </div>
 
-              {/* Imposter Count */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Number of Imposters
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[1, 2, 3].map((num) => {
-                    const isSelected = settings.impostersCount === num;
-                    return (
+            {isHost ? (
+              /* HOST VIEW: Interactive Global Controls */
+              <div className="space-y-4">
+                {/* Imposter Count */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Number of Imposters
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[1, 2, 3].map((num) => {
+                      const isSelected = settings.impostersCount === num;
+                      return (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => updateSettings(normalizedCode, player.id, { impostersCount: num })}
+                          className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                            isSelected
+                              ? 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500'
+                              : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {num} {num === 1 ? 'Imposter' : 'Imposters'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Turn Duration */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Turn Clue Timer
+                  </label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[15, 30, 45, 60].map((sec) => (
                       <button
-                        key={num}
+                        key={sec}
                         type="button"
-                        disabled={!isHost}
-                        onClick={() => updateSettings(normalizedCode, player.id, { impostersCount: num })}
+                        onClick={() => updateSettings(normalizedCode, player.id, { turnDurationSeconds: sec })}
                         className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                          isSelected
+                          settings.turnDurationSeconds === sec
+                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                            : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {sec}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Voting Duration */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Voting Timer
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[30, 45, 60].map((sec) => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => updateSettings(normalizedCode, player.id, { votingDurationSeconds: sec })}
+                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                          settings.votingDurationSeconds === sec
+                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                            : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {sec}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Lobby Disconnect Timeout */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Lobby Disconnect Timeout
+                    </label>
+                    <span className="text-[10px] text-rose-400 font-semibold">Configurable</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[3, 5, 10, 15, 30].map((sec) => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => updateSettings(normalizedCode, player.id, { lobbyDisconnectTimeout: sec })}
+                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                          (settings.lobbyDisconnectTimeout || 5) === sec
                             ? 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500'
                             : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
                         }`}
                       >
-                        {num} {num === 1 ? 'Imposter' : 'Imposters'}
+                        {sec}s
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Grace period before a disconnected player slot is dropped.
+                  </span>
                 </div>
               </div>
-
-              {/* Turn Duration */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Turn Clue Timer
-                </label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[15, 30, 45, 60].map((sec) => (
-                    <button
-                      key={sec}
-                      type="button"
-                      disabled={!isHost}
-                      onClick={() => updateSettings(normalizedCode, player.id, { turnDurationSeconds: sec })}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                        settings.turnDurationSeconds === sec
-                          ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
-                          : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {sec}s
-                    </button>
-                  ))}
+            ) : (
+              /* NORMAL PLAYER VIEW: Clean Read-Only Summary */
+              <div className="space-y-3 p-4 rounded-2xl bg-dark-950 border border-slate-800">
+                <div className="flex items-center justify-between py-2 border-b border-slate-800/60">
+                  <span className="text-xs font-medium text-slate-400">Imposters</span>
+                  <span className="text-xs font-bold text-white px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700">
+                    {settings.impostersCount || 1} {settings.impostersCount === 1 ? 'Imposter' : 'Imposters'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-slate-800/60">
+                  <span className="text-xs font-medium text-slate-400">Turn Clue Timer</span>
+                  <span className="text-xs font-bold text-white px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700">
+                    {settings.turnDurationSeconds || 30} seconds
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-slate-800/60">
+                  <span className="text-xs font-medium text-slate-400">Voting Timer</span>
+                  <span className="text-xs font-bold text-white px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700">
+                    {settings.votingDurationSeconds || 45} seconds
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-xs font-medium text-slate-400">Lobby Disconnect Timeout</span>
+                  <span className="text-xs font-bold text-white px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700">
+                    {settings.lobbyDisconnectTimeout || 5} seconds
+                  </span>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center gap-1.5">
+                  <span className="text-amber-400">🔒</span>
+                  <span>Configured by the room host. Updates sync automatically.</span>
                 </div>
               </div>
-
-              {/* Voting Duration */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Voting Timer
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[30, 45, 60].map((sec) => (
-                    <button
-                      key={sec}
-                      type="button"
-                      disabled={!isHost}
-                      onClick={() => updateSettings(normalizedCode, player.id, { votingDurationSeconds: sec })}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                        settings.votingDurationSeconds === sec
-                          ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
-                          : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {sec}s
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Lobby Disconnect Timeout */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Lobby Disconnect Timeout
-                  </label>
-                  <span className="text-[10px] text-rose-400 font-semibold">Configurable</span>
-                </div>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {[3, 5, 10, 15, 30].map((sec) => (
-                    <button
-                      key={sec}
-                      type="button"
-                      disabled={!isHost}
-                      onClick={() => updateSettings(normalizedCode, player.id, { lobbyDisconnectTimeout: sec })}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                        (settings.lobbyDisconnectTimeout || 5) === sec
-                          ? 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500'
-                          : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {sec}s
-                    </button>
-                  ))}
-                </div>
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  Grace period before a disconnected player slot is dropped.
-                </span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Multi-Category Picker Modal */}
+      {/* Multi-Category Picker Modal (Personal preference for each player) */}
       {showCategorySelector && (
         <CategorySelector
-          selectedSlugs={selectedSlugs}
+          selectedSlugs={myCategorySlugs}
           onSelect={(chosenCats) => {
-            updateSettings(normalizedCode, player.id, {
-              categorySlugs: chosenCats.map(c => c.slug),
-              categoryNames: chosenCats.map(c => c.name),
-              categorySlug: chosenCats[0]?.slug,
-              categoryName: chosenCats.map(c => c.name).join(', ')
-            });
+            updatePlayerCategories(
+              normalizedCode,
+              player.id,
+              chosenCats.map(c => c.slug),
+              chosenCats.map(c => c.name)
+            );
           }}
           onClose={() => setShowCategorySelector(false)}
         />

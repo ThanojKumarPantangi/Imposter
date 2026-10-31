@@ -6,7 +6,9 @@ import {
   leaveRoom,
   returnToLobby,
   getCategories,
-  getRoom
+  getRoom,
+  updateSettings,
+  updatePlayerCategories
 } from '../controllers/roomController.js';
 
 const router = express.Router();
@@ -16,6 +18,8 @@ router.post('/join', joinRoom);
 router.get('/active', getActiveRoom);
 router.post('/leave', leaveRoom);
 router.post('/return-to-lobby', returnToLobby);
+router.post('/settings', updateSettings);
+router.post('/player-categories', updatePlayerCategories);
 router.get('/categories', getCategories);
 router.get('/:roomCode', getRoom);
 

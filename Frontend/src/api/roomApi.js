@@ -40,5 +40,19 @@ export const roomApi = {
 
   getCategories: () => {
     return apiRequest('/rooms/categories');
+  },
+
+  updateSettings: (roomCode, hostId, settings) => {
+    return apiRequest('/rooms/settings', {
+      method: 'POST',
+      body: JSON.stringify({ roomCode, hostId, settings })
+    });
+  },
+
+  updatePlayerCategories: (roomCode, playerId, categorySlugs, categoryNames) => {
+    return apiRequest('/rooms/player-categories', {
+      method: 'POST',
+      body: JSON.stringify({ roomCode, playerId, categorySlugs, categoryNames })
+    });
   }
 };
