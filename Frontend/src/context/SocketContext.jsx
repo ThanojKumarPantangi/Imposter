@@ -17,6 +17,8 @@ export function SocketProvider({ children }) {
   const [roomState, setRoomState] = useState(null);
   const [disconnectAlert, setDisconnectAlert] = useState(null); // { playerId, username, deadline, timeoutSeconds }
   const [kickedNotice, setKickedNotice] = useState(null);
+  const [pendingRejoinRequest, setPendingRejoinRequest] = useState(null); // Host approval modal: { requestId, roomCode, player }
+  const [rejoinState, setRejoinState] = useState(null); // Requester state: { status: 'PENDING' | 'APPROVED' | 'DENIED' | 'TIMEOUT', requestId, roomCode, message, expiresInSeconds }
   const [gameToast, setGameToast] = useState(null);
 
   // Keep playerRef updated without triggering reconnect
@@ -114,16 +116,65 @@ export function SocketProvider({ children }) {
     socket.on('kicked_from_room', (data) => {
       sessionStorage.removeItem('active_room_code');
       setRoomState(null);
-      setKickedNotice(data.reason || 'You were removed from the room by the host.');
+      setPendingRejoinRequest(null);
+      setKickedNotice(data.reason || 'You have been removed from this room by the host.');
     });
 
     socket.on('player_kicked', (data) => {
       showToast(`👢 ${data.username} was kicked from the room`);
     });
 
+    // Rejoin events
+    socket.on('rejoin_request_received', (data) => {
+      // Host received a request from a previously kicked player
+      sounds.playTurnAlert();
+      setPendingRejoinRequest(data);
+    });
+
+    socket.on('rejoin_request_pending', (data) => {
+      // Requester waiting for host decision
+      setRejoinState({
+        status: 'PENDING',
+        requestId: data.requestId,
+        roomCode: data.roomCode,
+        expiresInSeconds: data.expiresInSeconds || 45
+      });
+    });
+
+    socket.on('rejoin_approved', (data) => {
+      // Requester has been approved by host
+      sounds.playWin();
+      showToast('🎉 Your rejoin request was approved by the host!');
+      setRejoinState({
+        status: 'APPROVED',
+        roomCode: data.roomCode,
+        room: data.room
+      });
+      if (data.room) {
+        setRoomState(data.room);
+        sessionStorage.setItem('active_room_code', data.roomCode);
+      }
+    });
+
+    socket.on('rejoin_denied', (data) => {
+      // Requester was denied by host
+      setRejoinState({
+        status: 'DENIED',
+        message: data.message || 'The host declined your request to join this room.'
+      });
+    });
+
+    socket.on('rejoin_error', (data) => {
+      setRejoinState({
+        status: 'ERROR',
+        message: data.message || 'Could not send rejoin request.'
+      });
+    });
+
     socket.on('room_closed', (data) => {
       sessionStorage.removeItem('active_room_code');
       setRoomState(null);
+      setPendingRejoinRequest(null);
       showToast(`🔒 ${data.reason || 'The room has been closed'}`);
     });
 
@@ -305,6 +356,45 @@ export function SocketProvider({ children }) {
 
   const clearKickedNotice = () => setKickedNotice(null);
 
+  // Rejoin request & approval helpers
+  const requestRejoin = (roomCode, player) => {
+    if (socketRef.current && roomCode && player) {
+      socketRef.current.emit('request_rejoin', { roomCode: roomCode.toUpperCase(), player });
+      setRejoinState({
+        status: 'PENDING',
+        roomCode: roomCode.toUpperCase(),
+        expiresInSeconds: 45
+      });
+    }
+  };
+
+  const approveRejoin = (requestId, roomCode, hostId, targetPlayerId) => {
+    if (socketRef.current) {
+      socketRef.current.emit('approve_rejoin', {
+        requestId,
+        roomCode: (roomCode || '').toUpperCase(),
+        hostId,
+        targetPlayerId
+      });
+      setPendingRejoinRequest(null);
+    }
+  };
+
+  const denyRejoin = (requestId, roomCode, hostId, targetPlayerId) => {
+    if (socketRef.current) {
+      socketRef.current.emit('deny_rejoin', {
+        requestId,
+        roomCode: (roomCode || '').toUpperCase(),
+        hostId,
+        targetPlayerId
+      });
+      setPendingRejoinRequest(null);
+    }
+  };
+
+  const clearPendingRejoinRequest = () => setPendingRejoinRequest(null);
+  const clearRejoinState = () => setRejoinState(null);
+
   return (
     <SocketContext.Provider
       value={{
@@ -315,6 +405,14 @@ export function SocketProvider({ children }) {
         disconnectAlert,
         kickedNotice,
         clearKickedNotice,
+        pendingRejoinRequest,
+        clearPendingRejoinRequest,
+        rejoinState,
+        setRejoinState,
+        clearRejoinState,
+        requestRejoin,
+        approveRejoin,
+        denyRejoin,
         gameToast,
         showToast,
         joinRoom,

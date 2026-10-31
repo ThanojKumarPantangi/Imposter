@@ -70,6 +70,7 @@ class GameEngine {
           clues: []
         }
       ],
+      kickedPlayerIds: [],
       currentRound: 1,
       turnOrder: [],
       activeTurnIndex: 0,
@@ -102,6 +103,14 @@ class GameEngine {
     const room = await roomRepository.getRoom(normalizedCode);
     if (!room) {
       throw new Error('Room not found with code ' + normalizedCode);
+    }
+
+    // Check if player was previously kicked by the host
+    if (room.kickedPlayerIds && room.kickedPlayerIds.includes(player.id)) {
+      const err = new Error('You were previously removed from this room. Host approval is required to rejoin.');
+      err.code = 'KICKED_REJOIN_REQUIRES_APPROVAL';
+      err.requiresApproval = true;
+      throw err;
     }
 
     if (room.status !== 'WAITING') {
@@ -260,15 +269,131 @@ class GameEngine {
   }
 
   /**
-   * Host kicks/removes a player
+   * Host kicks/removes a player (Records player in kickedPlayerIds)
    */
   async removePlayerByHost(roomCode, hostId, targetPlayerId) {
-    const room = await roomRepository.getRoom(roomCode);
+    const normalizedCode = roomCode.toUpperCase();
+    const room = await roomRepository.getRoom(normalizedCode);
     if (!room) throw new Error('Room not found');
     if (room.hostId !== hostId) throw new Error('Only the room host can remove players');
     if (hostId === targetPlayerId) throw new Error('Host cannot kick themselves');
 
-    return await this.leaveRoom(roomCode, targetPlayerId, true);
+    // Add target player to kicked list in Redis
+    if (!room.kickedPlayerIds) room.kickedPlayerIds = [];
+    if (!room.kickedPlayerIds.includes(targetPlayerId)) {
+      room.kickedPlayerIds.push(targetPlayerId);
+      await roomRepository.saveRoom(normalizedCode, room);
+    }
+
+    const leaveResult = await this.leaveRoom(normalizedCode, targetPlayerId, true);
+    return { ...leaveResult, removedPlayerId: targetPlayerId, targetPlayerId, kicked: true };
+  }
+
+  /**
+   * Create a pending rejoin request for a previously kicked player
+   */
+  async createRejoinRequest(roomCode, player) {
+    if (!roomCode || !player || !player.id) throw new Error('Room code and player profile required');
+    const normalizedCode = roomCode.toUpperCase();
+    const room = await roomRepository.getRoom(normalizedCode);
+    if (!room) throw new Error('Room not found with code ' + normalizedCode);
+
+    if (room.status !== 'WAITING') {
+      throw new Error('Match is already in progress. Rejoining not permitted.');
+    }
+
+    if (room.players.length >= (room.settings.maxPlayers || 50)) {
+      throw new Error('Room has reached maximum capacity');
+    }
+
+    // Generate atomic request ID
+    const requestId = `req_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const requestData = {
+      requestId,
+      roomCode: normalizedCode,
+      player: {
+        id: player.id,
+        username: player.username,
+        avatar: player.avatar || 'avatar-1'
+      },
+      hostId: room.hostId,
+      status: 'PENDING',
+      createdAt: Date.now()
+    };
+
+    // Store in Redis with 45s expiration
+    await roomRepository.setRejoinRequest(normalizedCode, player.id, requestData, 45);
+    return requestData;
+  }
+
+  /**
+   * Host approves a kicked player's rejoin request
+   */
+  async approveRejoin(roomCode, hostId, targetPlayerId, requestId) {
+    if (!roomCode || !hostId || !targetPlayerId) throw new Error('Missing required arguments');
+    const normalizedCode = roomCode.toUpperCase();
+    const room = await roomRepository.getRoom(normalizedCode);
+    if (!room) throw new Error('Room not found');
+    if (room.hostId !== hostId) throw new Error('Host authority required to approve rejoin requests');
+
+    if (room.status !== 'WAITING') {
+      throw new Error('Match has already begun');
+    }
+
+    // Verify pending request in Redis
+    const requestData = await roomRepository.getRejoinRequest(normalizedCode, targetPlayerId);
+    if (!requestData || (requestId && requestData.requestId !== requestId)) {
+      throw new Error('Rejoin request has expired or was already handled');
+    }
+
+    // Clear kick restriction from Redis room state
+    if (room.kickedPlayerIds) {
+      room.kickedPlayerIds = room.kickedPlayerIds.filter(id => id !== targetPlayerId);
+    }
+
+    // Clean up Redis pending request
+    await roomRepository.clearRejoinRequest(normalizedCode, targetPlayerId);
+
+    // Add player to room
+    let playerObj = room.players.find(p => p.id === targetPlayerId);
+    if (!playerObj) {
+      playerObj = {
+        id: targetPlayerId,
+        username: requestData.player?.username || 'Player',
+        avatar: requestData.player?.avatar || `avatar-${crypto.randomInt(1, 9)}`,
+        isHost: false,
+        isConnected: true,
+        isAlive: true,
+        permanentlyDeparted: false,
+        role: null,
+        secretWord: null,
+        hint: null,
+        clues: []
+      };
+      room.players.push(playerObj);
+    } else {
+      playerObj.isConnected = true;
+      playerObj.permanentlyDeparted = false;
+    }
+
+    await roomRepository.saveRoom(normalizedCode, room);
+    await roomRepository.setPlayerRoomMapping(targetPlayerId, normalizedCode);
+
+    return { room, player: playerObj, status: 'APPROVED' };
+  }
+
+  /**
+   * Host denies a kicked player's rejoin request
+   */
+  async denyRejoin(roomCode, hostId, targetPlayerId, requestId) {
+    if (!roomCode || !hostId || !targetPlayerId) throw new Error('Missing required arguments');
+    const normalizedCode = roomCode.toUpperCase();
+    const room = await roomRepository.getRoom(normalizedCode);
+    if (!room) throw new Error('Room not found');
+    if (room.hostId !== hostId) throw new Error('Host authority required to deny rejoin requests');
+
+    await roomRepository.clearRejoinRequest(normalizedCode, targetPlayerId);
+    return { denied: true, targetPlayerId, status: 'DENIED' };
   }
 
   /**
@@ -559,6 +684,7 @@ class GameEngine {
       playerId: player.id,
       username: player.username,
       clue: cleanClue,
+      status: 'SUBMITTED',
       round: room.currentRound,
       skipped: false,
       timestamp: Date.now()
@@ -575,23 +701,29 @@ class GameEngine {
     if (!room) return null;
     if (room.status !== 'CLUE_ROUND') return null;
     if (room.activeTurnPlayerId !== activeTurnPlayerId) return null;
-    if (room.activeTurnIndex !== expectedTurnIndex) return null;
+    if (expectedTurnIndex !== undefined && room.activeTurnIndex !== expectedTurnIndex) return null;
 
     const player = room.players.find(p => p.id === activeTurnPlayerId);
     const username = player ? player.username : 'Player';
 
-    // Record skipped clue
+    // Record skipped clue with explicit status
     room.clueHistory.push({
       playerId: activeTurnPlayerId,
       username: username,
       clue: null,
+      status: 'SKIPPED',
       skipped: true,
       round: room.currentRound,
       timestamp: Date.now()
     });
 
     console.log(`⏱️ [GameEngine] Turn expired for ${username} in ${roomCode}. Turn SKIPPED.`);
-    return await this.advanceTurnOrder(room, { wasSkipped: true, skippedPlayer: player });
+    const result = await this.advanceTurnOrder(room, { wasSkipped: true, skippedPlayer: player });
+    return {
+      ...result,
+      skippedPlayerId: activeTurnPlayerId,
+      newStatus: room.status
+    };
   }
 
   /**

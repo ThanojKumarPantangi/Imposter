@@ -18,6 +18,7 @@ export function GameView() {
   const { player } = useAuth();
   const {
     roomState,
+    kickedNotice,
     submitClue,
     submitVote,
     joinRoom,
@@ -33,12 +34,20 @@ export function GameView() {
 
   const normalizedCode = (roomCode || '').toUpperCase();
 
+  // If player was kicked, redirect immediately to Home Screen
+  useEffect(() => {
+    if (kickedNotice) {
+      navigate('/', { replace: true });
+    }
+  }, [kickedNotice, navigate]);
+
   // Reconnect / sync if needed
   useEffect(() => {
+    if (kickedNotice) return;
     if (player && (!roomState || roomState.code !== normalizedCode)) {
       joinRoom(normalizedCode, player);
     }
-  }, [normalizedCode, player]);
+  }, [normalizedCode, player, roomState, kickedNotice, joinRoom]);
 
   // If room resets to WAITING (play again/return to lobby), automatically navigate to lobby!
   useEffect(() => {
@@ -120,8 +129,8 @@ export function GameView() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
       {/* Top Game Bar */}
-      <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 mb-6">
+        <div className="flex items-center justify-between sm:justify-start gap-3 flex-wrap">
           <button
             onClick={handleLeaveGame}
             className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl bg-dark-900 border border-slate-800 transition-colors"
@@ -133,36 +142,38 @@ export function GameView() {
 
           <div className="flex flex-col">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Category</span>
-            <span className="font-display font-bold text-base text-white truncate max-w-[160px] sm:max-w-xs">
+            <span className="font-display font-bold text-sm sm:text-base text-white truncate max-w-[130px] sm:max-w-xs">
               {roomState.settings?.categoryName || 'Fruits'}
             </span>
           </div>
-          <div className="h-6 w-px bg-slate-800" />
+          <div className="h-6 w-px bg-slate-800 hidden sm:block" />
           <div className="flex flex-col">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Round</span>
-            <span className="font-display font-bold text-base text-cyan-400">{roomState.currentRound || 1}</span>
+            <span className="font-display font-bold text-sm sm:text-base text-cyan-400">{roomState.currentRound || 1}</span>
           </div>
         </div>
 
-        {/* Phase Countdown Timer */}
-        {roomState.status === 'CLUE_ROUND' && roomState.turnDeadline && (
-          <CountdownTimer
-            deadline={roomState.turnDeadline}
-            totalSeconds={roomState.settings?.turnDurationSeconds || 30}
-            label="Turn Timer"
-          />
-        )}
+        <div className="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
+          {/* Phase Countdown Timer */}
+          {roomState.status === 'CLUE_ROUND' && roomState.turnDeadline && (
+            <CountdownTimer
+              deadline={roomState.turnDeadline}
+              totalSeconds={roomState.settings?.turnDurationSeconds || 30}
+              label="Turn Timer"
+            />
+          )}
 
-        {roomState.status === 'VOTING' && roomState.votingDeadline && (
-          <CountdownTimer
-            deadline={roomState.votingDeadline}
-            totalSeconds={roomState.settings?.votingDurationSeconds || 45}
-            label="Voting Deadline"
-          />
-        )}
+          {roomState.status === 'VOTING' && roomState.votingDeadline && (
+            <CountdownTimer
+              deadline={roomState.votingDeadline}
+              totalSeconds={roomState.settings?.votingDurationSeconds || 45}
+              label="Voting Deadline"
+            />
+          )}
 
-        {/* Voice controls */}
-        <VoiceControls />
+          {/* Voice controls */}
+          <VoiceControls />
+        </div>
       </div>
 
       {/* Secret Card Section (Private to the user) */}
@@ -184,7 +195,7 @@ export function GameView() {
                 <Shield className="w-6 h-6" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Your Secret Role</span>
                   <span className={isImposter ? 'badge-imposter' : 'badge-civilian'}>
                     {me.role || 'SPECTATOR'}
@@ -200,12 +211,12 @@ export function GameView() {
                   {isImposter ? (
                     <div>
                       <span className="text-xs text-rose-300 font-semibold block">Your Persistent Hint:</span>
-                      <span className="text-lg font-black text-rose-200">{roomState.myHint}</span>
+                      <span className="text-base sm:text-lg font-black text-rose-200">{roomState.myHint}</span>
                     </div>
                   ) : isCivilian ? (
                     <div>
                       <span className="text-xs text-cyan-300 font-semibold block">Your Secret Word:</span>
-                      <span className="text-2xl font-black text-cyan-200 tracking-wide font-display">
+                      <span className="text-xl sm:text-2xl font-black text-cyan-200 tracking-wide font-display">
                         {revealedSecret ? roomState.myWord : '••••••••'}
                       </span>
                     </div>
@@ -245,11 +256,11 @@ export function GameView() {
           <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto mb-4 border border-cyan-500/30 animate-pulse">
             <Sparkles className="w-8 h-8" />
           </div>
-          <h2 className="font-display font-black text-3xl text-white mb-2">Secret Roles Distributed</h2>
-          <p className="text-sm text-slate-400 max-w-md mx-auto mb-6">
+          <h2 className="font-display font-black text-2xl sm:text-3xl text-white mb-2">Secret Roles Distributed</h2>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mb-6">
             Memorize your word or hint above! Clue rounds will begin in a moment.
           </p>
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-dark-950 border border-slate-800 text-sm font-bold text-slate-300">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-dark-950 border border-slate-800 text-xs sm:text-sm font-bold text-slate-300">
             <Clock className="w-4 h-4 text-cyan-400" />
             <span>Starting round 1 shortly...</span>
           </div>
@@ -265,7 +276,7 @@ export function GameView() {
           <div className="lg:col-span-2 space-y-6">
             {/* Active Player Status Card */}
             <div
-              className={`glass-card p-6 border ${
+              className={`glass-card p-5 sm:p-6 border ${
                 isMyTurn
                   ? 'border-cyan-500/60 bg-cyan-950/20 ring-1 ring-cyan-500'
                   : 'border-slate-800'
@@ -277,7 +288,7 @@ export function GameView() {
                     <Clock className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-display font-bold text-lg text-white">
+                    <h3 className="font-display font-bold text-base sm:text-lg text-white">
                       {isMyTurn ? '🌟 It is YOUR turn to submit a clue!' : `Waiting for ${roomState.players.find(p => p.id === roomState.activeTurnPlayerId)?.username || 'active player'}...`}
                     </h3>
                     <p className="text-xs text-slate-400">
@@ -292,7 +303,7 @@ export function GameView() {
               {/* Clue Input Form */}
               {isMyTurn && isAlive && (
                 <form onSubmit={handleClueSubmit} className="space-y-3">
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
                       value={clueInput}
@@ -302,7 +313,7 @@ export function GameView() {
                       maxLength={40}
                       className="flex-1 bg-dark-950 border border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 px-4 py-3 rounded-xl text-white placeholder-slate-500 text-sm font-semibold outline-none"
                     />
-                    <button type="submit" className="btn-cyan flex items-center gap-2 px-6">
+                    <button type="submit" className="btn-cyan flex items-center justify-center gap-2 px-6 py-3 sm:py-0 w-full sm:w-auto">
                       <Send className="w-4 h-4" />
                       <span>Submit</span>
                     </button>
@@ -316,45 +327,108 @@ export function GameView() {
               )}
             </div>
 
-            {/* Clue History Log with Skipped Turn Display */}
-            <div className="glass-card p-6">
-              <h4 className="font-display font-bold text-base text-white mb-4 flex items-center gap-2">
-                <span>Submitted Clues</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
-                  {roomState.clueHistory?.length || 0}
-                </span>
-              </h4>
+            {/* Submitted Clues Table (Section 6 Requirement) */}
+            <div className="glass-card p-5 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-display font-bold text-base text-white flex items-center gap-2">
+                  <span>Submitted Clues</span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                    Round {roomState.currentRound || 1}
+                  </span>
+                </h4>
+                <span className="text-[11px] text-slate-500">Live Turn Status</span>
+              </div>
 
-              {roomState.clueHistory?.length === 0 ? (
-                <div className="py-8 text-center text-slate-500 text-sm">
-                  No clues submitted yet this round.
-                </div>
-              ) : (
-                <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
-                  {roomState.clueHistory?.map((c, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex items-center justify-between p-3 rounded-xl border ${
-                        c.skipped
-                          ? 'bg-amber-950/20 border-amber-500/30'
-                          : 'bg-dark-950 border-slate-800/80'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-xs font-bold text-cyan-400">{c.username}:</span>
-                        {c.skipped ? (
-                          <span className="text-xs font-semibold text-amber-400 italic">
-                            {c.username} skipped the turn — no clue submitted.
+              {/* Responsive Clues Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800/80 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      <th className="pb-3 pl-2">Player</th>
+                      <th className="pb-3 px-2">Clue</th>
+                      <th className="pb-3 pr-2 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {roomState.players.filter(p => p.isAlive && !p.permanentlyDeparted).map((p) => {
+                      const entry = roomState.clueHistory?.find(
+                        c => c.playerId === p.id && c.round === (roomState.currentRound || 1)
+                      );
+                      const isSkipped = entry?.status === 'SKIPPED' || entry?.skipped;
+                      const isSubmitted = entry && !isSkipped && (entry.status === 'SUBMITTED' || entry.clue);
+                      const isActive = !entry && roomState.activeTurnPlayerId === p.id;
+                      const isWaiting = !entry && !isActive;
+
+                      return (
+                        <tr key={p.id} className="hover:bg-dark-800/40 transition-colors">
+                          <td className="py-3 pl-2">
+                            <div className="flex items-center gap-2.5">
+                              <PlayerAvatar player={p} size="sm" showStatus={false} />
+                              <span className="text-xs font-bold text-slate-200 truncate max-w-[120px] sm:max-w-[160px]">
+                                {p.username}
+                                {p.id === player?.id && (
+                                  <span className="ml-1 text-[10px] text-cyan-400 font-normal">(You)</span>
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-2">
+                            {isSubmitted ? (
+                              <span className="font-display font-black text-sm text-cyan-200">
+                                "{entry.clue}"
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-500">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 pr-2 text-right">
+                            {isSubmitted && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                Submitted
+                              </span>
+                            )}
+                            {isSkipped && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                Skipped
+                              </span>
+                            )}
+                            {isActive && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 animate-pulse">
+                                Thinking...
+                              </span>
+                            )}
+                            {isWaiting && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold text-slate-500 bg-slate-800/60 border border-slate-700/40">
+                                Waiting
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Historical Clues (if round > 1) */}
+              {roomState.clueHistory && roomState.clueHistory.some(c => c.round < (roomState.currentRound || 1)) && (
+                <div className="mt-5 pt-4 border-t border-slate-800/60">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                    Previous Rounds Clues
+                  </div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                    {roomState.clueHistory
+                      .filter(c => c.round < (roomState.currentRound || 1))
+                      .map((c, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-dark-950/60 text-slate-400">
+                          <span>
+                            <strong className="text-slate-300">{c.username}</strong>:{' '}
+                            {c.skipped ? <em className="text-amber-400">Skipped</em> : `"${c.clue}"`}
                           </span>
-                        ) : (
-                          <span className="text-sm font-black text-slate-100 font-display">"{c.clue}"</span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-slate-500 uppercase font-semibold">
-                        Round {c.round}
-                      </span>
-                    </div>
-                  ))}
+                          <span className="text-[10px] text-slate-500">R{c.round}</span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
             </div>

@@ -206,6 +206,36 @@ class RoomRepository {
     const redis = getRedisClient();
     return await redis.smembers('active_room_codes');
   }
+
+  /**
+   * Pending Rejoin Request (Authoritative in Redis with TTL)
+   */
+  async setRejoinRequest(roomCode, playerId, requestData, ttlSeconds = 45) {
+    if (!roomCode || !playerId) return;
+    const redis = getRedisClient();
+    const key = `rejoin_req:${roomCode.toUpperCase()}:${playerId}`;
+    await redis.set(key, JSON.stringify(requestData), 'EX', ttlSeconds);
+  }
+
+  async getRejoinRequest(roomCode, playerId) {
+    if (!roomCode || !playerId) return null;
+    const redis = getRedisClient();
+    const key = `rejoin_req:${roomCode.toUpperCase()}:${playerId}`;
+    const raw = await redis.get(key);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  async clearRejoinRequest(roomCode, playerId) {
+    if (!roomCode || !playerId) return;
+    const redis = getRedisClient();
+    const key = `rejoin_req:${roomCode.toUpperCase()}:${playerId}`;
+    await redis.del(key);
+  }
 }
 
 const roomRepository = new RoomRepository();

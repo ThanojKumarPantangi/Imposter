@@ -258,10 +258,16 @@ function setupNamespace(nsp) {
         if (targetSocketId) {
           nsp.to(targetSocketId).emit('kicked_from_room', {
             roomCode: normalizedCode,
-            reason: 'You were removed by the room host'
+            reason: 'You have been removed from this room by the host.'
           });
           const targetSocket = nsp.sockets.get(targetSocketId);
           if (targetSocket) targetSocket.leave(`room:${normalizedCode}`);
+
+          // Voice cleanup for kicked player
+          nsp.to(`room:${normalizedCode}`).emit('voice_peer_left', {
+            peerSocketId: targetSocketId,
+            playerId: targetPlayerId
+          });
         }
 
         nsp.to(`room:${normalizedCode}`).emit('player_kicked', {
@@ -274,6 +280,76 @@ function setupNamespace(nsp) {
         }
 
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
+      } catch (err) {
+        socket.emit('error', { message: err.message });
+      }
+    });
+
+    // 7b. Rejoin Request & Approval Workflow
+    socket.on('request_rejoin', async ({ roomCode, player }) => {
+      try {
+        if (!roomCode || !player || !player.id) return;
+        const normalizedCode = roomCode.toUpperCase();
+        const requestData = await gameEngine.createRejoinRequest(normalizedCode, player);
+
+        const room = await roomRepository.getRoom(normalizedCode);
+        if (room) {
+          const hostSocketId = await roomRepository.getSocketByPlayer(room.hostId);
+          if (hostSocketId) {
+            nsp.to(hostSocketId).emit('rejoin_request_received', {
+              requestId: requestData.requestId,
+              roomCode: normalizedCode,
+              player: requestData.player
+            });
+          }
+        }
+
+        socket.emit('rejoin_request_pending', {
+          requestId: requestData.requestId,
+          roomCode: normalizedCode,
+          expiresInSeconds: 45
+        });
+      } catch (err) {
+        socket.emit('rejoin_error', { message: err.message });
+      }
+    });
+
+    socket.on('approve_rejoin', async ({ roomCode, hostId, targetPlayerId, requestId }) => {
+      try {
+        const normalizedCode = (roomCode || '').toUpperCase();
+        const result = await gameEngine.approveRejoin(normalizedCode, hostId, targetPlayerId, requestId);
+
+        const targetSocketId = await roomRepository.getSocketByPlayer(targetPlayerId);
+        if (targetSocketId) {
+          const targetSocket = nsp.sockets.get(targetSocketId);
+          if (targetSocket) targetSocket.join(`room:${normalizedCode}`);
+          nsp.to(targetSocketId).emit('rejoin_approved', {
+            roomCode: normalizedCode,
+            room: result.room
+          });
+        }
+
+        await broadcastPersonalizedRoomState(nsp, normalizedCode);
+        nsp.to(`room:${normalizedCode}`).emit('player_joined', {
+          player: result.player,
+          totalPlayers: result.room.players.length
+        });
+      } catch (err) {
+        socket.emit('error', { message: err.message });
+      }
+    });
+
+    socket.on('deny_rejoin', async ({ roomCode, hostId, targetPlayerId, requestId }) => {
+      try {
+        const normalizedCode = (roomCode || '').toUpperCase();
+        await gameEngine.denyRejoin(normalizedCode, hostId, targetPlayerId, requestId);
+
+        const targetSocketId = await roomRepository.getSocketByPlayer(targetPlayerId);
+        if (targetSocketId) {
+          nsp.to(targetSocketId).emit('rejoin_denied', {
+            message: 'The host declined your request to join this room.'
+          });
+        }
       } catch (err) {
         socket.emit('error', { message: err.message });
       }
@@ -528,40 +604,62 @@ function setupNamespace(nsp) {
  * Schedule Authoritative Turn Timeout
  */
 function scheduleTurnTimeout(nsp, roomCode) {
-  setTimeout(async () => {
-    const room = await roomRepository.getRoom(roomCode);
-    if (!room || room.status !== 'CLUE_ROUND') return;
+  (async () => {
+    try {
+      const room = await roomRepository.getRoom(roomCode);
+      if (!room || room.status !== 'CLUE_ROUND' || !room.turnDeadline) return;
 
-    // Check if turn timer genuinely expired
-    if (room.turnDeadline && Date.now() >= room.turnDeadline - 500) {
       const activePlayerId = room.activeTurnPlayerId;
       const turnIndex = room.activeTurnIndex;
-      const result = await gameEngine.handleTurnTimeout(roomCode, activePlayerId, turnIndex);
+      const remainingMs = Math.max(100, (room.turnDeadline - Date.now()) + 50);
 
-      if (result) {
-        const skippedPlayer = result.skippedPlayer || room.players.find(p => p.id === activePlayerId);
-        const name = skippedPlayer ? skippedPlayer.username : 'Player';
+      setTimeout(async () => {
+        try {
+          const freshRoom = await roomRepository.getRoom(roomCode);
+          if (!freshRoom || freshRoom.status !== 'CLUE_ROUND') return;
 
-        nsp.to(`room:${roomCode}`).emit('turn_skipped', {
-          playerId: activePlayerId,
-          username: name,
-          message: `${name} skipped the turn — no clue submitted.`
-        });
+          // Guard against race condition: check if turn already rotated or completed
+          if (freshRoom.activeTurnPlayerId !== activePlayerId || freshRoom.activeTurnIndex !== turnIndex) {
+            return;
+          }
 
-        await broadcastPersonalizedRoomState(nsp, roomCode);
+          // If clock jitter caused early wakeup, wait remaining time
+          if (freshRoom.turnDeadline && Date.now() < freshRoom.turnDeadline - 200) {
+            scheduleTurnTimeout(nsp, roomCode);
+            return;
+          }
 
-        if (result.phaseChanged && result.room.status === 'VOTING') {
-          nsp.to(`room:${roomCode}`).emit('voting_phase_started', {
-            votingDeadline: result.room.votingDeadline,
-            duration: result.room.settings.votingDurationSeconds
-          });
-          scheduleVotingTimeout(nsp, roomCode, result.room.settings.votingDurationSeconds);
-        } else if (!result.phaseChanged) {
-          scheduleTurnTimeout(nsp, roomCode);
+          const result = await gameEngine.handleTurnTimeout(roomCode, activePlayerId, turnIndex);
+          if (result) {
+            const skippedPlayer = result.skippedPlayer || freshRoom.players.find(p => p.id === activePlayerId);
+            const name = skippedPlayer ? skippedPlayer.username : 'Player';
+
+            nsp.to(`room:${roomCode}`).emit('turn_skipped', {
+              playerId: activePlayerId,
+              username: name,
+              message: `${name} skipped the turn — no clue submitted.`
+            });
+
+            await broadcastPersonalizedRoomState(nsp, roomCode);
+
+            if (result.phaseChanged && result.room.status === 'VOTING') {
+              nsp.to(`room:${roomCode}`).emit('voting_phase_started', {
+                votingDeadline: result.room.votingDeadline,
+                duration: result.room.settings.votingDurationSeconds
+              });
+              scheduleVotingTimeout(nsp, roomCode, result.room.settings.votingDurationSeconds);
+            } else if (!result.phaseChanged) {
+              scheduleTurnTimeout(nsp, roomCode);
+            }
+          }
+        } catch (err) {
+          console.error(`Error in turn timeout for ${roomCode}:`, err);
         }
-      }
+      }, remainingMs);
+    } catch (e) {
+      console.error('Error scheduling turn timeout:', e);
     }
-  }, 1000);
+  })();
 }
 
 /**

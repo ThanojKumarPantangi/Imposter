@@ -18,7 +18,12 @@ export async function apiRequest(endpoint, options = {}) {
   const data = await response.json().catch(() => ({ success: false, error: 'Network error or invalid JSON response' }));
 
   if (!response.ok) {
-    throw new Error(data.error || `Request failed with status ${response.status}`);
+    const error = new Error(data.error || `Request failed with status ${response.status}`);
+    error.status = response.status;
+    error.data = data;
+    error.requiresApproval = data.requiresApproval;
+    error.kicked = data.kicked;
+    throw error;
   }
 
   return data;

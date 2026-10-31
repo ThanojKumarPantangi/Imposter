@@ -1,21 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Users, Play, Plus, BookOpen, Sparkles, ArrowRight, Trophy, Smartphone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { roomApi } from '../api/roomApi';
 import { PlayerAvatar } from '../components/PlayerAvatar';
+import { RejoinWaitingModal } from '../components/RejoinWaitingModal';
 import { sounds } from '../utils/sound';
 
 export function Home() {
   const navigate = useNavigate();
   const { player } = useAuth();
-  const { joinRoom } = useSocket();
+  const {
+    joinRoom,
+    rejoinState,
+    requestRejoin,
+    clearRejoinState
+  } = useSocket();
 
   const [roomCodeInput, setRoomCodeInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showRules, setShowRules] = useState(false);
+
+  // Watch for approval to auto-enter lobby
+  useEffect(() => {
+    if (rejoinState && rejoinState.status === 'APPROVED' && rejoinState.roomCode) {
+      const code = rejoinState.roomCode;
+      clearRejoinState();
+      joinRoom(code, player);
+      navigate(`/lobby/${code}`);
+    }
+  }, [rejoinState?.status, rejoinState?.roomCode, joinRoom, player, navigate, clearRejoinState]);
 
   // Handle Join Room
   const handleJoin = async (e) => {
@@ -36,7 +52,12 @@ export function Home() {
         navigate(`/lobby/${cleanCode}`);
       }
     } catch (err) {
-      setError(err.message || 'Room not found or game in progress');
+      if (err.requiresApproval || err.status === 403 || err.kicked || err.message?.includes('previously removed')) {
+        // Kicked player must request approval from host
+        requestRejoin(cleanCode, player);
+      } else {
+        setError(err.message || 'Room not found or game in progress');
+      }
     } finally {
       setLoading(false);
     }
@@ -253,6 +274,15 @@ export function Home() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Kicked Player Rejoin Waiting Modal */}
+      {rejoinState && (
+        <RejoinWaitingModal
+          rejoinState={rejoinState}
+          onCancel={clearRejoinState}
+          onReturnHome={clearRejoinState}
+        />
       )}
     </div>
   );

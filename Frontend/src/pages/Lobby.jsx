@@ -11,6 +11,7 @@ import { CategorySelector } from '../components/CategorySelector';
 import { KickConfirmModal } from '../components/KickConfirmModal';
 import { DisconnectedBanner } from '../components/DisconnectedBanner';
 import { VoiceControls } from '../components/VoiceControls';
+import { RejoinApprovalModal } from '../components/RejoinApprovalModal';
 import { sounds } from '../utils/sound';
 
 export function Lobby() {
@@ -20,6 +21,10 @@ export function Lobby() {
   const {
     roomState,
     disconnectAlert,
+    kickedNotice,
+    pendingRejoinRequest,
+    approveRejoin,
+    denyRejoin,
     updateSettings,
     updateRoomCategories,
     updatePlayerCategories,
@@ -36,12 +41,20 @@ export function Lobby() {
 
   const normalizedCode = (roomCode || '').toUpperCase();
 
-  // If roomState is not loaded or reconnected, auto-join socket room
+  // If player was kicked, redirect immediately to Home and do NOT auto-join!
   useEffect(() => {
+    if (kickedNotice) {
+      navigate('/', { replace: true });
+    }
+  }, [kickedNotice, navigate]);
+
+  // If roomState is not loaded or reconnected, auto-join socket room (unless kicked)
+  useEffect(() => {
+    if (kickedNotice) return;
     if (player && (!roomState || roomState.code !== normalizedCode)) {
       joinRoom(normalizedCode, player);
     }
-  }, [normalizedCode, player]);
+  }, [normalizedCode, player, roomState, kickedNotice, joinRoom]);
 
   // Navigate to Game view when room status changes away from WAITING
   useEffect(() => {
@@ -108,37 +121,46 @@ export function Lobby() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+    <div className="max-w-6xl mx-auto px-4 py-4 sm:py-8">
       {/* Top Header */}
-      <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
-        <button
-          onClick={handleLeaveRoom}
-          className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white px-3 py-2 rounded-xl bg-dark-900 border border-slate-800 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Leave Room</span>
-        </button>
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 mb-6">
+        <div className="flex items-center justify-between sm:justify-start gap-3">
+          <button
+            onClick={handleLeaveRoom}
+            className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white px-3 py-2.5 rounded-xl bg-dark-900 border border-slate-800 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Leave Room</span>
+          </button>
+
+          {/* In-Lobby Voice Controls (Mobile left-aligned or inline) */}
+          <div className="sm:hidden">
+            <VoiceControls />
+          </div>
+        </div>
 
         {/* Room Code Badge */}
-        <div className="flex items-center gap-3 bg-dark-900 border border-slate-800 px-5 py-2.5 rounded-2xl shadow-xl">
-          <div className="text-right">
+        <div className="flex items-center justify-between sm:justify-center gap-3 bg-dark-900 border border-slate-800 px-4 sm:px-5 py-2.5 rounded-2xl shadow-xl">
+          <div className="text-left sm:text-right">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Room Code</span>
-            <span className="font-display font-black text-2xl tracking-widest text-cyan-400 font-mono">
+            <span className="font-display font-black text-xl sm:text-2xl tracking-widest text-cyan-400 font-mono">
               {normalizedCode}
             </span>
           </div>
 
           <button
             onClick={copyRoomLink}
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors active:scale-95"
             title="Copy Invite Link"
           >
             {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* In-Lobby Voice Controls */}
-        <VoiceControls />
+        {/* In-Lobby Voice Controls (Desktop) */}
+        <div className="hidden sm:block">
+          <VoiceControls />
+        </div>
       </div>
 
       {/* Disconnected Player Countdown Banner */}
@@ -465,6 +487,29 @@ export function Lobby() {
           player={playerToKick}
           onConfirm={handleKickConfirm}
           onCancel={() => setPlayerToKick(null)}
+        />
+      )}
+
+      {/* Host Approval Modal for Kicked Player Rejoin Request */}
+      {isHost && pendingRejoinRequest && (
+        <RejoinApprovalModal
+          request={pendingRejoinRequest}
+          onApprove={() =>
+            approveRejoin(
+              pendingRejoinRequest.requestId,
+              normalizedCode,
+              player.id,
+              pendingRejoinRequest.player.id
+            )
+          }
+          onDeny={() =>
+            denyRejoin(
+              pendingRejoinRequest.requestId,
+              normalizedCode,
+              player.id,
+              pendingRejoinRequest.player.id
+            )
+          }
         />
       )}
     </div>

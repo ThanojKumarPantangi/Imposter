@@ -9,7 +9,10 @@ import {
   getRoom,
   updateSettings,
   updateRoomCategories,
-  updatePlayerCategories
+  updatePlayerCategories,
+  requestRejoin,
+  approveRejoin,
+  denyRejoin
 } from '../controllers/roomController.js';
 
 const router = express.Router();
@@ -22,6 +25,9 @@ router.post('/return-to-lobby', returnToLobby);
 router.post('/settings', updateSettings);
 router.post('/categories', updateRoomCategories);
 router.post('/player-categories', updatePlayerCategories);
+router.post('/rejoin/request', requestRejoin);
+router.post('/rejoin/approve', approveRejoin);
+router.post('/rejoin/deny', denyRejoin);
 router.get('/categories', getCategories);
 router.get('/:roomCode', getRoom);
 

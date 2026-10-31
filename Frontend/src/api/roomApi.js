@@ -65,5 +65,26 @@ export const roomApi = {
       method: 'POST',
       body: JSON.stringify({ roomCode, playerId, categorySlugs, categoryNames })
     });
+  },
+
+  requestRejoin: (roomCode, player) => {
+    return apiRequest('/rooms/rejoin/request', {
+      method: 'POST',
+      body: JSON.stringify({ roomCode, player })
+    });
+  },
+
+  approveRejoin: (requestId, roomCode, hostId, targetPlayerId) => {
+    return apiRequest('/rooms/rejoin/approve', {
+      method: 'POST',
+      body: JSON.stringify({ requestId, roomCode, hostId, targetPlayerId })
+    });
+  },
+
+  denyRejoin: (requestId, roomCode, hostId, targetPlayerId) => {
+    return apiRequest('/rooms/rejoin/deny', {
+      method: 'POST',
+      body: JSON.stringify({ requestId, roomCode, hostId, targetPlayerId })
+    });
   }
 };

@@ -27,6 +27,14 @@ export const joinRoom = async (req, res) => {
     const room = await gameEngine.joinRoom(roomCode, player);
     return res.json({ success: true, room });
   } catch (error) {
+    if (error.code === 'KICKED_REJOIN_REQUIRES_APPROVAL' || error.requiresApproval) {
+      return res.status(403).json({
+        success: false,
+        kicked: true,
+        requiresApproval: true,
+        error: error.message
+      });
+    }
     return res.status(400).json({ success: false, error: error.message });
   }
 };
@@ -165,6 +173,36 @@ export const updateRoomCategories = async (req, res) => {
 
 export const updatePlayerCategories = updateRoomCategories;
 
+export const requestRejoin = async (req, res) => {
+  try {
+    const { roomCode, player } = req.body;
+    const request = await gameEngine.createRejoinRequest(roomCode, player);
+    return res.json({ success: true, request });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+export const approveRejoin = async (req, res) => {
+  try {
+    const { roomCode, hostId, targetPlayerId, requestId } = req.body;
+    const result = await gameEngine.approveRejoin(roomCode, hostId, targetPlayerId, requestId);
+    return res.json({ success: true, room: result.room, player: result.player });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+export const denyRejoin = async (req, res) => {
+  try {
+    const { roomCode, hostId, targetPlayerId, requestId } = req.body;
+    const result = await gameEngine.denyRejoin(roomCode, hostId, targetPlayerId, requestId);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+};
+
 export default {
   createRoom,
   joinRoom,
@@ -175,5 +213,8 @@ export default {
   getCategories,
   updateSettings,
   updateRoomCategories,
-  updatePlayerCategories
+  updatePlayerCategories,
+  requestRejoin,
+  approveRejoin,
+  denyRejoin
 };

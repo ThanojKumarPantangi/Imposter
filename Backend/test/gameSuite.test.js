@@ -572,4 +572,156 @@ describe('🎮 Authoritative Imposter Multiplayer Test Suite', () => {
       assert.ok(readiness.reason.includes('At least one word category must be selected for the room'));
     });
   });
+
+  describe('9. Host Kick & Rejoin Approval + Turn Timeout Auto-Skip', () => {
+    test('69-72. Host kick records kick in Redis and blocks automatic rejoin', async () => {
+      const host = { id: 'host_k', username: 'HostKick' };
+      const p2 = { id: 'p2_k', username: 'PlayerToKick' };
+      const p3 = { id: 'p3_k', username: 'Player3' };
+      const room = await gameEngine.createRoom(host);
+      await gameEngine.joinRoom(room.code, p2);
+      await gameEngine.joinRoom(room.code, p3);
+
+      // Host kicks p2
+      const kickRes = await gameEngine.removePlayerByHost(room.code, host.id, p2.id);
+      assert.equal(kickRes.removedPlayerId, p2.id);
+
+      const afterKick = await roomRepository.getRoom(room.code);
+      assert.equal(afterKick.players.length, 2);
+      assert.ok(afterKick.kickedPlayerIds.includes(p2.id), 'Kicked player ID must be recorded in room.kickedPlayerIds');
+
+      // Player to kick cannot auto-rejoin
+      await assert.rejects(
+        async () => {
+          await gameEngine.joinRoom(room.code, p2);
+        },
+        (err) => {
+          assert.equal(err.code, 'KICKED_REJOIN_REQUIRES_APPROVAL');
+          return true;
+        }
+      );
+    });
+
+    test('73-76. Rejoin request and host approval workflow', async () => {
+      const host = { id: 'host_app', username: 'HostApproval' };
+      const p2 = { id: 'p2_app', username: 'KickedP2' };
+      const p3 = { id: 'p3_app', username: 'P3' };
+      const room = await gameEngine.createRoom(host);
+      await gameEngine.joinRoom(room.code, p2);
+      await gameEngine.joinRoom(room.code, p3);
+
+      // Kick p2
+      await gameEngine.removePlayerByHost(room.code, host.id, p2.id);
+
+      // p2 creates a rejoin request
+      const req = await gameEngine.createRejoinRequest(room.code, p2);
+      assert.ok(req.requestId, 'Rejoin request must have requestId');
+      assert.equal(req.status, 'PENDING');
+
+      // Non-host cannot approve
+      await assert.rejects(
+        async () => {
+          await gameEngine.approveRejoin(room.code, 'p3_app', p2.id, req.requestId);
+        },
+        /Host authority required to approve rejoin/
+      );
+
+      // Host approves
+      const approved = await gameEngine.approveRejoin(room.code, host.id, p2.id, req.requestId);
+      assert.ok(approved.room.players.some(p => p.id === p2.id), 'Player must be restored to room');
+      assert.ok(!approved.room.kickedPlayerIds.includes(p2.id), 'Kick record must be cleared');
+
+      // Attempting to reuse or approve the same request fails
+      await assert.rejects(
+        async () => {
+          await gameEngine.approveRejoin(room.code, host.id, p2.id, req.requestId);
+        },
+        /Rejoin request has expired or was already handled/
+      );
+    });
+
+    test('77-79. Host denial rejects rejoin request and prevents entry', async () => {
+      const host = { id: 'host_den', username: 'HostDeny' };
+      const p2 = { id: 'p2_den', username: 'P2Deny' };
+      const room = await gameEngine.createRoom(host);
+      await gameEngine.joinRoom(room.code, p2);
+      await gameEngine.removePlayerByHost(room.code, host.id, p2.id);
+
+      const req = await gameEngine.createRejoinRequest(room.code, p2);
+      const denied = await gameEngine.denyRejoin(room.code, host.id, p2.id, req.requestId);
+      assert.equal(denied.status, 'DENIED');
+
+      // Room still does not contain p2
+      const r = await roomRepository.getRoom(room.code);
+      assert.ok(!r.players.some(p => p.id === p2.id));
+      assert.ok(r.kickedPlayerIds.includes(p2.id));
+    });
+
+    test('80-83. Authoritative turn timeout marks clue as SKIPPED and advances turn', async () => {
+      const host = { id: 't_h', username: 'TurnHost' };
+      const p2 = { id: 't_p2', username: 'TurnP2' };
+      const p3 = { id: 't_p3', username: 'TurnP3' };
+      const room = await gameEngine.createRoom(host, { turnDurationSeconds: 10 });
+      await gameEngine.joinRoom(room.code, p2);
+      await gameEngine.joinRoom(room.code, p3);
+
+      await gameEngine.startGame(room.code, host.id);
+      await gameEngine.startClueRound(room.code);
+
+      const r1 = await roomRepository.getRoom(room.code);
+      assert.equal(r1.status, 'CLUE_ROUND');
+      const firstPlayerId = r1.activeTurnPlayerId;
+      assert.ok(firstPlayerId);
+
+      // Trigger authoritative timeout for firstPlayerId
+      const timeoutRes = await gameEngine.handleTurnTimeout(room.code, firstPlayerId);
+      assert.equal(timeoutRes.skippedPlayerId, firstPlayerId);
+
+      const r2 = await roomRepository.getRoom(room.code);
+      // Clue history must have explicit SKIPPED status
+      const historyEntry = r2.clueHistory.find(c => c.playerId === firstPlayerId);
+      assert.ok(historyEntry, 'Must have clueHistory entry for timed out player');
+      assert.equal(historyEntry.status, 'SKIPPED');
+      assert.equal(historyEntry.clue, null);
+      assert.equal(historyEntry.skipped, true);
+
+      // Turn must have advanced to next player
+      assert.notEqual(r2.activeTurnPlayerId, firstPlayerId, 'Active turn must advance to next player');
+    });
+
+    test('84-86. Last player timeout transitions round directly to VOTING', async () => {
+      const host = { id: 'lp_h', username: 'LastHost' };
+      const p2 = { id: 'lp_p2', username: 'LastP2' };
+      const p3 = { id: 'lp_p3', username: 'LastP3' };
+      const room = await gameEngine.createRoom(host, { turnDurationSeconds: 10, votingDurationSeconds: 30 });
+      await gameEngine.joinRoom(room.code, p2);
+      await gameEngine.joinRoom(room.code, p3);
+
+      await gameEngine.startGame(room.code, host.id);
+      await gameEngine.startClueRound(room.code);
+
+      const r = await roomRepository.getRoom(room.code);
+      const turnOrder = r.turnOrder; // [p1, p2, p3]
+
+      // First two players submit valid clues
+      await gameEngine.submitClueOrGuess(room.code, turnOrder[0], 'ClueOne');
+      await gameEngine.submitClueOrGuess(room.code, turnOrder[1], 'ClueTwo');
+
+      const rBeforeLast = await roomRepository.getRoom(room.code);
+      assert.equal(rBeforeLast.activeTurnPlayerId, turnOrder[2]);
+
+      // Last player times out
+      const lastTimeout = await gameEngine.handleTurnTimeout(room.code, turnOrder[2]);
+      assert.equal(lastTimeout.phaseChanged, true);
+      assert.equal(lastTimeout.newStatus, 'VOTING');
+
+      const rAfterLast = await roomRepository.getRoom(room.code);
+      assert.equal(rAfterLast.status, 'VOTING', 'Room must transition immediately to VOTING phase');
+      assert.ok(rAfterLast.votingDeadline, 'Voting deadline must be set');
+
+      // Verify all 3 clues in history: 2 submitted, 1 skipped
+      assert.equal(rAfterLast.clueHistory.length, 3);
+      assert.equal(rAfterLast.clueHistory[2].status, 'SKIPPED');
+    });
+  });
 });
