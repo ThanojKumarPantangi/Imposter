@@ -27,11 +27,45 @@ export function Home() {
   useEffect(() => {
     if (rejoinState && rejoinState.status === 'APPROVED' && rejoinState.roomCode) {
       const code = rejoinState.roomCode;
+      const targetRoom = rejoinState.room;
       clearRejoinState();
       joinRoom(code, player);
       navigate(`/lobby/${code}`);
     }
-  }, [rejoinState?.status, rejoinState?.roomCode, joinRoom, player, navigate, clearRejoinState]);
+  }, [rejoinState, joinRoom, player, navigate, clearRejoinState]);
+
+  // Polling fallback while waiting for approval in case socket packet was dropped or socket reconnected
+  useEffect(() => {
+    if (!rejoinState || rejoinState.status !== 'PENDING' || !rejoinState.roomCode || !player?.id) {
+      return;
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await roomApi.checkRejoinStatus(rejoinState.roomCode, player.id);
+        if (res?.success) {
+          if (res.status === 'APPROVED') {
+            clearInterval(pollInterval);
+            sounds.playSuccess();
+            const code = res.roomCode || rejoinState.roomCode;
+            clearRejoinState();
+            joinRoom(code, player);
+            navigate(`/lobby/${code}`);
+          } else if (res.status === 'DENIED') {
+            clearInterval(pollInterval);
+            sounds.playClick();
+            // Rejoin denied
+            clearRejoinState();
+            setError('Host declined your rejoin request.');
+          }
+        }
+      } catch (err) {
+        // Ignore transient polling errors
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [rejoinState, player?.id, joinRoom, navigate, clearRejoinState]);
 
   // Handle Join Room
   const handleJoin = async (e) => {

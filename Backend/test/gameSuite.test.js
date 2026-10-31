@@ -724,4 +724,71 @@ describe('🎮 Authoritative Imposter Multiplayer Test Suite', () => {
       assert.equal(rAfterLast.clueHistory[2].status, 'SKIPPED');
     });
   });
+
+  describe('10. Configurable Game Disconnect Timeout & Rejoin Status Verification', () => {
+    test('87-90. Host can configure gameDisconnectTimeout; non-host and invalid values are rejected', async () => {
+      const host = { id: 'gdt_host', username: 'GDTHost' };
+      const nonHost = { id: 'gdt_player', username: 'GDTPlayer' };
+      const room = await gameEngine.createRoom(host);
+      await gameEngine.joinRoom(room.code, nonHost);
+
+      // Default game disconnect timeout should be 15
+      assert.equal(room.settings.gameDisconnectTimeout, 15);
+      assert.equal(room.settings.gameDisconnectGracePeriod, 15);
+
+      // Host can update to 3, 5, 10, 15, 30
+      const updated30 = await gameEngine.updateSettings(room.code, host.id, { gameDisconnectTimeout: 30 });
+      assert.equal(updated30.settings.gameDisconnectTimeout, 30);
+      assert.equal(updated30.settings.gameDisconnectGracePeriod, 30);
+
+      const updated3 = await gameEngine.updateSettings(room.code, host.id, { gameDisconnectTimeout: 3 });
+      assert.equal(updated3.settings.gameDisconnectTimeout, 3);
+
+      // Non-host cannot update
+      await assert.rejects(
+        async () => {
+          await gameEngine.updateSettings(room.code, nonHost.id, { gameDisconnectTimeout: 10 });
+        },
+        /Only the room host can modify settings/
+      );
+
+      // Invalid value rejected
+      await assert.rejects(
+        async () => {
+          await gameEngine.updateSettings(room.code, host.id, { gameDisconnectTimeout: 99 });
+        },
+        /gameDisconnectTimeout must be one of: 3, 5, 10, 15, 30 seconds/
+      );
+    });
+
+    test('91-94. getRejoinStatus returns accurate status across request lifecycle', async () => {
+      const host = { id: 'rejoin_status_host', username: 'RSHost' };
+      const kickedP = { id: 'rejoin_status_kicked', username: 'RSKicked' };
+      const room = await gameEngine.createRoom(host);
+      await gameEngine.joinRoom(room.code, kickedP);
+
+      // Host kicks player
+      await gameEngine.removePlayerByHost(room.code, host.id, kickedP.id);
+
+      // Before request is created, not pending
+      const initialStatus = await gameEngine.getRejoinStatus(room.code, kickedP.id);
+      assert.notEqual(initialStatus?.status, 'PENDING');
+
+      // Request rejoin -> PENDING
+      const req = await gameEngine.createRejoinRequest(room.code, kickedP);
+      const pendingStatus = await gameEngine.getRejoinStatus(room.code, kickedP.id);
+      assert.ok(pendingStatus);
+      assert.equal(pendingStatus.status, 'PENDING');
+      assert.equal(pendingStatus.roomCode, room.code);
+
+      // Host approves -> APPROVED
+      await gameEngine.approveRejoin(room.code, host.id, kickedP.id, req.requestId);
+      const approvedStatus = await gameEngine.getRejoinStatus(room.code, kickedP.id);
+      assert.ok(approvedStatus);
+      assert.equal(approvedStatus.status, 'APPROVED');
+      assert.equal(approvedStatus.roomCode, room.code);
+      assert.ok(approvedStatus.room);
+      assert.ok(approvedStatus.room.players.some(p => p.id === kickedP.id));
+    });
+  });
 });

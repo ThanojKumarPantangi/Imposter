@@ -1,11 +1,24 @@
-import React from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { useSocket } from '../context/SocketContext';
 import { AlertCircle } from 'lucide-react';
 
 export function MainLayout() {
   const { kickedNotice, clearKickedNotice, gameToast } = useSocket();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (kickedNotice && location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
+  }, [kickedNotice, location.pathname, navigate]);
+
+  const handleDismissKicked = () => {
+    clearKickedNotice();
+    navigate('/', { replace: true });
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-dark-950 text-slate-100 relative">
@@ -21,7 +34,7 @@ export function MainLayout() {
             <h3 className="font-display font-bold text-lg text-white mb-2">Room Notification</h3>
             <p className="text-sm text-slate-300 mb-6">{kickedNotice}</p>
             <button
-              onClick={clearKickedNotice}
+              onClick={handleDismissKicked}
               className="w-full btn-primary py-2.5 text-sm font-semibold"
             >
               Understood

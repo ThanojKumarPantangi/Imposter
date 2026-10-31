@@ -12,6 +12,45 @@ import { CountdownTimer } from '../components/CountdownTimer';
 import { VoiceControls } from '../components/VoiceControls';
 import { sounds } from '../utils/sound';
 
+function DisconnectCountdownBadge({ deadline, timeout = 15, isGameOver = false }) {
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    if (isGameOver) return 0;
+    if (!deadline) return timeout;
+    return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  });
+
+  useEffect(() => {
+    if (isGameOver) return;
+
+    const tick = () => {
+      if (!deadline) {
+        setSecondsLeft(timeout);
+        return;
+      }
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+    };
+
+    tick();
+    const timer = setInterval(tick, 500);
+    return () => clearInterval(timer);
+  }, [deadline, timeout, isGameOver]);
+
+  if (isGameOver) return null;
+
+  return (
+    <div className="flex flex-col items-end text-right">
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/25">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping inline-block" />
+        Disconnected · Reconnecting...
+      </span>
+      <span className="text-[10px] font-mono font-bold text-rose-400 mt-0.5">
+        Removal in {secondsLeft}s
+      </span>
+    </div>
+  );
+}
+
 export function GameView() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
@@ -19,6 +58,7 @@ export function GameView() {
   const {
     roomState,
     kickedNotice,
+    disconnectAlert,
     submitClue,
     submitVote,
     joinRoom,
@@ -354,10 +394,11 @@ export function GameView() {
                       const entry = roomState.clueHistory?.find(
                         c => c.playerId === p.id && c.round === (roomState.currentRound || 1)
                       );
+                      const isDisconnected = (!p.isConnected || p.connectionStatus === 'DISCONNECTED') && p.isAlive && !p.permanentlyDeparted;
                       const isSkipped = entry?.status === 'SKIPPED' || entry?.skipped;
                       const isSubmitted = entry && !isSkipped && (entry.status === 'SUBMITTED' || entry.clue);
-                      const isActive = !entry && roomState.activeTurnPlayerId === p.id;
-                      const isWaiting = !entry && !isActive;
+                      const isActive = !entry && roomState.activeTurnPlayerId === p.id && !isDisconnected;
+                      const isWaiting = !entry && !isActive && !isDisconnected;
 
                       return (
                         <tr key={p.id} className="hover:bg-dark-800/40 transition-colors">
@@ -382,6 +423,11 @@ export function GameView() {
                             )}
                           </td>
                           <td className="py-3 pr-2 text-right">
+                            {isDisconnected && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                Disconnected
+                              </span>
+                            )}
                             {isSubmitted && (
                               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                                 Submitted
@@ -439,14 +485,20 @@ export function GameView() {
             <h4 className="font-display font-bold text-base text-white mb-4">Turn Order</h4>
             <div className="space-y-2.5">
               {roomState.players.map((p) => {
-                const isActive = roomState.activeTurnPlayerId === p.id;
+                const isDisconnected = (!p.isConnected || p.connectionStatus === 'DISCONNECTED') && p.isAlive && !p.permanentlyDeparted;
+                const isActive = roomState.activeTurnPlayerId === p.id && !isDisconnected;
                 const isEliminated = !p.isAlive || p.permanentlyDeparted;
+                const playerDeadline = p.disconnectDeadline || (disconnectAlert?.playerId === p.id ? (disconnectAlert.disconnectDeadline || disconnectAlert.deadline) : null);
+                const playerTimeout = p.gameDisconnectTimeout || (disconnectAlert?.playerId === p.id ? (disconnectAlert.gameDisconnectTimeout || disconnectAlert.timeoutSeconds) : (roomState.settings?.gameDisconnectTimeout || roomState.settings?.gameDisconnectGracePeriod || 15));
+
                 return (
                   <div
                     key={p.id}
                     className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
                       isActive
                         ? 'bg-cyan-950/40 border-cyan-500 text-white font-bold ring-1 ring-cyan-500'
+                        : isDisconnected
+                        ? 'bg-rose-950/30 border-rose-500/60 text-white ring-1 ring-rose-500/40 shadow-sm shadow-rose-950'
                         : isEliminated
                         ? 'bg-dark-950/40 border-slate-900 opacity-40'
                         : 'bg-dark-800/60 border-slate-800 text-slate-300'
@@ -454,13 +506,24 @@ export function GameView() {
                   >
                     <div className="flex items-center gap-2.5">
                       <PlayerAvatar player={p} size="sm" showStatus={false} />
-                      <span className="text-sm">{p.username}</span>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-slate-200">{p.username}</span>
+                        {p.id === player?.id && (
+                          <span className="text-[10px] text-cyan-400 font-normal">(You)</span>
+                        )}
+                      </div>
                     </div>
                     <div>
                       {p.permanentlyDeparted ? (
                         <span className="text-[10px] font-bold uppercase text-slate-600">Left Match</span>
                       ) : !p.isAlive ? (
                         <span className="text-[10px] font-bold uppercase text-slate-500">Eliminated</span>
+                      ) : isDisconnected ? (
+                        <DisconnectCountdownBadge
+                          deadline={playerDeadline}
+                          timeout={playerTimeout}
+                          isGameOver={roomState.status === 'FINISHED'}
+                        />
                       ) : isActive ? (
                         <span className="text-[10px] font-bold uppercase text-cyan-400 animate-pulse">Thinking...</span>
                       ) : (

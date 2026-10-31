@@ -423,7 +423,36 @@ export function Lobby() {
                     ))}
                   </div>
                   <span className="text-[10px] text-slate-500 mt-1 block">
-                    Grace period before a disconnected player slot is dropped.
+                    Grace period before a disconnected player slot is dropped from lobby.
+                  </span>
+                </div>
+
+                {/* Game Disconnect Timeout */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Game Disconnect Timeout
+                    </label>
+                    <span className="text-[10px] text-cyan-400 font-semibold">Configurable</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[3, 5, 10, 15, 30].map((sec) => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => updateSettings(normalizedCode, player.id, { gameDisconnectTimeout: sec })}
+                        className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                          (settings.gameDisconnectTimeout || settings.gameDisconnectGracePeriod || 15) === sec
+                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 ring-1 ring-cyan-500'
+                            : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {sec}s
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Grace period before a disconnected player is permanently removed from the active game.
                   </span>
                 </div>
               </div>
@@ -448,10 +477,16 @@ export function Lobby() {
                     {settings.votingDurationSeconds || 45} seconds
                   </span>
                 </div>
-                <div className="flex items-center justify-between py-2">
+                <div className="flex items-center justify-between py-2 border-b border-slate-800/60">
                   <span className="text-xs font-medium text-slate-400">Lobby Disconnect Timeout</span>
                   <span className="text-xs font-bold text-white px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700">
                     {settings.lobbyDisconnectTimeout || 5} seconds
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-xs font-medium text-slate-400">Game Disconnect Timeout</span>
+                  <span className="text-xs font-bold text-white px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700">
+                    {settings.gameDisconnectTimeout || settings.gameDisconnectGracePeriod || 15} seconds
                   </span>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center gap-1.5">

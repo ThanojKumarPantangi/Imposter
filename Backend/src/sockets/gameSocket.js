@@ -13,6 +13,15 @@ export function registerGameSocket(io) {
 
 function setupNamespace(nsp) {
   nsp.on('connection', (socket) => {
+    // User Registration channel
+    socket.on('register_user', async ({ playerId }) => {
+      if (playerId) {
+        socket.playerId = playerId;
+        socket.join(`user:${playerId}`);
+        await roomRepository.mapSocketToPlayer(socket.id, playerId);
+      }
+    });
+
     // 1. Join Room
     socket.on('join_room', async (data) => {
       try {
@@ -24,13 +33,30 @@ function setupNamespace(nsp) {
         const normalizedCode = roomCode.toUpperCase();
         const room = await gameEngine.joinRoom(normalizedCode, player);
 
+        socket.playerId = player.id;
         socket.join(`room:${normalizedCode}`);
+        socket.join(`user:${player.id}`);
         await roomRepository.mapSocketToPlayer(socket.id, player.id);
 
         await roomRepository.clearLobbyDisconnectTimer(normalizedCode, player.id);
         await roomRepository.clearGameDisconnectTimer(normalizedCode, player.id);
 
+        const joinedPlayer = room.players.find(p => p.id === player.id);
+        if (joinedPlayer) {
+          joinedPlayer.isConnected = true;
+          joinedPlayer.connectionStatus = 'CONNECTED';
+          joinedPlayer.disconnectedAt = null;
+          joinedPlayer.disconnectDeadline = null;
+          joinedPlayer.gameDisconnectTimeout = null;
+          await roomRepository.saveRoom(normalizedCode, room);
+        }
+
         console.log(`🔌 [Socket] Player "${player.username}" (${player.id}) joined/reconnected to room ${normalizedCode}`);
+
+        nsp.to(`room:${normalizedCode}`).emit('game_disconnect_cancelled', {
+          playerId: player.id,
+          username: player.username
+        });
 
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
 
@@ -51,6 +77,8 @@ function setupNamespace(nsp) {
       if (room) {
         socket.join(`room:${normalizedCode}`);
         if (playerId) {
+          socket.playerId = playerId;
+          socket.join(`user:${playerId}`);
           await roomRepository.mapSocketToPlayer(socket.id, playerId);
         }
         const sanitized = gameEngine.sanitizeRoomForPlayer(room, playerId);
@@ -62,6 +90,10 @@ function setupNamespace(nsp) {
     socket.on('recover_session', async ({ playerId }) => {
       try {
         if (!playerId) return socket.emit('session_recovered', { roomCode: null, room: null });
+
+        socket.playerId = playerId;
+        socket.join(`user:${playerId}`);
+        await roomRepository.mapSocketToPlayer(socket.id, playerId);
 
         const roomCode = await roomRepository.getPlayerRoomMapping(playerId);
         if (!roomCode) {
@@ -81,19 +113,28 @@ function setupNamespace(nsp) {
           return socket.emit('session_recovered', { roomCode: null, room: null });
         }
 
-        // Restore player connection state
+        // Restore player connection state and clear any disconnect countdown
         existingPlayer.isConnected = true;
+        existingPlayer.connectionStatus = 'CONNECTED';
+        existingPlayer.disconnectedAt = null;
+        existingPlayer.disconnectDeadline = null;
+        existingPlayer.gameDisconnectTimeout = null;
+
         await roomRepository.saveRoom(normalizedCode, room);
         await roomRepository.clearLobbyDisconnectTimer(normalizedCode, playerId);
         await roomRepository.clearGameDisconnectTimer(normalizedCode, playerId);
 
         socket.join(`room:${normalizedCode}`);
-        await roomRepository.mapSocketToPlayer(socket.id, playerId);
 
         const sanitized = gameEngine.sanitizeRoomForPlayer(room, playerId);
         socket.emit('session_recovered', {
           roomCode: normalizedCode,
           room: sanitized
+        });
+
+        nsp.to(`room:${normalizedCode}`).emit('game_disconnect_cancelled', {
+          playerId,
+          username: existingPlayer.username
         });
 
         nsp.to(`room:${normalizedCode}`).emit('player_connected', {
@@ -255,11 +296,15 @@ function setupNamespace(nsp) {
         const result = await gameEngine.removePlayerByHost(normalizedCode, hostId, targetPlayerId);
 
         const targetSocketId = await roomRepository.getSocketByPlayer(targetPlayerId);
+        const kickNotice = {
+          roomCode: normalizedCode,
+          reason: 'You have been removed from this room by the host.'
+        };
+
+        // Emit to user channel and target socket
+        nsp.to(`user:${targetPlayerId}`).emit('kicked_from_room', kickNotice);
         if (targetSocketId) {
-          nsp.to(targetSocketId).emit('kicked_from_room', {
-            roomCode: normalizedCode,
-            reason: 'You have been removed from this room by the host.'
-          });
+          nsp.to(targetSocketId).emit('kicked_from_room', kickNotice);
           const targetSocket = nsp.sockets.get(targetSocketId);
           if (targetSocket) targetSocket.leave(`room:${normalizedCode}`);
 
@@ -290,17 +335,29 @@ function setupNamespace(nsp) {
       try {
         if (!roomCode || !player || !player.id) return;
         const normalizedCode = roomCode.toUpperCase();
-        const requestData = await gameEngine.createRejoinRequest(normalizedCode, player);
+
+        socket.playerId = player.id;
+        socket.join(`user:${player.id}`);
+        await roomRepository.mapSocketToPlayer(socket.id, player.id);
+
+        const requestData = await gameEngine.createRejoinRequest(normalizedCode, {
+          ...player,
+          socketId: socket.id
+        });
+
+        socket.join(`rejoin:${requestData.requestId}`);
 
         const room = await roomRepository.getRoom(normalizedCode);
         if (room) {
           const hostSocketId = await roomRepository.getSocketByPlayer(room.hostId);
+          const payload = {
+            requestId: requestData.requestId,
+            roomCode: normalizedCode,
+            player: requestData.player
+          };
+          nsp.to(`user:${room.hostId}`).emit('rejoin_request_received', payload);
           if (hostSocketId) {
-            nsp.to(hostSocketId).emit('rejoin_request_received', {
-              requestId: requestData.requestId,
-              roomCode: normalizedCode,
-              player: requestData.player
-            });
+            nsp.to(hostSocketId).emit('rejoin_request_received', payload);
           }
         }
 
@@ -319,14 +376,23 @@ function setupNamespace(nsp) {
         const normalizedCode = (roomCode || '').toUpperCase();
         const result = await gameEngine.approveRejoin(normalizedCode, hostId, targetPlayerId, requestId);
 
+        const approvalPayload = {
+          roomCode: normalizedCode,
+          room: result.room,
+          player: result.player
+        };
+
+        // Multi-channel delivery to guarantee requesting player receives approval
+        nsp.to(`user:${targetPlayerId}`).emit('rejoin_approved', approvalPayload);
+        if (requestId) {
+          nsp.to(`rejoin:${requestId}`).emit('rejoin_approved', approvalPayload);
+        }
+
         const targetSocketId = await roomRepository.getSocketByPlayer(targetPlayerId);
         if (targetSocketId) {
           const targetSocket = nsp.sockets.get(targetSocketId);
           if (targetSocket) targetSocket.join(`room:${normalizedCode}`);
-          nsp.to(targetSocketId).emit('rejoin_approved', {
-            roomCode: normalizedCode,
-            room: result.room
-          });
+          nsp.to(targetSocketId).emit('rejoin_approved', approvalPayload);
         }
 
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
@@ -344,11 +410,19 @@ function setupNamespace(nsp) {
         const normalizedCode = (roomCode || '').toUpperCase();
         await gameEngine.denyRejoin(normalizedCode, hostId, targetPlayerId, requestId);
 
+        const denialPayload = {
+          message: 'The host declined your request to join this room.',
+          roomCode: normalizedCode
+        };
+
+        nsp.to(`user:${targetPlayerId}`).emit('rejoin_denied', denialPayload);
+        if (requestId) {
+          nsp.to(`rejoin:${requestId}`).emit('rejoin_denied', denialPayload);
+        }
+
         const targetSocketId = await roomRepository.getSocketByPlayer(targetPlayerId);
         if (targetSocketId) {
-          nsp.to(targetSocketId).emit('rejoin_denied', {
-            message: 'The host declined your request to join this room.'
-          });
+          nsp.to(targetSocketId).emit('rejoin_denied', denialPayload);
         }
       } catch (err) {
         socket.emit('error', { message: err.message });
@@ -561,8 +635,26 @@ function setupNamespace(nsp) {
           }, (timeoutSeconds + 0.5) * 1000);
         } else if (room.status !== 'FINISHED') {
           // Active Game Disconnect Grace Period (Preserves game state, roles, clues)
-          const gracePeriodSeconds = room.settings.gameDisconnectGracePeriod || 30;
+          const gracePeriodSeconds = room.settings.gameDisconnectTimeout || room.settings.gameDisconnectGracePeriod || 15;
+          const deadline = Date.now() + (gracePeriodSeconds * 1000);
+
+          player.connectionStatus = 'DISCONNECTED';
+          player.disconnectedAt = Date.now();
+          player.disconnectDeadline = deadline;
+          player.gameDisconnectTimeout = gracePeriodSeconds;
+          await roomRepository.saveRoom(normalizedCode, room);
+
           await roomRepository.setGameDisconnectTimer(normalizedCode, playerId, gracePeriodSeconds);
+
+          nsp.to(`room:${normalizedCode}`).emit('game_disconnect_countdown', {
+            playerId,
+            username: player.username,
+            disconnectedAt: player.disconnectedAt,
+            disconnectDeadline: deadline,
+            timeoutSeconds: gracePeriodSeconds,
+            roomCode: normalizedCode
+          });
+
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
 
           setTimeout(async () => {

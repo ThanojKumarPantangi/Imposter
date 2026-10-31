@@ -47,9 +47,13 @@ export function SocketProvider({ children }) {
       const savedRoomCode = sessionStorage.getItem('active_room_code');
 
       if (currentPlayer?.id) {
+        socket.emit('register_user', { playerId: currentPlayer.id });
         // Attempt authoritative session recovery
         socket.emit('recover_session', { playerId: currentPlayer.id });
       } else if (savedRoomCode && currentPlayer) {
+        if (currentPlayer.id) {
+          socket.emit('register_user', { playerId: currentPlayer.id });
+        }
         socket.emit('request_sync', { roomCode: savedRoomCode, playerId: currentPlayer.id });
       }
     });
@@ -73,6 +77,19 @@ export function SocketProvider({ children }) {
     // Authoritative room state update
     socket.on('room_state', (updatedRoom) => {
       if (updatedRoom) {
+        const currentPlayer = playerRef.current;
+        if (currentPlayer?.id && Array.isArray(updatedRoom.players)) {
+          const isMember = updatedRoom.players.some(p => p.id === currentPlayer.id);
+          if (!isMember) {
+            // Player was authoritatively kicked/removed from this room
+            sessionStorage.removeItem('active_room_code');
+            setRoomState(null);
+            setPendingRejoinRequest(null);
+            setKickedNotice('You have been removed from this room by the host.');
+            return;
+          }
+        }
+
         setRoomState(updatedRoom);
         sessionStorage.setItem('active_room_code', updatedRoom.code);
 
@@ -88,6 +105,16 @@ export function SocketProvider({ children }) {
     socket.on('lobby_disconnect_countdown', (data) => {
       setDisconnectAlert(data);
       sounds.playTurnAlert();
+    });
+
+    // Active game disconnect countdown and cancellation
+    socket.on('game_disconnect_countdown', (data) => {
+      setDisconnectAlert(data);
+      sounds.playTurnAlert();
+    });
+
+    socket.on('game_disconnect_cancelled', (data) => {
+      setDisconnectAlert(prev => (prev && prev.playerId === data.playerId ? null : prev));
     });
 
     socket.on('player_connected', (data) => {
@@ -117,6 +144,7 @@ export function SocketProvider({ children }) {
       sessionStorage.removeItem('active_room_code');
       setRoomState(null);
       setPendingRejoinRequest(null);
+      setRejoinState(null);
       setKickedNotice(data.reason || 'You have been removed from this room by the host.');
     });
 
@@ -148,11 +176,16 @@ export function SocketProvider({ children }) {
       setRejoinState({
         status: 'APPROVED',
         roomCode: data.roomCode,
-        room: data.room
+        room: data.room,
+        player: data.player
       });
       if (data.room) {
         setRoomState(data.room);
         sessionStorage.setItem('active_room_code', data.roomCode);
+      }
+      const currentPlayer = playerRef.current;
+      if (socketRef.current && data.roomCode && currentPlayer) {
+        socketRef.current.emit('join_room', { roomCode: data.roomCode, player: currentPlayer });
       }
     });
 
@@ -359,6 +392,9 @@ export function SocketProvider({ children }) {
   // Rejoin request & approval helpers
   const requestRejoin = (roomCode, player) => {
     if (socketRef.current && roomCode && player) {
+      if (player.id) {
+        socketRef.current.emit('register_user', { playerId: player.id });
+      }
       socketRef.current.emit('request_rejoin', { roomCode: roomCode.toUpperCase(), player });
       setRejoinState({
         status: 'PENDING',

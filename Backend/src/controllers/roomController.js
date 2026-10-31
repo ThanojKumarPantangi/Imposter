@@ -203,6 +203,16 @@ export const denyRejoin = async (req, res) => {
   }
 };
 
+export const getRejoinStatus = async (req, res) => {
+  try {
+    const { roomCode, playerId } = req.query;
+    const result = await gameEngine.getRejoinStatus(roomCode, playerId);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    return res.status(400).json({ success: false, error: error.message });
+  }
+};
+
 export default {
   createRoom,
   joinRoom,
@@ -216,5 +226,6 @@ export default {
   updatePlayerCategories,
   requestRejoin,
   approveRejoin,
-  denyRejoin
+  denyRejoin,
+  getRejoinStatus
 };

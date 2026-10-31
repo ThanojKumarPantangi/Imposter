@@ -52,7 +52,8 @@ class GameEngine {
         turnDurationSeconds: options.turnDurationSeconds || 30,
         votingDurationSeconds: options.votingDurationSeconds || 45,
         lobbyDisconnectTimeout: options.lobbyDisconnectTimeout || 5,
-        gameDisconnectGracePeriod: options.gameDisconnectGracePeriod || 30,
+        gameDisconnectTimeout: options.gameDisconnectTimeout || options.gameDisconnectGracePeriod || 15,
+        gameDisconnectGracePeriod: options.gameDisconnectTimeout || options.gameDisconnectGracePeriod || 15,
         maxPlayers: options.maxPlayers || 50
       },
       players: [
@@ -201,12 +202,20 @@ class GameEngine {
     if (newSettings.lobbyDisconnectTimeout !== undefined) {
       const allowed = [3, 5, 10, 15, 30];
       const t = parseInt(newSettings.lobbyDisconnectTimeout, 10);
-      if (allowed.includes(t)) {
-        room.settings.lobbyDisconnectTimeout = t;
+      if (!allowed.includes(t)) {
+        throw new Error('lobbyDisconnectTimeout must be one of: 3, 5, 10, 15, 30 seconds');
       }
+      room.settings.lobbyDisconnectTimeout = t;
     }
-    if (newSettings.gameDisconnectGracePeriod !== undefined) {
-      room.settings.gameDisconnectGracePeriod = parseInt(newSettings.gameDisconnectGracePeriod, 10);
+    if (newSettings.gameDisconnectTimeout !== undefined || newSettings.gameDisconnectGracePeriod !== undefined) {
+      const allowed = [3, 5, 10, 15, 30];
+      const raw = newSettings.gameDisconnectTimeout !== undefined ? newSettings.gameDisconnectTimeout : newSettings.gameDisconnectGracePeriod;
+      const t = parseInt(raw, 10);
+      if (!allowed.includes(t)) {
+        throw new Error('gameDisconnectTimeout must be one of: 3, 5, 10, 15, 30 seconds');
+      }
+      room.settings.gameDisconnectTimeout = t;
+      room.settings.gameDisconnectGracePeriod = t;
     }
 
     await roomRepository.saveRoom(roomCode, room);
@@ -394,6 +403,33 @@ class GameEngine {
 
     await roomRepository.clearRejoinRequest(normalizedCode, targetPlayerId);
     return { denied: true, targetPlayerId, status: 'DENIED' };
+  }
+
+  /**
+   * Check status of a rejoin request (for fast client polling fallback)
+   */
+  async getRejoinStatus(roomCode, playerId) {
+    if (!roomCode || !playerId) return null;
+    const normalizedCode = roomCode.toUpperCase();
+    const room = await roomRepository.getRoom(normalizedCode);
+    if (!room) return { status: 'ROOM_NOT_FOUND' };
+
+    const inRoom = room.players.some(p => p.id === playerId);
+    const isKicked = room.kickedPlayerIds && room.kickedPlayerIds.includes(playerId);
+    if (inRoom && !isKicked) {
+      return { status: 'APPROVED', roomCode: normalizedCode, room };
+    }
+
+    const pendingRequest = await roomRepository.getRejoinRequest(normalizedCode, playerId);
+    if (pendingRequest) {
+      return { status: 'PENDING', requestId: pendingRequest.requestId, roomCode: normalizedCode };
+    }
+
+    if (isKicked) {
+      return { status: 'DENIED', message: 'Rejoin request was declined or has expired.' };
+    }
+
+    return { status: 'NONE' };
   }
 
   /**

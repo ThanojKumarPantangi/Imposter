@@ -86,5 +86,9 @@ export const roomApi = {
       method: 'POST',
       body: JSON.stringify({ requestId, roomCode, hostId, targetPlayerId })
     });
+  },
+
+  checkRejoinStatus: (roomCode, playerId) => {
+    return apiRequest(`/rooms/rejoin/status?roomCode=${encodeURIComponent(roomCode)}&playerId=${encodeURIComponent(playerId)}`);
   }
 };
