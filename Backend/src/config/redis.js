@@ -1,19 +1,6 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import Redis from 'ioredis';
 import { Redis as UpstashRedis } from '@upstash/redis';
 import { EventEmitter } from 'events';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Explicitly load Backend/.env regardless of process current working directory
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-if (!process.env.REDIS_URL) {
-  dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-  dotenv.config({ path: path.resolve(process.cwd(), 'Backend/.env') });
-}
 
 let redisClient = null;
 
@@ -229,9 +216,37 @@ export const getRedisClient = () => {
   return redisClient;
 };
 
+/**
+ * Safely parse a positive integer from environment with a fallback default
+ */
+const parsePositiveInt = (val, defaultVal) => {
+  if (val === undefined || val === null || val === '') return defaultVal;
+  const parsed = parseInt(val, 10);
+  return !isNaN(parsed) && parsed > 0 ? parsed : defaultVal;
+};
+
+/**
+ * Configurable Redis key expiration (TTL) and timeout constants.
+ * Dynamically reads from process.env with sensible defaults matching original hardcoded values.
+ */
+export const REDIS_TTL = {
+  get ROOM() { return parsePositiveInt(process.env.REDIS_ROOM_TTL, 86400); },
+  get PLAYER_ROOM() { return parsePositiveInt(process.env.REDIS_PLAYER_ROOM_TTL, 86400); },
+  get SOCKET_MAPPING() { return parsePositiveInt(process.env.REDIS_SOCKET_MAPPING_TTL, 86400); },
+  get REJOIN_REQUEST() { return parsePositiveInt(process.env.REDIS_REJOIN_REQUEST_TTL, 45); },
+  get VOICE_PARTICIPANTS() { return parsePositiveInt(process.env.REDIS_VOICE_PARTICIPANTS_TTL, 86400); },
+  get TIMER_BUFFER() { return parsePositiveInt(process.env.REDIS_TIMER_BUFFER_TTL, 10); },
+  get LOBBY_DISCONNECT() { return parsePositiveInt(process.env.REDIS_LOBBY_DISCONNECT_TIMEOUT, 5); },
+  get GAME_DISCONNECT() { return parsePositiveInt(process.env.REDIS_GAME_DISCONNECT_TIMEOUT, 30); },
+  get TURN_TIMER() { return parsePositiveInt(process.env.REDIS_TURN_TIMER_TIMEOUT, 30); },
+  get VOTING_TIMER() { return parsePositiveInt(process.env.REDIS_VOTING_TIMER_TIMEOUT, 45); }
+};
+
 export default {
   getRedisClient,
   createRedisClient,
   isRedisConfigured,
-  isUsingUpstash
+  isUsingUpstash,
+  REDIS_TTL
 };
+

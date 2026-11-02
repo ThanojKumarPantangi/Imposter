@@ -1,5 +1,6 @@
 import gameEngine from '../services/gameEngine.js';
 import roomRepository from '../redis/roomRepository.js';
+import { REDIS_TTL } from '../config/redis.js';
 
 // Server-authoritative phase timer registries (one authoritative timer per room)
 const activeTurnTimers = new Map();
@@ -492,7 +493,7 @@ function setupNamespace(nsp) {
         socket.emit('rejoin_request_pending', {
           requestId: requestData.requestId,
           roomCode: normalizedCode,
-          expiresInSeconds: 45
+          expiresInSeconds: REDIS_TTL.REJOIN_REQUEST
         });
       } catch (err) {
         socket.emit('rejoin_error', { message: err.message });

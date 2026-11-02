@@ -341,8 +341,8 @@ class GameEngine {
       createdAt: Date.now()
     };
 
-    // Store in Redis with 45s expiration
-    await roomRepository.setRejoinRequest(normalizedCode, player.id, requestData, 45);
+    // Store in Redis with configurable expiration (default 45s)
+    await roomRepository.setRejoinRequest(normalizedCode, player.id, requestData);
     return requestData;
   }
 

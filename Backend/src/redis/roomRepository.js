@@ -1,4 +1,4 @@
-import { getRedisClient } from '../config/redis.js';
+import { getRedisClient, REDIS_TTL } from '../config/redis.js';
 
 class RoomRepository {
   /**
@@ -23,9 +23,9 @@ class RoomRepository {
    * Save active room state to Redis with TTL
    * @param {string} roomCode 
    * @param {Object} roomData 
-   * @param {number} ttlSeconds Default 24 hours (86400)
+   * @param {number} [ttlSeconds=REDIS_TTL.ROOM]
    */
-  async saveRoom(roomCode, roomData, ttlSeconds = 86400) {
+  async saveRoom(roomCode, roomData, ttlSeconds = REDIS_TTL.ROOM) {
     if (!roomCode || !roomData) return;
     const redis = getRedisClient();
     const normalizedCode = roomCode.toUpperCase();
@@ -87,7 +87,7 @@ class RoomRepository {
   async setPlayerRoomMapping(playerId, roomCode) {
     if (!playerId || !roomCode) return;
     const redis = getRedisClient();
-    await redis.set(`player:room:${playerId}`, roomCode.toUpperCase(), 'EX', 86400);
+    await redis.set(`player:room:${playerId}`, roomCode.toUpperCase(), 'EX', REDIS_TTL.PLAYER_ROOM);
   }
 
   async getPlayerRoomMapping(playerId) {
@@ -108,8 +108,8 @@ class RoomRepository {
   async mapSocketToPlayer(socketId, playerId) {
     if (!socketId || !playerId) return;
     const redis = getRedisClient();
-    await redis.set(`socket:player:${socketId}`, playerId, 'EX', 86400);
-    await redis.set(`player:socket:${playerId}`, socketId, 'EX', 86400);
+    await redis.set(`socket:player:${socketId}`, playerId, 'EX', REDIS_TTL.SOCKET_MAPPING);
+    await redis.set(`player:socket:${playerId}`, socketId, 'EX', REDIS_TTL.SOCKET_MAPPING);
   }
 
   async getPlayerBySocket(socketId) {
@@ -137,12 +137,12 @@ class RoomRepository {
   /**
    * Lobby disconnect timers (persisted in Redis)
    */
-  async setLobbyDisconnectTimer(roomCode, playerId, timeoutSeconds = 5) {
+  async setLobbyDisconnectTimer(roomCode, playerId, timeoutSeconds = REDIS_TTL.LOBBY_DISCONNECT) {
     if (!roomCode || !playerId) return null;
     const redis = getRedisClient();
     const deadline = Date.now() + (timeoutSeconds * 1000);
     const key = `timer:disconnect:lobby:${roomCode.toUpperCase()}:${playerId}`;
-    await redis.set(key, deadline.toString(), 'EX', timeoutSeconds + 10);
+    await redis.set(key, deadline.toString(), 'EX', timeoutSeconds + REDIS_TTL.TIMER_BUFFER);
     return deadline;
   }
 
@@ -164,12 +164,12 @@ class RoomRepository {
   /**
    * Game disconnect grace period timer (persisted in Redis)
    */
-  async setGameDisconnectTimer(roomCode, playerId, timeoutSeconds = 30) {
+  async setGameDisconnectTimer(roomCode, playerId, timeoutSeconds = REDIS_TTL.GAME_DISCONNECT) {
     if (!roomCode || !playerId) return null;
     const redis = getRedisClient();
     const deadline = Date.now() + (timeoutSeconds * 1000);
     const key = `timer:disconnect:game:${roomCode.toUpperCase()}:${playerId}`;
-    await redis.set(key, deadline.toString(), 'EX', timeoutSeconds + 10);
+    await redis.set(key, deadline.toString(), 'EX', timeoutSeconds + REDIS_TTL.TIMER_BUFFER);
     return deadline;
   }
 
@@ -189,10 +189,10 @@ class RoomRepository {
   /**
    * Turn timer tracking in Redis
    */
-  async setTurnTimer(roomCode, deadline, timeoutSeconds = 30) {
+  async setTurnTimer(roomCode, deadline, timeoutSeconds = REDIS_TTL.TURN_TIMER) {
     if (!roomCode) return;
     const redis = getRedisClient();
-    await redis.set(`timer:turn:${roomCode.toUpperCase()}`, deadline.toString(), 'EX', timeoutSeconds + 10);
+    await redis.set(`timer:turn:${roomCode.toUpperCase()}`, deadline.toString(), 'EX', timeoutSeconds + REDIS_TTL.TIMER_BUFFER);
   }
 
   async getTurnTimer(roomCode) {
@@ -211,10 +211,10 @@ class RoomRepository {
   /**
    * Voting timer tracking in Redis
    */
-  async setVotingTimer(roomCode, deadline, timeoutSeconds = 45) {
+  async setVotingTimer(roomCode, deadline, timeoutSeconds = REDIS_TTL.VOTING_TIMER) {
     if (!roomCode) return;
     const redis = getRedisClient();
-    await redis.set(`timer:voting:${roomCode.toUpperCase()}`, deadline.toString(), 'EX', timeoutSeconds + 10);
+    await redis.set(`timer:voting:${roomCode.toUpperCase()}`, deadline.toString(), 'EX', timeoutSeconds + REDIS_TTL.TIMER_BUFFER);
   }
 
   async getVotingTimer(roomCode) {
@@ -241,7 +241,7 @@ class RoomRepository {
   /**
    * Pending Rejoin Request (Authoritative in Redis with TTL)
    */
-  async setRejoinRequest(roomCode, playerId, requestData, ttlSeconds = 45) {
+  async setRejoinRequest(roomCode, playerId, requestData, ttlSeconds = REDIS_TTL.REJOIN_REQUEST) {
     if (!roomCode || !playerId) return;
     const redis = getRedisClient();
     const key = `rejoin_req:${roomCode.toUpperCase()}:${playerId}`;
@@ -285,7 +285,7 @@ class RoomRepository {
       }
     }
     participants[playerId] = socketId;
-    await redis.set(key, JSON.stringify(participants), 'EX', 86400);
+    await redis.set(key, JSON.stringify(participants), 'EX', REDIS_TTL.VOICE_PARTICIPANTS);
   }
 
   async getVoiceParticipants(roomCode) {
@@ -314,7 +314,7 @@ class RoomRepository {
     try {
       const participants = typeof raw === 'string' ? JSON.parse(raw) : raw;
       delete participants[playerId];
-      await redis.set(key, JSON.stringify(participants), 'EX', 86400);
+      await redis.set(key, JSON.stringify(participants), 'EX', REDIS_TTL.VOICE_PARTICIPANTS);
     } catch {
       // ignore
     }
