@@ -12,54 +12,43 @@ class AuthService {
   /**
    * Device-based registration and session restoration
    */
+  
   async registerOrRestoreDevice(deviceId, customUsername, avatar) {
-    if (!deviceId) {
-      deviceId = uuidv4();
-    }
+    if (!deviceId) deviceId = uuidv4();
 
     let guest = await Guest.findOne({ deviceId });
 
     if (!guest) {
-      const defaultName = customUsername && customUsername.trim().length >= 2 
-        ? customUsername.trim() 
-        : `Player_${Math.floor(1000 + Math.random() * 9000)}`;
+      const defaultName = customUsername && customUsername.trim().length >= 2 ? customUsername.trim() : `Player_${Math.floor(1000 + Math.random() * 9000)}`;
 
-      guest = await Guest.create({
-        deviceId,
-        username: defaultName,
-        avatar: avatar || `avatar-${Math.floor(1 + Math.random() * 8)}`
-      });
-      console.log(`👤 [Auth] Created new guest player: ${guest.username} (${guest.deviceId})`);
+      try {
+        guest = await Guest.create({ deviceId, username: defaultName, avatar: avatar || `avatar-${Math.floor(1 + Math.random() * 8)}` });
+        console.log(`👤 [Auth] Created new guest player: ${guest.username} (${guest.deviceId})`);
+      } catch (error) {
+        if (error.code === 11000 && error.keyPattern?.deviceId) {
+          guest = await Guest.findOne({ deviceId });
+          if (!guest) throw error;
+          console.log(`🔄 [Auth] Concurrent registration recovered for: ${guest.username} (${guest.deviceId})`);
+        } else {
+          throw error;
+        }
+      }
     } else {
-      guest.lastActiveAt = new Date();
-      if (customUsername && customUsername.trim().length >= 2 && customUsername !== guest.username) {
-        guest.username = customUsername.trim();
-      }
-      if (avatar && avatar !== guest.avatar) {
-        guest.avatar = avatar;
-      }
-      await guest.save();
-      console.log(`🔄 [Auth] Restored session for player: ${guest.username} (${guest.deviceId})`);
+        console.log(`🔄 [Auth] Restored session for player: ${guest.username} (${guest.deviceId})`);
     }
 
-    const token = this.generateToken({
-      id: guest._id.toString(),
-      deviceId: guest.deviceId,
-      username: guest.username,
-      role: 'GUEST'
-    });
+    guest.lastActiveAt = new Date();
+    
+    if (customUsername && customUsername.trim().length >= 2 && customUsername.trim() !== guest.username) guest.username = customUsername.trim();
+    if (avatar && avatar !== guest.avatar) guest.avatar = avatar;
 
-    return {
-      token,
-      player: {
-        id: guest._id.toString(),
-        deviceId: guest.deviceId,
-        username: guest.username,
-        avatar: guest.avatar,
-        stats: guest.stats
-      }
-    };
+    await guest.save();
+
+    const token = this.generateToken({ id: guest._id.toString(), deviceId: guest.deviceId, username: guest.username, role: 'GUEST' });
+
+    return { token, player: { id: guest._id.toString(), deviceId: guest.deviceId, username: guest.username, avatar: guest.avatar, stats: guest.stats } };
   }
+
 
   /**
    * Update guest username
