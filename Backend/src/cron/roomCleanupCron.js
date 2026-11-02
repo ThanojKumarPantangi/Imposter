@@ -20,7 +20,7 @@ export async function cleanupStaleRooms() {
       }
 
       // Check if stale (untouched for > 24 hours)
-      if (room.updatedAt && now - room.updatedAt > 24 * 60 * 60 * 1000) {
+      if (room.updatedAt && now - room.updatedAt > 7 * 60 * 60 * 1000) {
         console.log(`[Cron] Cleaning up stale room: ${code}`);
         await roomRepository.deleteRoom(code);
       }

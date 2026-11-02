@@ -1,17 +1,9 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import http from 'http';
 import { Server } from 'socket.io';
 import app from './app.js';
 import connectDB from './config/db.js';
 import { getRedisClient, createRedisClient, isRedisConfigured, isUsingUpstash } from './config/redis.js';
 import { registerGameSocket } from './sockets/gameSocket.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const PORT = process.env.PORT || 5000;
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
@@ -21,7 +13,7 @@ const server = http.createServer(app);
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: [clientUrl, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'],
+    origin: [clientUrl],
     credentials: true,
     methods: ['GET', 'POST']
   },

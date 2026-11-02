@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
 import roomRepository from '../redis/roomRepository.js';
 import Category from '../models/Category.js';
 import GameHistory from '../models/GameHistory.js';
