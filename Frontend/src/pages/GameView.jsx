@@ -150,6 +150,23 @@ export function GameView() {
   }
 
   const me = roomState.players.find(p => p.id === player?.id) || {};
+
+  
+  const alivePlayers = roomState.players.filter(
+    p => p.isAlive && !p.permanentlyDeparted
+  );
+
+  const totalAlive = alivePlayers.length;
+
+  const votedCount = alivePlayers.filter(
+    p => roomState.votes?.[p.id] !== undefined &&
+        roomState.votes?.[p.id] !== null
+  ).length;
+
+  const votingProgress = totalAlive > 0
+    ? (votedCount / totalAlive) * 100
+    : 0;
+
   const isAlive = me.isAlive !== false && !me.permanentlyDeparted;
   const isMyTurn = isAlive && roomState.status === 'CLUE_ROUND' && roomState.activeTurnPlayerId === player?.id;
   const isImposter = me.role === 'IMPOSTER';
@@ -564,6 +581,36 @@ export function GameView() {
               <p className="text-xs text-slate-400 max-w-md mx-auto">
                 Review all clues submitted and vote to eliminate who you believe is the Imposter.
               </p>
+            </div>
+            
+            {/* Live Voting Progress */}
+            <div className="mb-6 rounded-xl border border-slate-700/60 bg-dark-900/50 p-4">
+
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-slate-200">
+                  Voting Progress
+                </span>
+
+                <span className="text-sm font-bold text-emerald-400">
+                  {votedCount} / {totalAlive} voted
+                </span>
+              </div>
+
+              <div className="w-full h-2.5 bg-slate-700/60 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${votingProgress}%` }}
+                />
+              </div>
+
+              <p className="mt-2 text-xs text-slate-400">
+                {votedCount === totalAlive
+                  ? "Everyone has voted!"
+                  : `${totalAlive - votedCount} ${
+                      totalAlive - votedCount === 1 ? "player is" : "players are"
+                    } still deciding...`}
+              </p>
+
             </div>
 
             {/* Player Voting Cards */}
