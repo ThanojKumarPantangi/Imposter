@@ -607,9 +607,8 @@ export function GameView() {
                 onClick={handleVoteSubmit}
                 disabled={!selectedVoteTarget || hasVoted || !isAlive}
                 className="btn-primary px-8 py-3.5 flex items-center gap-2 text-sm disabled:opacity-40"
-              >
-                <Vote className="w-4 h-4" />
-                <span>{hasVoted ? 'Vote Submitted!' : 'Confirm Vote'}</span>
+              > 
+                {hasVoted ? 'Submitted!' : 'Confirm Vote'}
               </button>
               
               <button
@@ -620,7 +619,7 @@ export function GameView() {
                           disabled:opacity-40 disabled:cursor-not-allowed
                           transition-all"
               >
-                {hasVoted ? 'Vote Submitted' : 'Skip Vote'}
+                {hasVoted ? 'Submitted' : 'Skip Vote'}
               </button>
 
             </div>
