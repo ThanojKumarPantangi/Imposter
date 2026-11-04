@@ -65,6 +65,7 @@ export function GameView() {
     disconnectAlert,
     submitClue,
     submitVote,
+    submitSkipVote,
     joinRoom,
     leaveRoom,
     returnToLobby,
@@ -178,6 +179,21 @@ export function GameView() {
     submitVote(normalizedCode, player.id, selectedVoteTarget);
     setHasVoted(true);
   };
+
+  const handleSkipVote = () => {
+    setErrorMessage('');
+
+    if (!isAlive) return;
+
+    if (hasVoted) {
+      setErrorMessage('You have already voted.');
+      return;
+    }
+
+    submitSkipVote(normalizedCode, player.id);
+    setHasVoted(true);
+  };
+
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
@@ -595,6 +611,18 @@ export function GameView() {
                 <Vote className="w-4 h-4" />
                 <span>{hasVoted ? 'Vote Submitted!' : 'Confirm Vote'}</span>
               </button>
+              
+              <button
+                onClick={handleSkipVote}
+                disabled={!isAlive || hasVoted}
+                className="px-6 py-3 rounded-xl font-bold border border-amber-500/40
+                          bg-amber-500/10 text-amber-400 hover:bg-amber-500/20
+                          disabled:opacity-40 disabled:cursor-not-allowed
+                          transition-all"
+              >
+                {hasVoted ? 'Vote Submitted' : 'Skip Vote'}
+              </button>
+
             </div>
           </div>
         ) : (
@@ -628,45 +656,84 @@ export function GameView() {
                     <th className="py-3 px-4 text-right">Status</th>
                   </tr>
                 </thead>
+                
                 <tbody className="divide-y divide-slate-800/50 text-xs sm:text-sm">
-                  {roomState.players.filter(p => p.isAlive && !p.permanentlyDeparted).map((voter) => {
-                    const targetPlayerId = roomState.votes?.[voter.id];
-                    const targetPlayer = targetPlayerId ? roomState.players.find(x => x.id === targetPlayerId) : null;
-                    const hasCastVote = Boolean(targetPlayerId);
+                  {roomState.players
+                    .filter(p => p.isAlive && !p.permanentlyDeparted)
+                    .map((voter) => {
 
-                    return (
-                      <tr key={voter.id} className="hover:bg-dark-900/40 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2.5">
-                            <PlayerAvatar player={voter} size="sm" showStatus={false} />
-                            <span className="font-semibold text-slate-200">{voter.username}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          {hasCastVote ? (
-                            <div className="flex items-center gap-1.5 font-bold text-rose-300">
-                              <span>🎯</span>
-                              <span>{targetPlayer ? targetPlayer.username : 'Target Selected'}</span>
+                      const targetPlayerId = roomState.votes?.[voter.id];
+
+                      const isSkipVote = targetPlayerId === 'SKIP';
+
+                      const targetPlayer = isSkipVote
+                        ? null
+                        : roomState.players.find(p => p.id === targetPlayerId);
+
+                      const hasCastVote = Boolean(targetPlayerId);
+
+                      return (
+                        <tr
+                          key={voter.id}
+                          className="hover:bg-dark-900/40 transition-colors"
+                        >
+                          {/* Voter */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <PlayerAvatar
+                                player={voter}
+                                size="sm"
+                                showStatus={false}
+                              />
+                              <span className="font-semibold text-slate-200">
+                                {voter.username}
+                              </span>
                             </div>
-                          ) : (
-                            <span className="text-slate-500 italic">Undecided...</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {hasCastVote ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              Voted
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">
-                              Deciding...
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+
+                          {/* Vote Target */}
+                          <td className="py-3 px-4">
+                            {hasCastVote ? (
+                              isSkipVote ? (
+                                <div className="flex items-center gap-1.5 font-bold text-amber-400">
+                                  <span>⏭️</span>
+                                  <span>Skipped</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 font-bold text-rose-300">
+                                  <span>🎯</span>
+                                  <span>
+                                    {targetPlayer
+                                      ? targetPlayer.username
+                                      : 'Target Selected'}
+                                  </span>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-slate-500 italic">
+                                Undecided...
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Voting Status */}
+                          <td className="py-3 px-4 text-right">
+                            {hasCastVote ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                Voted
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse">
+                                Deciding...
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  }
                 </tbody>
+
               </table>
             </div>
 
@@ -700,7 +767,9 @@ export function GameView() {
             </div>
           ) : (
             <div className="my-6 p-6 rounded-2xl bg-dark-950 border border-slate-800 text-amber-400 font-bold">
-              The vote was tied! No player was eliminated this round.
+              {roomState.eliminationResult.wasSkipped
+                ? 'The majority voted to skip! Moving to the next round.'
+                : 'The vote was tied! No player was eliminated this round.'}
             </div>
           )}
 

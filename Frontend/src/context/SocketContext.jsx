@@ -549,6 +549,19 @@ export function SocketProvider({ children }) {
     }
   };
 
+  
+  const submitSkipVote = (roomCode, voterId) => {
+    if (socketRef.current) {
+      sounds.playClick();
+
+      socketRef.current.emit('submit_skip_vote', {
+        roomCode,
+        voterId
+      });
+    }
+  };
+
+
   const requestSync = (roomCode, playerId) => {
     if (socketRef.current) {
       socketRef.current.emit('request_sync', { roomCode, playerId });
@@ -633,6 +646,7 @@ export function SocketProvider({ children }) {
         startGame,
         submitClue,
         submitVote,
+        submitSkipVote,
         requestSync,
         serverTimeSync
       }}

@@ -678,7 +678,44 @@ function setupNamespace(nsp) {
       }
     });
 
-    // 11. Return to Lobby
+    // 11. Submit Skip Vote
+    socket.on('submit_skip_vote', async ({ roomCode, voterId }) => {
+      try {
+        const normalizedCode = roomCode.toUpperCase();
+
+        const result = await gameEngine.submitSkipVote(
+          normalizedCode,
+          voterId
+        );
+
+        if (result.finishedVoting) {
+          clearRoomPhaseTimers(normalizedCode);
+
+          await broadcastPersonalizedRoomState(nsp, normalizedCode);
+
+          if (result.gameOver) {
+            nsp.to(`room:${normalizedCode}`).emit(
+              'game_finished',
+              result.winnerResult
+            );
+          } else {
+            nsp.to(`room:${normalizedCode}`).emit(
+              'round_results',
+              result.room.eliminationResult
+            );
+
+            scheduleNextRound(nsp, normalizedCode);
+          }
+        } else {
+          await broadcastPersonalizedRoomState(nsp, normalizedCode);
+        }
+      } catch (err) {
+        socket.emit('error', { message: err.message });
+      }
+    });
+
+
+    // 12. Return to Lobby
     socket.on('return_to_lobby', async ({ roomCode, playerId }) => {
       try {
         const normalizedCode = (roomCode || '').toUpperCase();
@@ -692,7 +729,7 @@ function setupNamespace(nsp) {
       }
     });
 
-    // 12. WebRTC Voice Chat Signaling
+    // 13. WebRTC Voice Chat Signaling
     socket.on('voice_signal_join', async ({ roomCode, playerId }) => {
       try {
         const normalizedCode = (roomCode || '').toUpperCase();

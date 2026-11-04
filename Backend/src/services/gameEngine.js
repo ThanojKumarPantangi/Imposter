@@ -829,29 +829,43 @@ class GameEngine {
   /**
    * Submit Vote during VOTING phase
    */
+ 
   async submitVote(roomCode, voterId, targetPlayerId) {
     const room = await roomRepository.getRoom(roomCode);
+
     if (!room) throw new Error('Room not found');
     if (room.status !== 'VOTING') throw new Error('Not currently in voting phase');
+
     if (room.votingDeadline && Date.now() > room.votingDeadline + 500) {
       throw new Error('Voting timer has expired. Late vote rejected.');
     }
 
     const voter = room.players.find(p => p.id === voterId);
+
     if (!voter || !voter.isAlive || voter.permanentlyDeparted) {
       throw new Error('Only living players can vote');
     }
 
+    if (room.votes?.[voterId] !== undefined) {
+      throw new Error('You have already voted or skipped');
+    }
+
     const target = room.players.find(p => p.id === targetPlayerId);
+
     if (!target || !target.isAlive || target.permanentlyDeparted) {
       throw new Error('Vote target must be an active living player');
     }
 
-    if (voterId === targetPlayerId) throw new Error('You cannot vote for yourself');
+    if (voterId === targetPlayerId) {
+      throw new Error('You cannot vote for yourself');
+    }
 
     room.votes[voterId] = targetPlayerId;
 
-    const livingCount = room.players.filter(p => p.isAlive && !p.permanentlyDeparted).length;
+    const livingCount = room.players.filter(
+      p => p.isAlive && !p.permanentlyDeparted
+    ).length;
+
     const votesCount = Object.keys(room.votes).length;
 
     await roomRepository.saveRoom(roomCode, room);
@@ -862,6 +876,48 @@ class GameEngine {
 
     return { room, finishedVoting: false };
   }
+
+  /**
+   * Submit Skip Vote during VOTING phase
+   */
+  async submitSkipVote(roomCode, voterId) {
+    const room = await roomRepository.getRoom(roomCode);
+
+    if (!room) throw new Error('Room not found');
+    if (room.status !== 'VOTING') throw new Error('Not currently in voting phase');
+
+    if (room.votingDeadline && Date.now() > room.votingDeadline + 500) {
+      throw new Error('Voting timer has expired. Late vote rejected.');
+    }
+
+    const voter = room.players.find(p => p.id === voterId);
+
+    if (!voter || !voter.isAlive || voter.permanentlyDeparted) {
+      throw new Error('Only living players can vote');
+    }
+
+    if (room.votes?.[voterId] !== undefined) {
+      throw new Error('You have already voted or skipped');
+    }
+
+    // Store skip as a special ballot value
+    room.votes[voterId] = 'SKIP';
+
+    const livingCount = room.players.filter(
+      p => p.isAlive && !p.permanentlyDeparted
+    ).length;
+
+    const votesCount = Object.keys(room.votes).length;
+
+    await roomRepository.saveRoom(roomCode, room);
+
+    if (votesCount >= livingCount) {
+      return await this.tallyVotesAndProcessElimination(roomCode);
+    }
+
+    return { room, finishedVoting: false };
+  }
+
 
   /**
    * Centralized Winner Resolution
@@ -920,66 +976,125 @@ class GameEngine {
   /**
    * Tally votes and process elimination with centralized victory evaluation
    */
+  
   async tallyVotesAndProcessElimination(roomCode) {
     const room = await roomRepository.getRoom(roomCode);
-    if (!room) return null;
-    if (room.status === 'FINISHED') return { room, finishedVoting: true, gameOver: true, winnerResult: room.winnerResult };
-    if (room.status !== 'VOTING') return { room, finishedVoting: true, gameOver: false, isFinalShowdown: false };
 
-    const voteCounts = {};
-    for (const [voterId, targetId] of Object.entries(room.votes)) {
-      voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+    if (!room) return null;
+
+    if (room.status === 'FINISHED') {
+      return {
+        room,
+        finishedVoting: true,
+        gameOver: true,
+        winnerResult: room.winnerResult
+      };
     }
 
-    let maxVotes = 0;
-    let eliminatedPlayerId = null;
-    let isTie = false;
+    if (room.status !== 'VOTING') {
+      return {
+        room,
+        finishedVoting: true,
+        gameOver: false,
+        isFinalShowdown: false
+      };
+    }
 
-    for (const [playerId, count] of Object.entries(voteCounts)) {
-      if (count > maxVotes) {
-        maxVotes = count;
-        eliminatedPlayerId = playerId;
-        isTie = false;
-      } else if (count === maxVotes) {
-        isTie = true;
+    // Count skip votes separately from player votes
+    const voteCounts = {};
+    let skipVotes = 0;
+
+    for (const targetId of Object.values(room.votes || {})) {
+      if (targetId === 'SKIP') {
+        skipVotes++;
+      } else {
+        voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
       }
     }
 
+    const maxPlayerVotes = Math.max(0, ...Object.values(voteCounts));
+
+    const playersWithMaxVotes = Object.entries(voteCounts)
+      .filter(([_, count]) => count === maxPlayerVotes)
+      .map(([playerId]) => playerId);
+
     let eliminatedPlayer = null;
-    if (eliminatedPlayerId && !isTie) {
-      eliminatedPlayer = room.players.find(p => p.id === eliminatedPlayerId);
-      if (eliminatedPlayer && eliminatedPlayer.isAlive) {
-        eliminatedPlayer.isAlive = false;
-        eliminatedPlayer.eliminatedAtRound = room.currentRound;
+    let wasTie = false;
+    let wasSkipped = false;
+
+    // CASE 1: Skip votes exceed player votes
+    if (skipVotes > maxPlayerVotes) {
+      wasSkipped = true;
+    }
+
+    // CASE 2: Skip votes equal the highest player vote count
+    else if (skipVotes === maxPlayerVotes && skipVotes > 0) {
+      wasTie = true;
+    }
+
+    // CASE 3: A player has the highest votes
+    else if (maxPlayerVotes > skipVotes) {
+
+      // CASE 3A: Multiple players have equal highest votes
+      if (playersWithMaxVotes.length > 1) {
+        wasTie = true;
+      } else {
+        const eliminatedPlayerId = playersWithMaxVotes[0];
+
+        eliminatedPlayer = room.players.find(
+          p => p.id === eliminatedPlayerId
+        );
+
+        if (eliminatedPlayer && eliminatedPlayer.isAlive) {
+          eliminatedPlayer.isAlive = false;
+          eliminatedPlayer.eliminatedAtRound = room.currentRound;
+        }
       }
     }
 
     room.eliminationResult = {
-      eliminatedPlayer: eliminatedPlayer ? {
-        id: eliminatedPlayer.id,
-        username: eliminatedPlayer.username,
-        role: eliminatedPlayer.role
-      } : null,
-      wasTie: isTie,
+      eliminatedPlayer: eliminatedPlayer
+        ? {
+            id: eliminatedPlayer.id,
+            username: eliminatedPlayer.username,
+            role: eliminatedPlayer.role
+          }
+        : null,
+      wasTie,
+      wasSkipped,
+      skipVotes,
       voteCounts,
       round: room.currentRound
     };
 
     room.status = 'RESULTS';
     room.votingDeadline = null;
+
     await roomRepository.clearVotingTimer(roomCode);
 
-    // Run Centralized Winner Resolution
+    // Check game victory conditions only after actual elimination
     const winEvaluation = this.evaluateWinner(room);
-    if (winEvaluation.gameOver) {
-      return await this.endGameWithWinner(room, winEvaluation.winnerRole, winEvaluation.winCondition);
+
+    if (eliminatedPlayer && winEvaluation.gameOver) {
+      return await this.endGameWithWinner(
+        room,
+        winEvaluation.winnerRole,
+        winEvaluation.winCondition
+      );
     }
 
     room.currentRound += 1;
+
     await roomRepository.saveRoom(roomCode, room);
 
-    return { room, finishedVoting: true, gameOver: false, isFinalShowdown: winEvaluation.isFinalShowdown };
+    return {
+      room,
+      finishedVoting: true,
+      gameOver: false,
+      isFinalShowdown: winEvaluation.isFinalShowdown
+    };
   }
+
 
   /**
    * Centralized Player Departure (Intentional leave or Grace Period Expiration)
