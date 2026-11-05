@@ -167,6 +167,14 @@ export function GameView() {
     ? (votedCount / totalAlive) * 100
     : 0;
 
+  const playersNotVoted = alivePlayers.filter(
+    p =>
+      roomState.votes?.[p.id] === undefined ||
+      roomState.votes?.[p.id] === null
+  );
+
+  const notVotedNames = playersNotVoted.map(p => p.username);
+
   const isAlive = me.isAlive !== false && !me.permanentlyDeparted;
   const isMyTurn = isAlive && roomState.status === 'CLUE_ROUND' && roomState.activeTurnPlayerId === player?.id;
   const isImposter = me.role === 'IMPOSTER';
@@ -602,6 +610,28 @@ export function GameView() {
                   style={{ width: `${votingProgress}%` }}
                 />
               </div>
+
+              {/* Players Who Haven't Voted */}
+              {playersNotVoted.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-slate-400 mb-2">
+                    Waiting for votes from:
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {playersNotVoted.map(player => (
+                      <span
+                        key={player.id}
+                        className="px-2.5 py-1 rounded-full text-xs font-medium
+                                  bg-slate-800/80 border border-slate-700/60
+                                  text-slate-300"
+                      >
+                        {player.username}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <p className="mt-2 text-xs text-slate-400">
                 {votedCount === totalAlive
