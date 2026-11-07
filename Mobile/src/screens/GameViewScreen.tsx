@@ -25,8 +25,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useVoiceChat } from '../context/VoiceChatContext';
 import { PlayerAvatar } from '../components/PlayerAvatar';
-import { NavbarTimerProgress } from '../components/NavbarTimerProgress';
-import { YouAreNextBanner } from '../components/YouAreNextBanner';
+import { TurnNotificationBanner, TurnNotificationVariant } from '../components/TurnNotificationBanner';
 import { BottomSecretWordPanel } from '../components/BottomSecretWordPanel';
 import { VoiceControls } from '../components/VoiceControls';
 import { Card } from '../components/common/Card';
@@ -315,6 +314,27 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
         ? roomState.settings?.votingDurationSeconds || 45
         : 30;
 
+  // --- DYNAMIC NOTIFICATION LOGIC ---
+  const isClueRound = roomState.status === 'CLUE_ROUND';
+  const hasActiveTurn = Boolean(roomState.activeTurnPlayerId);
+  const activePlayer = roomState.players.find(p => p.id === roomState.activeTurnPlayerId);
+
+  let turnNotificationVariant: TurnNotificationVariant = 'other';
+  let turnNotificationText = '';
+
+  if (showNextBanner) {
+    turnNotificationVariant = 'next';
+    turnNotificationText = "You're next";
+  } else if (isMyTurn) {
+    turnNotificationVariant = 'me';
+    turnNotificationText = "Your turn";
+  } else if (hasActiveTurn && activePlayer) {
+    turnNotificationVariant = 'other';
+    turnNotificationText = `${activePlayer.username}'s turn`;
+  }
+
+  const showTurnNotification = isClueRound && hasActiveTurn;
+
   const handleClueSubmit = () => {
     setErrorMessage('');
     if (!isAlive || !isMyTurn) return;
@@ -376,17 +396,29 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
           <View style={styles.topBarRight}>
             <VoiceControls compact />
           </View>
-
-          <NavbarTimerProgress
-            deadline={activeDeadline}
-            totalDurationSeconds={activeDuration}
-          />
         </View>
 
-        {/* Integrated "You're Next" Notification */}
-        <YouAreNextBanner
-          visible={showNextBanner}
+        {/* Lower Section: Dynamic Turn Notification */}
+
+        <TurnNotificationBanner
+          visible={
+            roomState.status === 'VOTING' ||
+            showTurnNotification
+          }
+          variant={
+            roomState.status === 'VOTING'
+              ? 'voting'
+              : turnNotificationVariant
+          }
+          text={
+            roomState.status === 'VOTING'
+              ? '🗳️ Vote for the Imposter!'
+              : turnNotificationText
+          }
+          deadline={activeDeadline}
+          totalDurationSeconds={activeDuration}
         />
+
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -436,58 +468,6 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
         {/* ========================================================== */}
         {roomState.status === 'CLUE_ROUND' && (
           <View style={styles.clueRoundContainer}>
-            {/* Active Turn Banner */}
-            <Card style={isMyTurn ? styles.myTurnCard : styles.otherTurnCard}>
-              <View style={styles.turnHeader}>
-                <Text style={styles.turnTitle}>
-                  {isMyTurn
-                    ? '🌟 It is YOUR turn to submit a clue!'
-                    : `${roomState.players.find((p) => p.id === roomState.activeTurnPlayerId)?.username || 'active player'}'s turn...`}
-                </Text>
-                <Text style={styles.turnSub}>
-                  {isImposter
-                    ? 'Give a clue or enter the exact secret word to win!'
-                    : 'Give a one-word clue without revealing the secret!'}
-                </Text>
-              </View>
-
-              {/* Clue Input Form */}
-              {isMyTurn && isAlive && (
-                <View style={styles.clueForm}>
-                  <View style={styles.inputAndSubmitRow}>
-                    <TextInput
-                      value={clueInput}
-                      onChangeText={setClueInput}
-                      placeholder={
-                        isImposter
-                          ? 'Enter clue OR exact word guess...'
-                          : 'Enter your related clue...'
-                      }
-                      placeholderTextColor={COLORS.slate[500]}
-                      maxLength={40}
-                      autoFocus
-                      style={styles.clueTextInput}
-                    />
-                    <TouchableOpacity
-                      onPress={handleClueSubmit}
-                      disabled={!clueInput.trim()}
-                      style={[styles.clueSendBtn, !clueInput.trim() && styles.disabledSendBtn]}
-                    >
-                      <Send size={16} color={COLORS.dark[950]} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {isImposter && (
-                    <View style={styles.imposterTipBox}>
-                      <Text style={styles.imposterTipText}>
-                        💡 <Text style={styles.boldWhite}>Imposter Tip:</Text> Guess the secret word and enter it here to win instantly!
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </Card>
-
             {/* Clues & Turn Order List */}
             <Card style={styles.turnOrderCard}>
               <View style={styles.turnOrderHeader}>
@@ -889,6 +869,8 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'rgba(7, 9, 14, 0.95)',
     borderBottomWidth: 1,
+    borderBottomLeftRadius: 45,
+    borderBottomRightRadius: 45,
     borderBottomColor: 'rgba(30, 41, 59, 0.7)',
     zIndex: 50,
   },
