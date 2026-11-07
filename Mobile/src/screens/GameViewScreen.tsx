@@ -468,6 +468,45 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
         {/* ========================================================== */}
         {roomState.status === 'CLUE_ROUND' && (
           <View style={styles.clueRoundContainer}>
+            {/* Active Turn Banner */}
+            {isMyTurn && isAlive && (
+              <Card style={isMyTurn ? styles.myTurnCard : styles.otherTurnCard}>
+                {/* Clue Input Form */}
+                <View style={styles.clueForm}>
+                  <View style={styles.inputAndSubmitRow}>
+                    <TextInput
+                      value={clueInput}
+                      onChangeText={setClueInput}
+                      placeholder={
+                        isImposter
+                          ? 'Enter clue OR exact word guess...'
+                          : 'Enter your related clue...'
+                      }
+                      placeholderTextColor={COLORS.slate[500]}
+                      maxLength={40}
+                      autoFocus
+                      style={styles.clueTextInput}
+                    />
+                    <TouchableOpacity
+                      onPress={handleClueSubmit}
+                      disabled={!clueInput.trim()}
+                      style={[styles.clueSendBtn, !clueInput.trim() && styles.disabledSendBtn]}
+                    >
+                      <Send size={16} color={COLORS.dark[950]} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {isImposter && (
+                    <View style={styles.imposterTipBox}>
+                      <Text style={styles.imposterTipText}>
+                        💡 <Text style={styles.boldWhite}>Imposter Tip:</Text> Guess the secret word and enter it here to win instantly!
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Card>
+            )}
+
             {/* Clues & Turn Order List */}
             <Card style={styles.turnOrderCard}>
               <View style={styles.turnOrderHeader}>
@@ -1012,6 +1051,54 @@ const styles = StyleSheet.create({
   },
   clueRoundContainer: {
     gap: SPACING.md,
+  },
+  myTurnCard: {
+    borderWidth: 1.5,
+    borderColor: COLORS.civilian.default,
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+  },
+  otherTurnCard: {
+    backgroundColor: COLORS.dark[900],
+  },
+  clueForm: {
+    gap: SPACING.sm,
+  },
+  inputAndSubmitRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  clueTextInput: {
+    flex: 1,
+    backgroundColor: COLORS.dark[950],
+    borderWidth: 1,
+    borderColor: COLORS.slate[700],
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  clueSendBtn: {
+    backgroundColor: COLORS.civilian.default,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disabledSendBtn: {
+    opacity: 0.45,
+  },
+  imposterTipBox: {
+    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.25)',
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+  },
+  imposterTipText: {
+    fontSize: 10,
+    color: '#fb7185',
   },
   turnOrderCard: {
     width: '100%',
