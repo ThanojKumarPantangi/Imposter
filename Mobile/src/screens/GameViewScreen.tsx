@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { useVoiceChat } from '../context/VoiceChatContext';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { VoiceControls } from '../components/VoiceControls';
@@ -99,6 +100,7 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
     returnToLobby,
     roomLifecycleState,
   } = useSocket();
+  const { activeSpeakerIds } = useVoiceChat();
 
   const [clueInput, setClueInput] = useState<string>('');
   const [selectedVoteTarget, setSelectedVoteTarget] = useState<string | null>(null);
@@ -446,7 +448,7 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
                     >
                       <View style={styles.clueRowTop}>
                         <View style={styles.playerInfoRow}>
-                          <PlayerAvatar player={p} size="sm" showStatus={false} />
+                          <PlayerAvatar player={p} size="sm" showStatus={false} isSpeaking={Boolean(activeSpeakerIds?.includes(p.id))} />
                           <Text style={styles.cluePlayerName} numberOfLines={1}>
                             {p.username}
                             {p.id === player?.id ? ' (You)' : ''}
@@ -578,7 +580,7 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
                         ]}
                       >
                         <View style={styles.targetRow}>
-                          <PlayerAvatar player={p} size="sm" showStatus={false} />
+                          <PlayerAvatar player={p} size="sm" showStatus={false} isSpeaking={Boolean(activeSpeakerIds?.includes(p.id))} />
                           <View>
                             <Text style={styles.targetName}>{p.username}</Text>
                             <Text style={styles.targetSub}>
@@ -637,7 +639,7 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
                     return (
                       <View key={voter.id} style={styles.spectatorVoteItem}>
                         <View style={styles.voterLeft}>
-                          <PlayerAvatar player={voter} size="sm" showStatus={false} />
+                          <PlayerAvatar player={voter} size="sm" showStatus={false} isSpeaking={Boolean(activeSpeakerIds?.includes(voter.id))} />
                           <Text style={styles.voterName}>{voter.username}</Text>
                         </View>
 

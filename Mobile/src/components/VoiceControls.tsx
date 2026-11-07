@@ -11,7 +11,13 @@ interface VoiceControlsProps {
 }
 
 export const VoiceControls: React.FC<VoiceControlsProps> = ({ compact = false }) => {
-  const { micEnabled, speakerEnabled, toggleMicrophone, toggleSpeaker, voiceError } = useVoiceChat();
+  const {
+    micEnabled,
+    speakerEnabled,
+    toggleMicrophone,
+    toggleSpeaker,
+    voiceError,
+  } = useVoiceChat();
 
   const handleToggleMic = () => {
     sounds.playClick();
@@ -47,7 +53,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ compact = false })
           )}
         </TouchableOpacity>
 
-        {/* Speaker Button */}
+        {/* Speaker / Deafen Button */}
         <TouchableOpacity
           onPress={handleToggleSpeaker}
           activeOpacity={0.7}

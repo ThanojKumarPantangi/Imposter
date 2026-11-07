@@ -20,6 +20,7 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { useVoiceChat } from '../context/VoiceChatContext';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { CategorySelectorModal } from '../components/CategorySelectorModal';
 import { KickConfirmModal } from '../components/KickConfirmModal';
@@ -57,6 +58,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
     leaveRoom,
     roomLifecycleState,
   } = useSocket();
+  const { activeSpeakerIds } = useVoiceChat();
 
   const [copied, setCopied] = useState<boolean>(false);
   const [showCategorySelector, setShowCategorySelector] = useState<boolean>(false);
@@ -220,7 +222,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
                   ]}
                 >
                   <View style={styles.playerItemLeft}>
-                    <PlayerAvatar player={p} size="sm" />
+                    <PlayerAvatar player={p} size="sm" isSpeaking={Boolean(activeSpeakerIds?.includes(p.id))} />
                     <View style={styles.playerNameColumn}>
                       <View style={styles.nameRow}>
                         <Text style={styles.playerName}>{p.username}</Text>
