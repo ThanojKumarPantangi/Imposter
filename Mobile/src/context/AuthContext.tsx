@@ -25,6 +25,7 @@ interface AuthContextType {
   adminLogin: (email: string, password: string) => Promise<any>;
   adminLogout: () => void;
   isAdminAuthenticated: boolean;
+  refreshAuthSession: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -126,6 +127,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await SecureStore.deleteItemAsync(STORAGE_KEYS.ADMIN_TOKEN).catch(() => {});
   };
 
+  const refreshAuthSession = async (): Promise<string | null> => {
+    try {
+      const id = deviceId || (await getOrCreateDeviceId());
+      const cachedName = await getCachedUsername();
+      const cachedAv = await getCachedAvatar();
+      const res = await authApi.restoreOrRegisterDevice(id, cachedName, cachedAv);
+      if (res.success && res.player) {
+        setPlayer(res.player);
+        setToken(res.token);
+        await SecureStore.setItemAsync(STORAGE_KEYS.AUTH_TOKEN, res.token).catch(() => {});
+        return res.token;
+      }
+    } catch (e: any) {
+      console.warn('Could not refresh auth session:', e.message);
+    }
+    return token;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -141,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         adminLogin,
         adminLogout,
         isAdminAuthenticated: !!adminToken,
+        refreshAuthSession,
       }}
     >
       {children}

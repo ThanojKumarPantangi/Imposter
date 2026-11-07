@@ -115,10 +115,10 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
     }
   }, [kickedNotice]);
 
-  // Re-sync if needed
+  // Re-sync if needed (avoid duplicate joins during reconnect/recovery)
   useEffect(() => {
     if (kickedNotice) return;
-    if (isLeaving || roomLifecycleState === 'INTENTIONAL_EXIT' || roomLifecycleState === 'NO_ROOM') return;
+    if (isLeaving || roomLifecycleState === 'INTENTIONAL_EXIT' || roomLifecycleState === 'NO_ROOM' || roomLifecycleState === 'TEMPORARILY_DISCONNECTED') return;
     if (player && (!roomState || roomState.code !== normalizedCode)) {
       joinRoom(normalizedCode, player);
     }

@@ -73,10 +73,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
     }
   }, [kickedNotice]);
 
-  // If roomState is not loaded, auto-join socket room
+  // If roomState is not loaded, auto-join socket room (avoid duplicate joins during reconnect/recovery)
   useEffect(() => {
     if (kickedNotice) return;
-    if (isLeaving || roomLifecycleState === 'INTENTIONAL_EXIT' || roomLifecycleState === 'NO_ROOM') return;
+    if (isLeaving || roomLifecycleState === 'INTENTIONAL_EXIT' || roomLifecycleState === 'NO_ROOM' || roomLifecycleState === 'TEMPORARILY_DISCONNECTED') return;
     if (player && (!roomState || roomState.code !== normalizedCode)) {
       joinRoom(normalizedCode, player);
     }

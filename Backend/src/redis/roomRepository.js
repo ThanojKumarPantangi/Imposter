@@ -129,7 +129,11 @@ class RoomRepository {
     const redis = getRedisClient();
     const playerId = await this.getPlayerBySocket(socketId);
     if (playerId) {
-      await redis.del(`player:socket:${playerId}`);
+      const activeSocketId = await this.getSocketByPlayer(playerId);
+      // Only delete player:socket if it still points to this socketId
+      if (activeSocketId === socketId) {
+        await redis.del(`player:socket:${playerId}`);
+      }
     }
     await redis.del(`socket:player:${socketId}`);
   }

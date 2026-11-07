@@ -54,13 +54,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [showRules, setShowRules] = useState<boolean>(false);
   const [showEditProfile, setShowEditProfile] = useState<boolean>(false);
 
-  // If arriving Home with a lingering active room session, clean it up!
+  // If returning to Home while an active session exists, smoothly restore the player to their room
   useEffect(() => {
     const lingeringCode = roomState?.code;
-    if (lingeringCode && player?.id && roomLifecycleState !== 'INTENTIONAL_EXIT') {
-      leaveRoom(lingeringCode, player.id);
+    if (lingeringCode && roomLifecycleState === 'ACTIVE_ROOM') {
+      const targetScreen = roomState.status === 'WAITING' ? 'Lobby' : 'GameView';
+      navigation.navigate(targetScreen, { roomCode: lingeringCode });
     }
-  }, []);
+  }, [roomState?.code, roomState?.status, roomLifecycleState]);
 
   // Watch for approval to auto-enter lobby
   useEffect(() => {
@@ -195,6 +196,42 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
+        ) : null}
+
+        {/* Active Session Card */}
+        {roomState?.code && (roomLifecycleState === 'ACTIVE_ROOM' || roomLifecycleState === 'TEMPORARILY_DISCONNECTED') ? (
+          <Card variant="imposter" style={styles.activeSessionCard}>
+            <View style={styles.cardHeader}>
+              <View style={styles.iconBoxRose}>
+                <Sparkles size={20} color={COLORS.imposter.default} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Active Room: {roomState.code}</Text>
+                <Text style={styles.cardSub}>
+                  {roomState.status === 'WAITING' ? 'Waiting in Lobby' : `Match in Progress (${roomState.status})`}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.resumeBtnRow}>
+              <GradientButton
+                title="Resume Match"
+                onPress={() => {
+                  sounds.playClick();
+                  navigation.navigate(roomState.status === 'WAITING' ? 'Lobby' : 'GameView', { roomCode: roomState.code });
+                }}
+                variant="primary"
+                style={{ flex: 1 }}
+              />
+              <TouchableOpacity
+                onPress={() => {
+                  if (player?.id) leaveRoom(roomState.code, player.id);
+                }}
+                style={styles.leaveActiveSessionBtn}
+              >
+                <Text style={styles.leaveActiveSessionText}>Leave</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
         ) : null}
 
         {/* Action Cards */}
@@ -460,6 +497,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  activeSessionCard: {
+    width: '100%',
+    marginBottom: SPACING.lg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(244, 63, 94, 0.4)',
+    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+  },
+  resumeBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginTop: SPACING.md,
+  },
+  leaveActiveSessionBtn: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.dark[800],
+    borderWidth: 1,
+    borderColor: COLORS.slate[700],
+  },
+  leaveActiveSessionText: {
+    color: COLORS.slate[300],
+    fontSize: 13,
+    fontWeight: '700',
   },
   cardsSection: {
     width: '100%',

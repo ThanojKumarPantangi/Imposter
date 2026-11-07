@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
@@ -7,6 +8,7 @@ import { sounds } from '../utils/sound';
 import { serverTimeSync } from '../utils/serverTimeSync';
 import { CONFIG, STORAGE_KEYS } from '../config/constants';
 import { RoomState, DisconnectAlert, RejoinRequest, RejoinState, Player, RoomSettings } from '../types';
+import { restoreSessionScreen } from '../navigation/navigationService';
 
 type RoomLifecycle = 'ACTIVE_ROOM' | 'TEMPORARILY_DISCONNECTED' | 'INTENTIONAL_EXIT' | 'NO_ROOM';
 
@@ -50,9 +52,12 @@ interface SocketContextType {
 const SocketContext = createContext<SocketContextType | null>(null);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { player } = useAuth();
+  const { player, refreshAuthSession } = useAuth();
   const playerRef = useRef<Player | null>(player);
   const socketRef = useRef<Socket | null>(null);
+  const appStateRef = useRef<AppStateStatus>((AppState.currentState as AppStateStatus) || 'active');
+  const isReconnectingRef = useRef<boolean>(false);
+  const lastToastRef = useRef<{ message: string; timestamp: number }>({ message: '', timestamp: 0 });
 
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
@@ -66,19 +71,133 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const roomLifecycleRef = useRef<RoomLifecycle>('NO_ROOM');
   const isLeavingRef = useRef<boolean>(false);
 
+  // Keep playerRef synchronized
   useEffect(() => {
     playerRef.current = player;
   }, [player]);
 
-  const showToast = (message: string) => {
-    setGameToast(message);
-    setTimeout(() => setGameToast(null), 4000);
-  };
+  // Keep roomLifecycleRef synchronized
+  useEffect(() => {
+    roomLifecycleRef.current = roomLifecycleState;
+  }, [roomLifecycleState]);
 
+  // Deduplicated toast notifications
+  const showToast = useCallback((message: string) => {
+    const now = Date.now();
+    if (lastToastRef.current.message === message && now - lastToastRef.current.timestamp < 2500) {
+      return; // Deduplicate rapid identical toasts
+    }
+    lastToastRef.current = { message, timestamp: now };
+    setGameToast(message);
+    setTimeout(() => {
+      setGameToast((prev) => (prev === message ? null : prev));
+    }, 4000);
+  }, []);
+
+  // Centralized session recovery request (strictly invoked after connection is verified)
+  const recoverActiveSession = useCallback(async (socket: Socket) => {
+    const currentPlayer = playerRef.current;
+    const currentLifecycle = roomLifecycleRef.current;
+    const savedRoomCode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_ROOM_CODE);
+
+    if (currentPlayer?.id) {
+      socket.emit('register_user', { playerId: currentPlayer.id });
+    }
+
+    if (currentLifecycle === 'INTENTIONAL_EXIT' || currentLifecycle === 'NO_ROOM' || !savedRoomCode) {
+      return;
+    }
+
+    if (currentPlayer?.id) {
+      console.log(`🔄 [Socket] Emitting recover_session for player ${currentPlayer.id} in room ${savedRoomCode}`);
+      socket.emit('recover_session', {
+        playerId: currentPlayer.id,
+        roomCode: savedRoomCode,
+      });
+    } else if (savedRoomCode) {
+      console.log(`🔄 [Socket] Emitting request_sync fallback for room ${savedRoomCode}`);
+      socket.emit('request_sync', { roomCode: savedRoomCode });
+    }
+  }, []);
+
+  // Fast foreground resume handler: validates socket vitality, reconnects if dead, and recovers session
+  const handleForegroundResume = useCallback(async () => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    console.log('📱 [Foreground] App returned to active state. Verifying socket and session...');
+
+    // If socket is disconnected, trigger immediate reconnect without waiting for backoff
+    if (!socket.connected) {
+      console.log('📱 [Foreground] Socket is disconnected. Forcing immediate reconnection...');
+      isReconnectingRef.current = true;
+      socket.connect();
+      return;
+    }
+
+    // If socket claims to be connected, send probe to catch silent/zombie TCP disconnection
+    let probeAcknowledged = false;
+    const probeTimer = setTimeout(() => {
+      if (!probeAcknowledged) {
+        console.warn('⚠️ [Foreground] Socket heartbeat probe timed out. Forcing reconnection...');
+        socket.disconnect();
+        socket.connect();
+      }
+    }, 1500);
+
+    try {
+      socket.emit('sync_time', { clientSendTime: Date.now() }, (res: any) => {
+        probeAcknowledged = true;
+        clearTimeout(probeTimer);
+        serverTimeSync.syncWithSocket(socket);
+
+        // Socket is verified alive on network layer. Recover session immediately.
+        recoverActiveSession(socket);
+      });
+    } catch {
+      clearTimeout(probeTimer);
+      socket.disconnect();
+      socket.connect();
+    }
+  }, [recoverActiveSession]);
+
+  // AppState monitoring for reliable Android background/foreground transitions
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      const prevAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (nextAppState.match(/inactive|background/)) {
+        console.log(`📱 [AppState] Application moving to background (${nextAppState}). Preserving socket and session.`);
+        // Note: We do NOT disconnect or destroy the socket here. We let Android manage background naturally.
+      } else if (nextAppState === 'active' && prevAppState.match(/inactive|background/)) {
+        console.log('📱 [AppState] Application restored to foreground (active).');
+        handleForegroundResume();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [handleForegroundResume]);
+
+  // If player becomes authenticated/restored after socket already connected, register and recover
+  useEffect(() => {
+    if (player?.id && socketRef.current?.connected) {
+      recoverActiveSession(socketRef.current);
+    }
+  }, [player?.id, recoverActiveSession]);
+
+  // Main Socket Initialization (Strict Singleton pattern)
   useEffect(() => {
     let socket: Socket;
 
     async function initSocket() {
+      // Prevent duplicate instances
+      if (socketRef.current) {
+        return;
+      }
+
       const customUrl = await AsyncStorage.getItem(STORAGE_KEYS.SERVER_URL);
       const serverUrl = customUrl ? customUrl.trim().replace(/\/+$/, '') : CONFIG.SOCKET_URL;
 
@@ -89,43 +208,57 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
+        randomizationFactor: 0.5,
+        timeout: 10000,
       });
 
       socketRef.current = socket;
 
       socket.on('connect', async () => {
+        console.log(`🔌 [Socket] Connected successfully (socket.id: ${socket.id})`);
         setIsConnected(true);
+        isReconnectingRef.current = false;
         serverTimeSync.syncWithSocket(socket);
 
-        const currentPlayer = playerRef.current;
-        const currentLifecycle = roomLifecycleRef.current;
-        const savedRoomCode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_ROOM_CODE);
-
-        if (currentPlayer?.id) {
-          socket.emit('register_user', { playerId: currentPlayer.id });
-        }
-
-        if (currentLifecycle === 'INTENTIONAL_EXIT' || currentLifecycle === 'NO_ROOM' || !savedRoomCode) {
-          return;
-        }
-
-        if (currentPlayer?.id) {
-          socket.emit('recover_session', { playerId: currentPlayer.id });
-        } else if (savedRoomCode) {
-          socket.emit('request_sync', { roomCode: savedRoomCode });
-        }
+        // Attempt session recovery immediately upon connection
+        await recoverActiveSession(socket);
       });
 
-      socket.on('disconnect', () => {
+      socket.on('disconnect', (reason: string) => {
+        console.log(`🔌 [Socket] Disconnected: reason = ${reason}`);
         setIsConnected(false);
         if (roomLifecycleRef.current === 'ACTIVE_ROOM') {
           roomLifecycleRef.current = 'TEMPORARILY_DISCONNECTED';
           setRoomLifecycleState('TEMPORARILY_DISCONNECTED');
         }
+
+        // If server initiated disconnect, force reconnect attempt
+        if (reason === 'io server disconnect') {
+          socket.connect();
+        }
       });
 
+      socket.on('connect_error', (error: Error) => {
+        setIsConnected(false);
+        console.warn(`⚠️ [Socket] Connection error: ${error.message}`);
+        // Socket.IO auto-reconnect handles network retries with backoff & jitter
+      });
+
+      socket.on('reconnect_attempt', (attempt: number) => {
+        console.log(`🔄 [Socket] Reconnection attempt #${attempt}`);
+      });
+
+      socket.on('reconnect', () => {
+        console.log('✅ [Socket] Reconnected successfully');
+        setIsConnected(true);
+        isReconnectingRef.current = false;
+      });
+
+      // Authoritative Session Recovery Response from Backend
       socket.on('session_recovered', async (data: any) => {
-        if (roomLifecycleRef.current === 'INTENTIONAL_EXIT' || roomLifecycleRef.current === 'NO_ROOM') {
+        console.log('📥 [Socket] Received session_recovered:', data?.roomCode ? `Room ${data.roomCode}` : 'No active room');
+        
+        if (roomLifecycleRef.current === 'INTENTIONAL_EXIT') {
           await AsyncStorage.removeItem(STORAGE_KEYS.ACTIVE_ROOM_CODE);
           return;
         }
@@ -136,13 +269,30 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setRoomState(data.room);
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_ROOM_CODE, data.room.code);
           serverTimeSync.syncWithSocket(socket);
+
+          // Clear any disconnect countdown alerts for self
+          const currentPlayer = playerRef.current;
+          setDisconnectAlert((prev) => (prev && prev.playerId === currentPlayer?.id ? null : prev));
+
+          // Restore appropriate screen based on authoritative room status
+          const targetScreen = data.room.status === 'WAITING' ? 'Lobby' : 'GameView';
+          restoreSessionScreen(targetScreen, data.room.code);
         } else {
+          // Backend authoritative cleanup: Player was removed or room no longer exists under backend rules
           await AsyncStorage.removeItem(STORAGE_KEYS.ACTIVE_ROOM_CODE);
+          const wasActive = roomLifecycleRef.current === 'ACTIVE_ROOM' || roomLifecycleRef.current === 'TEMPORARILY_DISCONNECTED';
           roomLifecycleRef.current = 'NO_ROOM';
           setRoomLifecycleState('NO_ROOM');
+          setRoomState(null);
+
+          if (wasActive) {
+            restoreSessionScreen('Home');
+            showToast('Match session ended or timed out.');
+          }
         }
       });
 
+      // Authoritative Room State Updates
       socket.on('room_state', async (updatedRoom: RoomState) => {
         if (roomLifecycleRef.current === 'INTENTIONAL_EXIT' || roomLifecycleRef.current === 'NO_ROOM') {
           return;
@@ -159,6 +309,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               setRoomState(null);
               setPendingRejoinRequest(null);
               setKickedNotice('You have been removed from this room by the host.');
+              restoreSessionScreen('Home');
               return;
             }
           }
@@ -168,7 +319,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setRoomState(updatedRoom);
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_ROOM_CODE, updatedRoom.code);
 
-          const hasDisconnected = updatedRoom.players.some((p) => !p.isConnected);
+          const hasDisconnected = updatedRoom.players?.some((p) => !p.isConnected);
           if (!hasDisconnected) {
             setDisconnectAlert(null);
           }
@@ -191,14 +342,20 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       socket.on('player_connected', (data: { username: string; playerId: string }) => {
         setDisconnectAlert((prev) => (prev && prev.playerId === data.playerId ? null : prev));
-        showToast(`🟢 ${data.username} connected!`);
+        const currentPlayer = playerRef.current;
+        if (data.playerId !== currentPlayer?.id) {
+          showToast(`🟢 ${data.username} connected!`);
+        }
       });
 
-      socket.on('player_disconnected', (data: { username: string }) => {
-        showToast(`⚠️ ${data.username} lost connection`);
+      socket.on('player_disconnected', (data: { username: string; playerId?: string }) => {
+        const currentPlayer = playerRef.current;
+        if (data.playerId !== currentPlayer?.id) {
+          showToast(`⚠️ ${data.username} lost connection`);
+        }
       });
 
-      socket.on('player_removed_disconnect', (data: { username: string }) => {
+      socket.on('player_removed_disconnect', (data: { username: string; playerId?: string }) => {
         setDisconnectAlert(null);
         showToast(`⏱️ ${data.username} was removed due to disconnect timeout`);
       });
@@ -219,6 +376,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setPendingRejoinRequest(null);
         setRejoinState(null);
         setKickedNotice(data.reason || 'You have been removed from this room by the host.');
+        restoreSessionScreen('Home');
       });
 
       socket.on('player_kicked', (data: { username: string }) => {
@@ -253,6 +411,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setRoomLifecycleState('ACTIVE_ROOM');
           setRoomState(data.room);
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_ROOM_CODE, data.roomCode);
+          restoreSessionScreen(data.room.status === 'WAITING' ? 'Lobby' : 'GameView', data.roomCode);
         }
         const currentPlayer = playerRef.current;
         if (socketRef.current && data.roomCode && currentPlayer) {
@@ -280,6 +439,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setRoomLifecycleState('NO_ROOM');
         setRoomState(null);
         setPendingRejoinRequest(null);
+        restoreSessionScreen('Home');
         showToast(`🔒 ${data.reason || 'The room has been closed'}`);
       });
 
@@ -430,6 +590,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     initSocket();
 
+    // Periodic time synchronization while connected
     const periodicSync = setInterval(() => {
       if (socketRef.current?.connected) {
         serverTimeSync.syncWithSocket(socketRef.current);
@@ -438,9 +599,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     return () => {
       clearInterval(periodicSync);
-      if (socketRef.current) socketRef.current.disconnect();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
-  }, []);
+  }, [recoverActiveSession, showToast]);
 
   const joinRoom = async (roomCode: string, playerData: Player | null) => {
     if (roomLifecycleRef.current === 'INTENTIONAL_EXIT') {
@@ -488,6 +652,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     roomLifecycleRef.current = 'NO_ROOM';
     setRoomLifecycleState('NO_ROOM');
     isLeavingRef.current = false;
+    restoreSessionScreen('Home');
   };
 
   const returnToLobby = (roomCode: string, playerId?: string) => {
@@ -568,12 +733,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const clearKickedNotice = () => setKickedNotice(null);
 
-  const requestRejoin = (roomCode: string, player: Player) => {
-    if (socketRef.current && roomCode && player) {
-      if (player.id) {
-        socketRef.current.emit('register_user', { playerId: player.id });
+  const requestRejoin = (roomCode: string, playerToRejoin: Player) => {
+    if (socketRef.current && roomCode && playerToRejoin) {
+      if (playerToRejoin.id) {
+        socketRef.current.emit('register_user', { playerId: playerToRejoin.id });
       }
-      socketRef.current.emit('request_rejoin', { roomCode: roomCode.toUpperCase(), player });
+      socketRef.current.emit('request_rejoin', { roomCode: roomCode.toUpperCase(), player: playerToRejoin });
       setRejoinState({
         status: 'PENDING',
         roomCode: roomCode.toUpperCase(),
@@ -662,4 +827,3 @@ export const useSocket = (): SocketContextType => {
 };
 
 export default SocketContext;
-

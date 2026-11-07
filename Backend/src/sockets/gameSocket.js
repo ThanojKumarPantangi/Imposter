@@ -181,7 +181,7 @@ function setupNamespace(nsp) {
     });
 
     // 3. Session / Room Recovery on Launch or Refresh
-    socket.on('recover_session', async ({ playerId }) => {
+    socket.on('recover_session', async ({ playerId, roomCode: fallbackRoomCode }) => {
       try {
         if (!playerId) return socket.emit('session_recovered', { roomCode: null, room: null });
 
@@ -189,7 +189,10 @@ function setupNamespace(nsp) {
         socket.join(`user:${playerId}`);
         await roomRepository.mapSocketToPlayer(socket.id, playerId);
 
-        const roomCode = await roomRepository.getPlayerRoomMapping(playerId);
+        let roomCode = await roomRepository.getPlayerRoomMapping(playerId);
+        if (!roomCode && fallbackRoomCode) {
+          roomCode = fallbackRoomCode;
+        }
         if (!roomCode) {
           return socket.emit('session_recovered', { roomCode: null, room: null });
         }
@@ -206,6 +209,9 @@ function setupNamespace(nsp) {
           await roomRepository.removePlayerRoomMapping(playerId);
           return socket.emit('session_recovered', { roomCode: null, room: null });
         }
+
+        // Restore player-to-room mapping in case it expired or was cleared
+        await roomRepository.setPlayerRoomMapping(playerId, normalizedCode);
 
         // Restore player connection state and clear any disconnect countdown
         existingPlayer.isConnected = true;
@@ -819,6 +825,15 @@ function setupNamespace(nsp) {
       try {
         const playerId = await roomRepository.getPlayerBySocket(socket.id);
         if (!playerId) return;
+
+        // Race condition prevention: If the player has already reconnected with a newer socket,
+        // ignore this stale disconnect event and clean up only this socket's mapping.
+        const currentSocketId = await roomRepository.getSocketByPlayer(playerId);
+        if (currentSocketId && currentSocketId !== socket.id) {
+          console.log(`ℹ️ [Socket] Ignoring stale socket disconnect (${socket.id}) for player (${playerId}) - active socket is ${currentSocketId}`);
+          await roomRepository.removeSocketMapping(socket.id);
+          return;
+        }
 
         const roomCode = await roomRepository.getPlayerRoomMapping(playerId);
         if (!roomCode) return;

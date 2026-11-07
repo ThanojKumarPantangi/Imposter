@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertCircle } from 'lucide-react-native';
 
 import { RootStackParamList } from './types';
+import { navigationRef } from './navigationService';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LobbyScreen } from '../screens/LobbyScreen';
 import { GameViewScreen } from '../screens/GameViewScreen';
@@ -48,7 +49,7 @@ export const RootNavigator: React.FC = () => {
         },
       ]}
     >
-      <NavigationContainer theme={AppNavTheme}>
+      <NavigationContainer ref={navigationRef} theme={AppNavTheme}>
         <Stack.Navigator
           initialRouteName="Home"
           screenOptions={{

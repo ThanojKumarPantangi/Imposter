@@ -147,9 +147,30 @@ export const createRedisClient = () => {
         const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
         return Array.from(store.keys()).filter(k => regex.test(k));
       }
-      async sadd() { return 1; }
-      async srem() { return 1; }
-      async smembers() { return []; }
+      async sadd(key, ...members) {
+        if (!store.has(key)) store.set(key, new Set());
+        const set = store.get(key);
+        if (set instanceof Set) {
+          members.forEach(m => set.add(m));
+          return members.length;
+        }
+        return 1;
+      }
+      async srem(key, ...members) {
+        const set = store.get(key);
+        if (set instanceof Set) {
+          members.forEach(m => set.delete(m));
+          return members.length;
+        }
+        return 1;
+      }
+      async smembers(key) {
+        const set = store.get(key);
+        if (set instanceof Set) {
+          return Array.from(set);
+        }
+        return [];
+      }
       async flushall() { store.clear(); return 'OK'; }
       duplicate() { return new MockRedis(); }
     }
