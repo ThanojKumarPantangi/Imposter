@@ -25,6 +25,7 @@ import { CategorySelectorModal } from '../components/CategorySelectorModal';
 import { KickConfirmModal } from '../components/KickConfirmModal';
 import { DisconnectedBanner } from '../components/DisconnectedBanner';
 import { RejoinApprovalModal } from '../components/RejoinApprovalModal';
+import { VoiceControls } from '../components/VoiceControls';
 import { Card } from '../components/common/Card';
 import { GradientButton } from '../components/common/GradientButton';
 import { COLORS } from '../theme/colors';
@@ -156,26 +157,31 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
     <View style={styles.container}>
       {/* Top Header Bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={handleLeaveRoom}
-          disabled={isLeaving}
-          style={styles.leaveBtn}
-        >
-          <LogOut size={16} color={COLORS.slate[400]} />
-        </TouchableOpacity>
-
-        {/* Room Code Badge */}
-        <View style={styles.codeBadge}>
-          <Text style={styles.codeLabel}>ROOM CODE</Text>
-          <Text style={styles.codeText}>{normalizedCode}</Text>
-          <TouchableOpacity onPress={copyRoomCode} style={styles.copyBtn}>
-            {copied ? (
-              <Check size={14} color={COLORS.accent.emerald} />
-            ) : (
-              <Copy size={14} color={COLORS.slate[300]} />
-            )}
+        <View style={styles.topBarLeft}>
+          <TouchableOpacity
+            onPress={handleLeaveRoom}
+            disabled={isLeaving}
+            style={styles.leaveBtn}
+          >
+            <LogOut size={16} color={COLORS.slate[400]} />
           </TouchableOpacity>
+
+          {/* Room Code Badge */}
+          <View style={styles.codeBadge}>
+            <Text style={styles.codeLabel}>ROOM CODE</Text>
+            <Text style={styles.codeText}>{normalizedCode}</Text>
+            <TouchableOpacity onPress={copyRoomCode} style={styles.copyBtn}>
+              {copied ? (
+                <Check size={14} color={COLORS.accent.emerald} />
+              ) : (
+                <Copy size={14} color={COLORS.slate[300]} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* Audio and Mic Voice Controls */}
+        <VoiceControls compact />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -557,6 +563,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(30, 41, 59, 0.7)',
     backgroundColor: 'rgba(7, 9, 14, 0.95)',
+  },
+  topBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   leaveBtn: {
     padding: SPACING.sm,

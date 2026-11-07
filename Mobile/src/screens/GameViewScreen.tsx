@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { CountdownTimer } from '../components/CountdownTimer';
+import { VoiceControls } from '../components/VoiceControls';
 import { Card } from '../components/common/Card';
 import { GradientButton } from '../components/common/GradientButton';
 import { Badge } from '../components/common/Badge';
@@ -249,6 +250,8 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
         </View>
 
         <View style={styles.topBarRight}>
+          <VoiceControls compact />
+
           {roomState.status === 'CLUE_ROUND' && roomState.turnDeadline && (
             <CountdownTimer
               key={`turn-${roomState.currentRound}-${roomState.activeTurnIndex}-${roomState.turnDeadline}`}
@@ -828,7 +831,9 @@ const styles = StyleSheet.create({
     color: COLORS.civilian.default,
   },
   topBarRight: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   scrollContent: {
     padding: SPACING.md,

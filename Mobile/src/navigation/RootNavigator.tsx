@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertCircle } from 'lucide-react-native';
 
 import { RootStackParamList } from './types';
@@ -33,9 +34,20 @@ const AppNavTheme = {
 
 export const RootNavigator: React.FC = () => {
   const { kickedNotice, clearKickedNotice, gameToast } = useSocket();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.rootContainer}>
+    <View
+      style={[
+        styles.rootContainer,
+        {
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        },
+      ]}
+    >
       <NavigationContainer theme={AppNavTheme}>
         <Stack.Navigator
           initialRouteName="Home"
