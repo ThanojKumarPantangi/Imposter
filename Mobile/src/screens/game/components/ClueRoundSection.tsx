@@ -78,7 +78,7 @@ export const ClueRoundSection: React.FC<ClueRoundSectionProps> = ({
         <View style={clueStyles.playersClueList}>
           {orderedPlayers.map((p) => {
             const entry = roomState.clueHistory?.find(
-              (c) => c.playerId === p.id && c.round === currentRound
+              (c) => (c.playerId === p.id || String(c.playerId) === String(p.id)) && Number(c.round) === Number(currentRound)
             );
             return (
               <CluePlayerRow

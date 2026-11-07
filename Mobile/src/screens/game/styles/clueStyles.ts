@@ -83,23 +83,35 @@ export const clueStyles = StyleSheet.create({
     gap: SPACING.sm,
   },
   playerClueRow: {
-    backgroundColor: COLORS.dark[850],
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.slate[800],
-    padding: SPACING.sm,
-    gap: 4,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 24,
+    borderWidth: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
   playerClueRowActive: {
-    borderColor: COLORS.civilian.default,
-    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+    backgroundColor: '#007BFF',
+    borderWidth: 0,
+  },
+  playerClueRowInactive: {
+    backgroundColor: '#1A1A1A',
+    borderWidth: 0,
   },
   playerClueRowDisconnected: {
-    borderColor: 'rgba(244, 63, 94, 0.4)',
-    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+    opacity: 0.7,
   },
   playerClueRowEliminated: {
-    opacity: 0.55,
+    opacity: 0.5,
+  },
+  playerAvatarWrapper: {
+    flexShrink: 0,
+  },
+  playerInfoCol: {
+    flex: 1,
+    justifyContent: 'center',
   },
   clueRowTop: {
     flexDirection: 'row',
@@ -113,9 +125,47 @@ export const clueStyles = StyleSheet.create({
     flex: 1,
   },
   cluePlayerName: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
-    color: COLORS.slate[200],
+  },
+  cluePlayerNameActive: {
+    color: '#FFFFFF',
+  },
+  cluePlayerNameInactive: {
+    color: '#9CA3AF',
+  },
+  youTagActive: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '400',
+    fontSize: 12,
+  },
+  youTagInactive: {
+    color: '#6B7280',
+    fontWeight: '400',
+    fontSize: 12,
+  },
+  clueWordText: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  clueWordTextActive: {
+    color: '#FFFFFF',
+  },
+  clueWordTextInactive: {
+    color: '#38bdf8',
+  },
+  skippedWordText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  skippedWordTextActive: {
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  skippedWordTextInactive: {
+    color: '#f59e0b',
   },
   statusColRight: {
     alignItems: 'flex-end',

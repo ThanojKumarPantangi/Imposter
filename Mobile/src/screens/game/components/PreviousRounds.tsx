@@ -18,7 +18,7 @@ export const PreviousRounds: React.FC<PreviousRoundsProps> = ({
         <View key={`${c.round}-${c.playerId}-${i}`} style={clueStyles.prevClueItem}>
           <Text style={clueStyles.prevClueText}>
             <Text style={clueStyles.boldWhite}>{c.username}:</Text>{' '}
-            {c.skipped ? (
+            {c.skipped || c.status === 'SKIPPED' ? (
               <Text style={clueStyles.skippedAmber}>Skipped</Text>
             ) : (
               `“${c.clue}”`

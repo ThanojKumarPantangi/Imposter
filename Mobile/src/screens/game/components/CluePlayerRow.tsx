@@ -1,9 +1,63 @@
-import React from 'react';
-import { View, Text } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, Animated, StyleSheet } from 'react-native';
 import { PlayerAvatar } from '../../../components/PlayerAvatar';
-import { DisconnectCountdownBadge } from './DisconnectCountdownBadge';
 import { clueStyles } from '../styles/clueStyles';
 import { CluePlayerRowProps } from '../types/gameComponentTypes';
+
+const TypingIndicator = () => {
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const animateDot = (anim: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: 1, duration: 350, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0.3, duration: 350, useNativeDriver: true }),
+        ])
+      );
+    };
+
+    const a1 = animateDot(dot1, 0);
+    const a2 = animateDot(dot2, 180);
+    const a3 = animateDot(dot3, 360);
+
+    a1.start();
+    a2.start();
+    a3.start();
+
+    return () => {
+      a1.stop();
+      a2.stop();
+      a3.stop();
+    };
+  }, [dot1, dot2, dot3]);
+
+  return (
+    <View style={typingStyles.container}>
+      <Animated.View style={[typingStyles.dot, { opacity: dot1 }]} />
+      <Animated.View style={[typingStyles.dot, { opacity: dot2 }]} />
+      <Animated.View style={[typingStyles.dot, { opacity: dot3 }]} />
+    </View>
+  );
+};
+
+const typingStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+  },
+});
 
 export const CluePlayerRow: React.FC<CluePlayerRowProps> = ({
   player,
@@ -11,7 +65,6 @@ export const CluePlayerRow: React.FC<CluePlayerRowProps> = ({
   activeTurnPlayerId,
   clueEntry,
   isSpeaking,
-  isGameOver,
 }) => {
   const isDisconnected =
     (!player.isConnected || player.connectionStatus === 'DISCONNECTED') &&
@@ -19,64 +72,68 @@ export const CluePlayerRow: React.FC<CluePlayerRowProps> = ({
     !player.permanentlyDeparted;
   const isActive = activeTurnPlayerId === player.id && !isDisconnected;
   const isEliminated = !player.isAlive || player.permanentlyDeparted;
-  const isSkipped = clueEntry?.status === 'SKIPPED' || clueEntry?.skipped;
-  const isSubmitted = clueEntry && !isSkipped && (clueEntry.status === 'SUBMITTED' || clueEntry.clue);
+
+  const hasEnteredWord = Boolean(clueEntry?.clue && clueEntry.clue.trim());
+  const hasSkipped = !hasEnteredWord && Boolean(clueEntry?.skipped || clueEntry?.status === 'SKIPPED');
 
   return (
     <View
       style={[
         clueStyles.playerClueRow,
-        isActive && clueStyles.playerClueRowActive,
+        isActive ? clueStyles.playerClueRowActive : clueStyles.playerClueRowInactive,
         isDisconnected && clueStyles.playerClueRowDisconnected,
         isEliminated && clueStyles.playerClueRowEliminated,
       ]}
     >
-      <View style={clueStyles.clueRowTop}>
-        <View style={clueStyles.playerInfoRow}>
-          <PlayerAvatar
-            player={player}
-            size="sm"
-            showStatus={false}
-            isSpeaking={isSpeaking}
-          />
-          <Text style={clueStyles.cluePlayerName} numberOfLines={1}>
-            {player.username}
-            {isCurrentPlayer ? ' (You)' : ''}
-          </Text>
-        </View>
-
-        <View style={clueStyles.statusColRight}>
-          {player.permanentlyDeparted ? (
-            <Text style={clueStyles.statusDeparted}>Left</Text>
-          ) : !player.isAlive ? (
-            <Text style={clueStyles.statusEliminated}>Eliminated</Text>
-          ) : isDisconnected ? (
-            <DisconnectCountdownBadge
-              deadline={player.disconnectDeadline}
-              timeout={player.gameDisconnectTimeout}
-              isGameOver={isGameOver}
-            />
-          ) : isSubmitted ? (
-            <Text style={clueStyles.statusSubmitted}>Submitted</Text>
-          ) : isSkipped ? (
-            <Text style={clueStyles.statusSkipped}>Skipped</Text>
-          ) : isActive ? (
-            <Text style={clueStyles.statusThinking}>Thinking...</Text>
-          ) : (
-            <Text style={clueStyles.statusWaiting}>Waiting</Text>
-          )}
-        </View>
+      <View style={clueStyles.playerAvatarWrapper}>
+        <PlayerAvatar
+          player={player}
+          size="md"
+          showStatus={false}
+          isSpeaking={isSpeaking}
+        />
       </View>
 
-      {/* Clue Text */}
-      <View style={clueStyles.clueTextRow}>
-        {isSubmitted ? (
-          <Text style={clueStyles.clueBubbleText}>“{clueEntry?.clue}”</Text>
-        ) : isSkipped ? (
-          <Text style={clueStyles.skippedClueText}>Clue skipped</Text>
-        ) : (
-          <Text style={clueStyles.noClueYetText}>No clue submitted yet</Text>
-        )}
+      <View style={clueStyles.playerInfoCol}>
+        <Text
+          style={[
+            clueStyles.cluePlayerName,
+            isActive ? clueStyles.cluePlayerNameActive : clueStyles.cluePlayerNameInactive,
+          ]}
+          numberOfLines={1}
+        >
+          {player.username}
+          {isCurrentPlayer ? (
+            <Text style={isActive ? clueStyles.youTagActive : clueStyles.youTagInactive}>
+              {' '}(You)
+            </Text>
+          ) : null}
+        </Text>
+
+        {/* Word Display: Submitted Word / Skipped / Turn Typing Indicator */}
+        {hasEnteredWord ? (
+          <Text
+            style={[
+              clueStyles.clueWordText,
+              isActive ? clueStyles.clueWordTextActive : clueStyles.clueWordTextInactive,
+            ]}
+            numberOfLines={1}
+          >
+            {clueEntry?.clue}
+          </Text>
+        ) : hasSkipped ? (
+          <Text
+            style={[
+              clueStyles.skippedWordText,
+              isActive ? clueStyles.skippedWordTextActive : clueStyles.skippedWordTextInactive,
+            ]}
+            numberOfLines={1}
+          >
+            Skipped
+          </Text>
+        ) : isActive ? (
+          <TypingIndicator />
+        ) : null}
       </View>
     </View>
   );
