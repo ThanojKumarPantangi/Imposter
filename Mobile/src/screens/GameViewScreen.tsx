@@ -24,7 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useVoiceChat } from '../context/VoiceChatContext';
 import { PlayerAvatar } from '../components/PlayerAvatar';
-import { CountdownTimer } from '../components/CountdownTimer';
+import { NavbarTimerProgress } from '../components/NavbarTimerProgress';
 import { VoiceControls } from '../components/VoiceControls';
 import { Card } from '../components/common/Card';
 import { GradientButton } from '../components/common/GradientButton';
@@ -195,6 +195,20 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
   const isImposter = me.role === 'IMPOSTER';
   const isCivilian = me.role === 'CIVILIAN';
 
+  const activeDeadline =
+    roomState.status === 'CLUE_ROUND'
+      ? roomState.turnDeadline
+      : roomState.status === 'VOTING'
+      ? roomState.votingDeadline
+      : null;
+
+  const activeDuration =
+    roomState.status === 'CLUE_ROUND'
+      ? roomState.settings?.turnDurationSeconds || 30
+      : roomState.status === 'VOTING'
+      ? roomState.settings?.votingDurationSeconds || 45
+      : 30;
+
   const handleClueSubmit = () => {
     setErrorMessage('');
     if (!isAlive || !isMyTurn) return;
@@ -253,25 +267,12 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
 
         <View style={styles.topBarRight}>
           <VoiceControls compact />
-
-          {roomState.status === 'CLUE_ROUND' && roomState.turnDeadline && (
-            <CountdownTimer
-              key={`turn-${roomState.currentRound}-${roomState.activeTurnIndex}-${roomState.turnDeadline}`}
-              deadline={roomState.turnDeadline}
-              totalSeconds={roomState.settings?.turnDurationSeconds || 30}
-              label="Turn Timer"
-            />
-          )}
-
-          {roomState.status === 'VOTING' && roomState.votingDeadline && (
-            <CountdownTimer
-              key={`voting-${roomState.currentRound}-${roomState.votingDeadline}`}
-              deadline={roomState.votingDeadline}
-              totalSeconds={roomState.settings?.votingDurationSeconds || 45}
-              label="Voting Deadline"
-            />
-          )}
         </View>
+
+        <NavbarTimerProgress
+          deadline={activeDeadline}
+          totalDurationSeconds={activeDuration}
+        />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -796,6 +797,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   topBar: {
+    position: 'relative',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
