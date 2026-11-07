@@ -11,15 +11,18 @@ interface DisconnectedBannerProps {
 }
 
 export const DisconnectedBanner: React.FC<DisconnectedBannerProps> = ({ alertData }) => {
-  if (!alertData) return null;
+  const deadline = alertData?.deadline;
+  const timeoutSeconds = alertData?.timeoutSeconds;
+  const username = alertData?.username;
 
-  const { username, deadline, timeoutSeconds } = alertData;
   const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
     if (deadline) return serverTimeSync.getRemainingSeconds(deadline);
     return timeoutSeconds || 5;
   });
 
   useEffect(() => {
+    if (!alertData || !deadline) return;
+
     function tick() {
       if (deadline) {
         setSecondsRemaining(serverTimeSync.getRemainingSeconds(deadline));
@@ -33,7 +36,9 @@ export const DisconnectedBanner: React.FC<DisconnectedBannerProps> = ({ alertDat
       clearInterval(interval);
       unsubscribe();
     };
-  }, [deadline]);
+  }, [deadline, alertData]);
+
+  if (!alertData) return null;
 
   return (
     <View style={styles.banner}>

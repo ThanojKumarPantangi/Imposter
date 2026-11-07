@@ -131,10 +131,11 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
 
   // If room resets to WAITING, return to Lobby
   useEffect(() => {
+    if (isLeaving) return;
     if (roomState && roomState.status === 'WAITING') {
       navigation.replace('Lobby', { roomCode: normalizedCode });
     }
-  }, [roomState?.status, normalizedCode]);
+  }, [roomState?.status, normalizedCode, isLeaving]);
 
   // Reset vote submission when entering a new voting round
   useEffect(() => {
@@ -248,11 +249,13 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
     };
   }, []);
 
-  if (!roomState) {
+  if (isLeaving || !roomState) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.imposter.default} />
-        <Text style={styles.loadingText}>Connecting to authoritative game state...</Text>
+        <Text style={styles.loadingText}>
+          {isLeaving ? 'Leaving game...' : 'Connecting to authoritative game state...'}
+        </Text>
       </View>
     );
   }
@@ -293,9 +296,9 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
   const currentTurnKey = `${roomState.currentRound}-${roomState.activeTurnPlayerId}`;
   const showNextBanner = isNext && dismissedTurnKey !== currentTurnKey;
 
-  const handleDismissNextBanner = useCallback(() => {
+  const handleDismissNextBanner = () => {
     setDismissedTurnKey(currentTurnKey);
-  }, [currentTurnKey]);
+  };
 
   const activeSegmentIndex = livingParticipants.indexOf(roomState.activeTurnPlayerId || '');
   const totalSegments = livingParticipants.length;
