@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import {
   Shield,
@@ -25,6 +26,8 @@ import { useSocket } from '../context/SocketContext';
 import { useVoiceChat } from '../context/VoiceChatContext';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { NavbarTimerProgress } from '../components/NavbarTimerProgress';
+import { YouAreNextBanner } from '../components/YouAreNextBanner';
+import { BottomSecretWordPanel } from '../components/BottomSecretWordPanel';
 import { VoiceControls } from '../components/VoiceControls';
 import { Card } from '../components/common/Card';
 import { GradientButton } from '../components/common/GradientButton';
@@ -200,6 +203,52 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
     return roomState.players;
   }, [roomState?.players, roomState?.turnOrder]);
 
+  // Next Eligible Player in authoritative turn sequence
+  const nextEligiblePlayerId = useMemo(() => {
+    if (roomState?.status !== 'CLUE_ROUND') return null;
+    if (!roomState.turnOrder || roomState.turnOrder.length === 0) return null;
+    if (!roomState.activeTurnPlayerId) return null;
+
+    const turnOrder = roomState.turnOrder;
+    const currentIdx = turnOrder.indexOf(roomState.activeTurnPlayerId);
+    if (currentIdx === -1) return null;
+
+    const playerMap = new Map<string, Player>();
+    roomState.players?.forEach((p) => playerMap.set(p.id, p));
+
+    for (let i = currentIdx + 1; i < turnOrder.length; i++) {
+      const candidateId = turnOrder[i];
+      const p = playerMap.get(candidateId);
+      if (p && p.isAlive && !p.permanentlyDeparted) {
+        return candidateId;
+      }
+    }
+
+    return null;
+  }, [roomState?.status, roomState?.turnOrder, roomState?.activeTurnPlayerId, roomState?.players]);
+
+  const livingParticipants = useMemo(() => {
+    if (!roomState?.turnOrder) return [];
+    const playerMap = new Map<string, Player>();
+    roomState.players?.forEach((p) => playerMap.set(p.id, p));
+    return roomState.turnOrder.filter((id) => {
+      const p = playerMap.get(id);
+      return p && p.isAlive && !p.permanentlyDeparted;
+    });
+  }, [roomState?.turnOrder, roomState?.players]);
+
+  const [dismissedTurnKey, setDismissedTurnKey] = useState<string | null>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState<boolean>(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setIsKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   if (!roomState) {
     return (
       <View style={styles.loadingContainer}>
@@ -234,19 +283,37 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
   const isImposter = me.role === 'IMPOSTER';
   const isCivilian = me.role === 'CIVILIAN';
 
+  const isNext = Boolean(
+    isAlive &&
+    roomState.status === 'CLUE_ROUND' &&
+    !isMyTurn &&
+    nextEligiblePlayerId &&
+    nextEligiblePlayerId === player?.id
+  );
+
+  const currentTurnKey = `${roomState.currentRound}-${roomState.activeTurnPlayerId}`;
+  const showNextBanner = isNext && dismissedTurnKey !== currentTurnKey;
+
+  const handleDismissNextBanner = useCallback(() => {
+    setDismissedTurnKey(currentTurnKey);
+  }, [currentTurnKey]);
+
+  const activeSegmentIndex = livingParticipants.indexOf(roomState.activeTurnPlayerId || '');
+  const totalSegments = livingParticipants.length;
+
   const activeDeadline =
     roomState.status === 'CLUE_ROUND'
       ? roomState.turnDeadline
       : roomState.status === 'VOTING'
-      ? roomState.votingDeadline
-      : null;
+        ? roomState.votingDeadline
+        : null;
 
   const activeDuration =
     roomState.status === 'CLUE_ROUND'
       ? roomState.settings?.turnDurationSeconds || 30
       : roomState.status === 'VOTING'
-      ? roomState.settings?.votingDurationSeconds || 45
-      : 30;
+        ? roomState.settings?.votingDurationSeconds || 45
+        : 30;
 
   const handleClueSubmit = () => {
     setErrorMessage('');
@@ -289,28 +356,36 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
     <View style={styles.container}>
       {/* Top Game Bar */}
       <View style={styles.topBar}>
-        <View style={styles.topBarLeft}>
-          <TouchableOpacity
-            onPress={handleLeaveGame}
-            disabled={isLeaving}
-            style={styles.leaveBtn}
-          >
-            <LogOut size={16} color={COLORS.slate[400]} />
-          </TouchableOpacity>
+        {/* Main Navbar Row */}
+        <View style={styles.topBarMainRow}>
+          <View style={styles.topBarLeft}>
+            <TouchableOpacity
+              onPress={handleLeaveGame}
+              disabled={isLeaving}
+              style={styles.leaveBtn}
+            >
+              <LogOut size={16} color={COLORS.slate[400]} />
+            </TouchableOpacity>
 
-          <View style={styles.roundBadge}>
-            <Text style={styles.roundLabel}>ROUND</Text>
-            <Text style={styles.roundNumber}>{roomState.currentRound || 1}</Text>
+            <View style={styles.roundBadge}>
+              <Text style={styles.roundLabel}>ROUND</Text>
+              <Text style={styles.roundNumber}>{roomState.currentRound || 1}</Text>
+            </View>
           </View>
+
+          <View style={styles.topBarRight}>
+            <VoiceControls compact />
+          </View>
+
+          <NavbarTimerProgress
+            deadline={activeDeadline}
+            totalDurationSeconds={activeDuration}
+          />
         </View>
 
-        <View style={styles.topBarRight}>
-          <VoiceControls compact />
-        </View>
-
-        <NavbarTimerProgress
-          deadline={activeDeadline}
-          totalDurationSeconds={activeDuration}
+        {/* Integrated "You're Next" Notification */}
+        <YouAreNextBanner
+          visible={showNextBanner}
         />
       </View>
 
@@ -334,46 +409,6 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
             </View>
           </View>
         )}
-
-        {/* Private Secret Role Card */}
-        <Card variant={isImposter ? 'imposter' : 'civilian'} style={styles.secretCard}>
-          <View style={styles.secretCardRow}>
-            <View style={isImposter ? styles.shieldBoxRose : styles.shieldBoxCyan}>
-              <Shield size={24} color={isImposter ? COLORS.imposter.default : COLORS.civilian.default} />
-            </View>
-
-            <View style={styles.secretDetails}>
-              <View style={styles.roleTagRow}>
-                <Text style={styles.roleHeaderLabel}>Role:</Text>
-                <Badge
-                  label={me.role || 'SPECTATOR'}
-                  variant={isImposter ? 'imposter' : 'civilian'}
-                />
-                {!isAlive && (
-                  <View style={styles.eliminatedSmallBadge}>
-                    <Text style={styles.eliminatedSmallText}>Spectating</Text>
-                  </View>
-                )}
-              </View>
-
-              <View>
-                {isImposter ? (
-                  <View style={styles.hintWordRow}>
-                    <Text style={styles.hintPrefix}>Hint:</Text>
-                    <Text style={styles.hintValue}>{roomState.myHint || 'Watch others clues'}</Text>
-                  </View>
-                ) : isCivilian ? (
-                  <View style={styles.hintWordRow}>
-                    <Text style={styles.secretWordPrefix}>Secret Word:</Text>
-                    <Text style={styles.secretWordValue}>{roomState.myWord || '—'}</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.spectatorNotice}>Spectator Mode</Text>
-                )}
-              </View>
-            </View>
-          </View>
-        </Card>
 
         {errorMessage ? (
           <View style={styles.errorBox}>
@@ -761,10 +796,10 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
               {roomState.winnerResult.winCondition === 'IMPOSTER_GUESSED_WORD'
                 ? '💥 An Imposter correctly entered the exact secret word!'
                 : roomState.winnerResult.winCondition === 'ALL_IMPOSTERS_ELIMINATED'
-                ? '🎉 All Imposters were successfully identified and eliminated!'
-                : roomState.winnerResult.winCondition === 'IMPOSTERS_PARITY'
-                ? '🎭 Imposters have reached equal numbers with the Civilians!'
-                : 'Match completed!'}
+                  ? '🎉 All Imposters were successfully identified and eliminated!'
+                  : roomState.winnerResult.winCondition === 'IMPOSTERS_PARITY'
+                    ? '🎭 Imposters have reached equal numbers with the Civilians!'
+                    : 'Match completed!'}
             </Text>
 
             {/* Secret Reveal Box */}
@@ -813,6 +848,19 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
           </Card>
         )}
       </ScrollView>
+
+      {/* Fixed Bottom Secret Word / Imposter Hint Panel */}
+      {roomState.status !== 'FINISHED' && (
+        <BottomSecretWordPanel
+          role={me.role}
+          myWord={roomState.myWord}
+          myHint={roomState.myHint}
+          isAlive={isAlive}
+          isImposter={isImposter}
+          isCivilian={isCivilian}
+          isKeyboardVisible={isKeyboardVisible}
+        />
+      )}
     </View>
   );
 };
@@ -837,14 +885,21 @@ const styles = StyleSheet.create({
   },
   topBar: {
     position: 'relative',
+    flexDirection: 'column',
+    width: '100%',
+    backgroundColor: 'rgba(7, 9, 14, 0.95)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(30, 41, 59, 0.7)',
+    zIndex: 50,
+  },
+  topBarMainRow: {
+    position: 'relative',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
-    backgroundColor: 'rgba(7, 9, 14, 0.95)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(30, 41, 59, 0.7)',
+    width: '100%',
   },
   topBarLeft: {
     flexDirection: 'row',
@@ -880,7 +935,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: SPACING.md,
-    paddingBottom: 40,
+    paddingBottom: 220,
     gap: SPACING.md,
   },
   spectatorBanner: {
