@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, Animated, StyleSheet } from 'react-native';
 import { Eye } from 'lucide-react-native';
 import { Card } from '../../../components/common/Card';
 import { PlayerAvatar } from '../../../components/PlayerAvatar';
@@ -7,6 +7,61 @@ import { COLORS } from '../../../theme/colors';
 import { votingStyles } from '../styles/votingStyles';
 import { gameStyles } from '../styles/gameStyles';
 import { SpectatorVotingSectionProps } from '../types/gameComponentTypes';
+
+const VotingTypingIndicator = () => {
+  const dot1 = useRef(new Animated.Value(0.3)).current;
+  const dot2 = useRef(new Animated.Value(0.3)).current;
+  const dot3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const animateDot = (anim: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: 1, duration: 350, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0.3, duration: 350, useNativeDriver: true }),
+        ])
+      );
+    };
+
+    const a1 = animateDot(dot1, 0);
+    const a2 = animateDot(dot2, 180);
+    const a3 = animateDot(dot3, 360);
+
+    a1.start();
+    a2.start();
+    a3.start();
+
+    return () => {
+      a1.stop();
+      a2.stop();
+      a3.stop();
+    };
+  }, [dot1, dot2, dot3]);
+
+  return (
+    <View style={vTypingStyles.container}>
+      <Animated.View style={[vTypingStyles.dot, { opacity: dot1 }]} />
+      <Animated.View style={[vTypingStyles.dot, { opacity: dot2 }]} />
+      <Animated.View style={[vTypingStyles.dot, { opacity: dot3 }]} />
+    </View>
+  );
+};
+
+const vTypingStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+  },
+});
 
 export const SpectatorVotingSection: React.FC<SpectatorVotingSectionProps> = ({
   roomState,
@@ -39,27 +94,32 @@ export const SpectatorVotingSection: React.FC<SpectatorVotingSectionProps> = ({
 
           return (
             <View key={voter.id} style={votingStyles.spectatorVoteItem}>
-              <View style={votingStyles.voterLeft}>
+              <View style={votingStyles.targetAvatarWrapper}>
                 <PlayerAvatar
                   player={voter}
-                  size="sm"
+                  size="md"
                   showStatus={false}
                   isSpeaking={Boolean(activeSpeakerIds?.includes(voter.id))}
                 />
-                <Text style={votingStyles.voterName}>{voter.username}</Text>
               </View>
 
-              <View style={votingStyles.voterTarget}>
+              <View style={votingStyles.targetInfoCol}>
+                <Text style={votingStyles.voterName} numberOfLines={1}>
+                  {voter.username}
+                </Text>
+
                 {hasCast ? (
                   isSkip ? (
-                    <Text style={votingStyles.targetSkipText}>⏭️ Skipped</Text>
+                    <Text style={votingStyles.targetSkipText} numberOfLines={1}>
+                      Skipped
+                    </Text>
                   ) : (
-                    <Text style={votingStyles.targetVotedText}>
+                    <Text style={votingStyles.targetVotedText} numberOfLines={1}>
                       🎯 {target?.username || 'Target'}
                     </Text>
                   )
                 ) : (
-                  <Text style={votingStyles.targetUndecided}>Undecided...</Text>
+                  <VotingTypingIndicator />
                 )}
               </View>
             </View>

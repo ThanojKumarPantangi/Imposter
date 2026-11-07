@@ -20,6 +20,7 @@ export const VotePlayerCard: React.FC<VotePlayerCardProps> = ({
 
   return (
     <TouchableOpacity
+      activeOpacity={0.8}
       disabled={isSelf || hasVoted}
       onPress={handlePress}
       style={[
@@ -28,19 +29,36 @@ export const VotePlayerCard: React.FC<VotePlayerCardProps> = ({
         isSelf && votingStyles.voteTargetSelf,
       ]}
     >
-      <View style={votingStyles.targetRow}>
+      <View style={votingStyles.targetAvatarWrapper}>
         <PlayerAvatar
           player={player}
-          size="sm"
+          size="md"
           showStatus={false}
           isSpeaking={isSpeaking}
         />
-        <View>
-          <Text style={votingStyles.targetName}>{player.username}</Text>
-          <Text style={votingStyles.targetSub}>
-            {isSelf ? '(Cannot vote self)' : 'Vote to Eliminate'}
+      </View>
+
+      <View style={votingStyles.targetInfoCol}>
+        <Text
+          style={[
+            votingStyles.targetName,
+            isSelected ? votingStyles.targetNameSelected : votingStyles.targetNameUnselected,
+          ]}
+          numberOfLines={1}
+        >
+          {player.username}
+          {isSelf ? (
+            <Text style={isSelected ? votingStyles.youTagSelected : votingStyles.youTagUnselected}>
+              {' '}(You)
+            </Text>
+          ) : null}
+        </Text>
+
+        {isSelected && (
+          <Text style={votingStyles.targetSubSelected} numberOfLines={1}>
+            Selected
           </Text>
-        </View>
+        )}
       </View>
     </TouchableOpacity>
   );
