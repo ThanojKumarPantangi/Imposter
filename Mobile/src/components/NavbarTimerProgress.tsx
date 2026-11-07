@@ -31,7 +31,7 @@ const CURVE_K = 0.5522848;
 export const NavbarTimerProgress: React.FC<NavbarTimerProgressProps> = memo(({
   deadline,
   totalDurationSeconds = 30,
-  height = 2.5,
+  height = 3.5,
   trackColor = 'rgba(0, 0, 0, 0.15)',
   fillColor,
   whiteColor = '#FFFFFF',

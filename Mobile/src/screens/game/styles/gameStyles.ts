@@ -1,0 +1,191 @@
+import { StyleSheet } from 'react-native';
+import { COLORS } from '../../../theme/colors';
+import { RADIUS, SPACING } from '../../../theme/spacing';
+
+export const gameStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.dark[950],
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: COLORS.dark[950],
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.xl,
+    gap: SPACING.md,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: COLORS.slate[400],
+    fontWeight: '600',
+  },
+  topBar: {
+    position: 'relative',
+    flexDirection: 'column',
+    width: '100%',
+    backgroundColor: 'rgba(7, 9, 14, 0.95)',
+    borderBottomWidth: 1,
+    borderBottomLeftRadius: 45,
+    borderBottomRightRadius: 45,
+    borderBottomColor: 'rgba(30, 41, 59, 0.7)',
+    zIndex: 50,
+  },
+  topBarMainRow: {
+    position: 'relative',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    width: '100%',
+  },
+  topBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  leaveBtn: {
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.dark[900],
+    borderWidth: 1,
+    borderColor: COLORS.slate[800],
+  },
+  roundBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  roundLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.slate[400],
+  },
+  roundNumber: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.civilian.default,
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  scrollContent: {
+    padding: SPACING.md,
+    paddingBottom: 220,
+    gap: SPACING.md,
+  },
+  spectatorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.35)',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    gap: SPACING.md,
+  },
+  spectatorIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    backgroundColor: 'rgba(244, 63, 94, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spectatorTextCol: {
+    flex: 1,
+  },
+  spectatorHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  spectatorTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.white,
+  },
+  spectatorTag: {
+    backgroundColor: 'rgba(244, 63, 94, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: RADIUS.round,
+  },
+  spectatorTagText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#fb7185',
+    textTransform: 'uppercase',
+  },
+  spectatorDesc: {
+    fontSize: 11,
+    color: COLORS.slate[300],
+  },
+  errorBox: {
+    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.35)',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+  },
+  errorText: {
+    color: COLORS.imposter.default,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  centerPhaseCard: {
+    alignItems: 'center',
+    padding: SPACING.xl,
+    gap: SPACING.sm,
+  },
+  sparkleIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: RADIUS.xl,
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.sm,
+  },
+  phaseMainTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: COLORS.white,
+    textAlign: 'center',
+  },
+  phaseSubTitle: {
+    fontSize: 12,
+    color: COLORS.slate[400],
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 340,
+  },
+  badgeColumn: {
+    alignItems: 'flex-end',
+  },
+  reconnectingTag: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: RADIUS.round,
+  },
+  reconnectingTagText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: COLORS.accent.amber,
+  },
+  removalSecondsText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: COLORS.imposter.default,
+    marginTop: 1,
+  },
+});
+

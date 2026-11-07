@@ -144,7 +144,7 @@ export const TurnNotificationBanner: React.FC<TurnNotificationBannerProps> = ({
         <NavbarTimerProgress
           deadline={deadline}
           totalDurationSeconds={totalDurationSeconds}
-          height={2.5}
+          height={3.5}
         />
       </Animated.View>
     </Animated.View>

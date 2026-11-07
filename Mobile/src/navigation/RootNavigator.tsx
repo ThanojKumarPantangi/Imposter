@@ -9,7 +9,7 @@ import { RootStackParamList } from './types';
 import { navigationRef } from './navigationService';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LobbyScreen } from '../screens/LobbyScreen';
-import { GameViewScreen } from '../screens/GameViewScreen';
+import { GameViewScreen } from '../screens/game/GameViewScreen';
 import { PassAndPlayScreen } from '../screens/PassAndPlayScreen';
 import { LeaderboardScreen } from '../screens/LeaderboardScreen';
 import { AdminLoginScreen } from '../screens/AdminLoginScreen';
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   },
   toastContainer: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 70,
     left: 20,
     right: 20,
     alignItems: 'center',
