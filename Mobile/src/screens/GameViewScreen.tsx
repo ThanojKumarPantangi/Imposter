@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,7 @@ import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { sounds } from '../utils/sound';
 import { serverTimeSync } from '../utils/serverTimeSync';
+import { Player } from '../types';
 
 interface GameViewScreenProps {
   route: { params: { roomCode: string } };
@@ -160,6 +161,44 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
       returnToLobby(normalizedCode, player.id);
     }
   };
+
+  // Authoritative Turn Order:
+  // Players are ordered in the exact sequence determined by the backend game engine (roomState.turnOrder),
+  // followed by any non-participating/eliminated players.
+  const orderedPlayers = useMemo(() => {
+    if (!roomState?.players || roomState.players.length === 0) return [];
+
+    const turnOrder = roomState.turnOrder;
+    if (Array.isArray(turnOrder) && turnOrder.length > 0) {
+      const playerMap = new Map<string, Player>();
+      roomState.players.forEach((p) => {
+        playerMap.set(p.id, p);
+      });
+
+      const ordered: Player[] = [];
+      const seenIds = new Set<string>();
+
+      // 1. Position players in exact authoritative turn order
+      for (const id of turnOrder) {
+        const p = playerMap.get(id);
+        if (p) {
+          ordered.push(p);
+          seenIds.add(id);
+        }
+      }
+
+      // 2. Append any remaining players (eliminated in previous rounds or departed)
+      for (const p of roomState.players) {
+        if (!seenIds.has(p.id)) {
+          ordered.push(p);
+        }
+      }
+
+      return ordered;
+    }
+
+    return roomState.players;
+  }, [roomState?.players, roomState?.turnOrder]);
 
   if (!roomState) {
     return (
@@ -424,7 +463,7 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
               </View>
 
               <View style={styles.playersClueList}>
-                {roomState.players.map((p) => {
+                {orderedPlayers.map((p) => {
                   const entry = roomState.clueHistory?.find(
                     (c) => c.playerId === p.id && c.round === (roomState.currentRound || 1)
                   );

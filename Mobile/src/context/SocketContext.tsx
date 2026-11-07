@@ -457,6 +457,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return {
               ...prev,
               status: data.status || 'ROLE_REVEAL',
+              turnOrder: data.turnOrder || prev.turnOrder,
               settings: {
                 ...prev.settings,
                 ...(data.settings || {}),
@@ -481,6 +482,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               activeTurnPlayerId: data.activeTurnPlayerId || prev.activeTurnPlayerId,
               activeTurnIndex: data.activeTurnIndex !== undefined ? data.activeTurnIndex : prev.activeTurnIndex,
               turnDeadline: data.turnDeadline || prev.turnDeadline,
+              turnOrder: data.turnOrder || prev.turnOrder,
               settings: {
                 ...prev.settings,
                 ...(data.settings || {}),
@@ -506,6 +508,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               activeTurnPlayerId: data.activeTurnPlayerId || prev.activeTurnPlayerId,
               activeTurnIndex: data.activeTurnIndex !== undefined ? data.activeTurnIndex : prev.activeTurnIndex,
               turnDeadline: data.turnDeadline || prev.turnDeadline,
+              turnOrder: data.turnOrder || prev.turnOrder,
               currentRound: data.round || prev.currentRound,
               settings: {
                 ...prev.settings,

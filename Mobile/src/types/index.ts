@@ -83,6 +83,7 @@ export interface RoomState {
   players: Player[];
   settings: RoomSettings;
   currentRound: number;
+  turnOrder?: string[];
   activeTurnPlayerId?: string | null;
   activeTurnIndex?: number;
   turnDeadline?: number | null;
