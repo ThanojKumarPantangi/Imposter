@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Mic, MicOff, Volume2, VolumeX, AlertCircle } from 'lucide-react-native';
+import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react-native';
 import { useVoiceChat } from '../context/VoiceChatContext';
+import { showError } from './Toast';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { sounds } from '../utils/sound';
@@ -18,6 +19,17 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ compact = false })
     toggleSpeaker,
     voiceError,
   } = useVoiceChat();
+
+  const lastReportedErrorRef = React.useRef<string | null>(null);
+
+  useEffect(() => {
+    if (voiceError && voiceError !== lastReportedErrorRef.current) {
+      lastReportedErrorRef.current = voiceError;
+      showError(voiceError);
+    } else if (!voiceError) {
+      lastReportedErrorRef.current = null;
+    }
+  }, [voiceError]);
 
   const handleToggleMic = () => {
     sounds.playClick();
@@ -79,13 +91,6 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ compact = false })
           )}
         </TouchableOpacity>
       </View>
-
-      {voiceError && (
-        <View style={styles.errorBox}>
-          <AlertCircle size={10} color={COLORS.imposter.default} />
-          <Text style={styles.errorText}>{voiceError}</Text>
-        </View>
-      )}
     </View>
   );
 };
@@ -143,21 +148,6 @@ const styles = StyleSheet.create({
   },
   speakerTextDeafened: {
     color: COLORS.imposter.default,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-    borderRadius: RADIUS.sm,
-    marginTop: 2,
-    gap: 4,
-  },
-  errorText: {
-    fontSize: 10,
-    color: COLORS.imposter.default,
-    fontWeight: '600',
   },
 });
 

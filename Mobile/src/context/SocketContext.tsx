@@ -9,6 +9,7 @@ import { serverTimeSync } from '../utils/serverTimeSync';
 import { CONFIG, STORAGE_KEYS } from '../config/constants';
 import { RoomState, DisconnectAlert, RejoinRequest, RejoinState, Player, RoomSettings } from '../types';
 import { restoreSessionScreen } from '../navigation/navigationService';
+import { showToast as triggerGlobalToast } from '../components/Toast';
 
 type RoomLifecycle = 'ACTIVE_ROOM' | 'TEMPORARILY_DISCONNECTED' | 'INTENTIONAL_EXIT' | 'NO_ROOM';
 
@@ -81,17 +82,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     roomLifecycleRef.current = roomLifecycleState;
   }, [roomLifecycleState]);
 
-  // Deduplicated toast notifications
+  // Unified single global toast notifications
   const showToast = useCallback((message: string) => {
-    const now = Date.now();
-    if (lastToastRef.current.message === message && now - lastToastRef.current.timestamp < 2500) {
-      return; // Deduplicate rapid identical toasts
-    }
-    lastToastRef.current = { message, timestamp: now };
-    setGameToast(message);
-    setTimeout(() => {
-      setGameToast((prev) => (prev === message ? null : prev));
-    }, 4000);
+    triggerGlobalToast(message);
   }, []);
 
   // Centralized session recovery request (strictly invoked after connection is verified)

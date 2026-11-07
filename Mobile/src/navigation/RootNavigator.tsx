@@ -17,6 +17,7 @@ import { AdminDashboardScreen } from '../screens/AdminDashboardScreen';
 
 import { useSocket } from '../context/SocketContext';
 import { GradientButton } from '../components/common/GradientButton';
+import { Toast } from '../components/Toast';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 
@@ -34,7 +35,7 @@ const AppNavTheme = {
 };
 
 export const RootNavigator: React.FC = () => {
-  const { kickedNotice, clearKickedNotice, gameToast } = useSocket();
+  const { kickedNotice, clearKickedNotice } = useSocket();
   const insets = useSafeAreaInsets();
 
   return (
@@ -89,14 +90,8 @@ export const RootNavigator: React.FC = () => {
         </Modal>
       )}
 
-      {/* Global Floating Game Toast */}
-      {gameToast && (
-        <View style={styles.toastContainer} pointerEvents="none">
-          <View style={styles.toastCard}>
-            <Text style={styles.toastText}>{gameToast}</Text>
-          </View>
-        </View>
-      )}
+      {/* Global Floating Toast */}
+      <Toast />
     </View>
   );
 };
@@ -147,33 +142,6 @@ const styles = StyleSheet.create({
   },
   understoodBtn: {
     width: '100%',
-  },
-  toastContainer: {
-    position: 'absolute',
-    bottom: 70,
-    left: 20,
-    right: 20,
-    alignItems: 'center',
-    zIndex: 9999,
-  },
-  toastCard: {
-    backgroundColor: COLORS.dark[850],
-    borderWidth: 1,
-    borderColor: COLORS.slate[700],
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.xl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  toastText: {
-    color: COLORS.white,
-    fontWeight: '700',
-    fontSize: 13,
-    textAlign: 'center',
   },
 });
 
