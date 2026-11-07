@@ -968,87 +968,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.slate[300],
   },
-  secretCard: {
-    width: '100%',
-  },
-  secretCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  shieldBoxRose: {
-    width: 46,
-    height: 46,
-    borderRadius: RADIUS.lg,
-    backgroundColor: 'rgba(244, 63, 94, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shieldBoxCyan: {
-    width: 46,
-    height: 46,
-    borderRadius: RADIUS.lg,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secretDetails: {
-    flex: 1,
-  },
-  roleTagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  roleHeaderLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.slate[400],
-  },
-  eliminatedSmallBadge: {
-    backgroundColor: COLORS.slate[800],
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: RADIUS.sm,
-  },
-  eliminatedSmallText: {
-    fontSize: 9,
-    color: COLORS.slate[400],
-    fontWeight: '700',
-  },
-  hintWordRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  hintPrefix: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fb7185',
-  },
-  hintValue: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#fecdd3',
-  },
-  secretWordPrefix: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#38bdf8',
-  },
-  secretWordValue: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: COLORS.white,
-    letterSpacing: 0.5,
-  },
-  spectatorNotice: {
-    fontSize: 12,
-    color: COLORS.slate[400],
-    fontStyle: 'italic',
-  },
   errorBox: {
     backgroundColor: 'rgba(244, 63, 94, 0.12)',
     borderWidth: 1,
@@ -1093,67 +1012,6 @@ const styles = StyleSheet.create({
   },
   clueRoundContainer: {
     gap: SPACING.md,
-  },
-  myTurnCard: {
-    borderWidth: 1.5,
-    borderColor: COLORS.civilian.default,
-    backgroundColor: 'rgba(6, 182, 212, 0.08)',
-  },
-  otherTurnCard: {
-    backgroundColor: COLORS.dark[900],
-  },
-  turnHeader: {
-    marginBottom: SPACING.md,
-  },
-  turnTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.white,
-  },
-  turnSub: {
-    fontSize: 11,
-    color: COLORS.slate[400],
-    marginTop: 2,
-  },
-  clueForm: {
-    gap: SPACING.sm,
-  },
-  inputAndSubmitRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  clueTextInput: {
-    flex: 1,
-    backgroundColor: COLORS.dark[950],
-    borderWidth: 1,
-    borderColor: COLORS.slate[700],
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  clueSendBtn: {
-    backgroundColor: COLORS.civilian.default,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  disabledSendBtn: {
-    opacity: 0.45,
-  },
-  imposterTipBox: {
-    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(244, 63, 94, 0.25)',
-    borderRadius: RADIUS.md,
-    padding: SPACING.sm,
-  },
-  imposterTipText: {
-    fontSize: 10,
-    color: '#fb7185',
   },
   turnOrderCard: {
     width: '100%',
@@ -1649,4 +1507,3 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 });
-

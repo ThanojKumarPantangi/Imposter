@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import {
   View,
