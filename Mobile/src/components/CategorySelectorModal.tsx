@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,10 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
+  Pressable,
 } from 'react-native';
 import { X, Search, Check, Layers, Sparkles } from 'lucide-react-native';
 import { roomApi } from '../services/api/roomApi';
@@ -16,6 +20,8 @@ import { Category } from '../types';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { sounds } from '../utils/sound';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface CategorySelectorModalProps {
   visible: boolean;
@@ -39,6 +45,54 @@ export const CategorySelectorModal: React.FC<CategorySelectorModalProps> = ({
     () => new Set(selectedSlugs.length > 0 ? selectedSlugs : ['fruits'])
   );
 
+  // --- ANIMATION VALUES ---
+  const [internalVisible, setInternalVisible] = useState(false);
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Mount/Unmount Animations
+  useEffect(() => {
+    if (visible) {
+      setInternalVisible(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 10,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: SCREEN_HEIGHT,
+          duration: 250,
+          useNativeDriver: true,
+          easing: Easing.in(Easing.ease),
+        }),
+      ]).start(() => {
+        setInternalVisible(false);
+      });
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    sounds.playClick();
+    onClose(); // Trigger parent state change, which will trigger the exit animation above
+  };
+
+  // Data Loading
   useEffect(() => {
     if (!visible) return;
     let isMounted = true;
@@ -72,7 +126,7 @@ export const CategorySelectorModal: React.FC<CategorySelectorModalProps> = ({
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(slug)) {
-        if (next.size <= 1) return prev; // Keep at least one category selected
+        if (next.size <= 1) return prev;
         next.delete(slug);
       } else {
         next.add(slug);
@@ -126,39 +180,129 @@ export const CategorySelectorModal: React.FC<CategorySelectorModalProps> = ({
     onClose();
   };
 
+  // Internal component for animated checkbox & card interactions
+  const CategoryCard = ({ item, isSelected, onPress }: any) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+    const checkScale = useRef(new Animated.Value(isSelected ? 1 : 0)).current;
+
+    useEffect(() => {
+      Animated.spring(checkScale, {
+        toValue: isSelected ? 1 : 0,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }).start();
+    }, [isSelected]);
+
+    const handlePressIn = () => {
+      Animated.spring(scaleAnim, {
+        toValue: 0.97,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const handlePressOut = () => {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    return (
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <Pressable
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          style={[
+            styles.categoryCard,
+            isSelected ? styles.categoryCardSelected : styles.categoryCardUnselected,
+          ]}
+        >
+          <View style={styles.catHeader}>
+            <Text style={[styles.catName, isSelected && styles.catNameSelected]}>
+              {item.name}
+            </Text>
+            <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
+              <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+                <Check size={14} color="#07090e" strokeWidth={3.5} />
+              </Animated.View>
+            </View>
+          </View>
+
+          <Text style={[styles.catDesc, isSelected && styles.catDescSelected]} numberOfLines={2}>
+            {item.description || 'Curated word pool designed for balanced multiplayer play.'}
+          </Text>
+
+          <View style={styles.catFooter}>
+            <View style={[styles.groupBadge, isSelected && styles.groupBadgeSelected]}>
+              <Text style={[styles.groupBadgeText, isSelected && styles.groupBadgeTextSelected]}>
+                {(item.group || 'GENERAL').replace(/_/g, ' ')}
+              </Text>
+            </View>
+            {item.featured && (
+              <View style={styles.featuredBadge}>
+                <Sparkles size={10} color="#fbbf24" />
+                <Text style={styles.featuredText}>Popular</Text>
+              </View>
+            )}
+          </View>
+        </Pressable>
+      </Animated.View>
+    );
+  };
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.cardContainer}>
+    <Modal visible={internalVisible} transparent onRequestClose={handleClose} animationType="none">
+      <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+
+        <Animated.View
+          style={[
+            styles.cardContainer,
+            { transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          {/* Top Drag Indicator */}
+          <View style={styles.dragHandleContainer}>
+            <View style={styles.dragHandle} />
+          </View>
+
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <View>
+              <View style={styles.titleContent}>
                 <View style={styles.pillTag}>
-                  <Layers size={12} color={COLORS.civilian.default} />
-                  <Text style={styles.pillText}>Multi-Category Selection</Text>
+                  <Layers size={14} color={COLORS.civilian.default} />
+                  <Text style={styles.pillText}>Deck Builder</Text>
                 </View>
-                <Text style={styles.mainTitle}>Choose Word Categories</Text>
+                <Text style={styles.mainTitle}>Choose Categories</Text>
                 <Text style={styles.subTitle}>
-                  Combine multiple categories into one shared word deck
+                  Select multiple topics to combine into one game deck.
                 </Text>
               </View>
 
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <X size={20} color={COLORS.slate[400]} />
+              <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+                <X size={22} color={COLORS.slate[400]} />
               </TouchableOpacity>
             </View>
 
             {/* Search Bar */}
             <View style={styles.searchBar}>
-              <Search size={16} color={COLORS.slate[500]} />
+              <Search size={18} color={COLORS.slate[500]} />
               <TextInput
                 value={search}
                 onChangeText={setSearch}
-                placeholder="Search by topic, food, movie, animals..."
+                placeholder="Search topics, movies, animals..."
                 placeholderTextColor={COLORS.slate[500]}
                 style={styles.searchInput}
+                selectionColor={COLORS.civilian.default}
               />
+              {search.length > 0 && (
+                <TouchableOpacity onPress={() => setSearch('')}>
+                  <X size={16} color={COLORS.slate[500]} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Category Groups Horizontal Scroll */}
@@ -193,21 +337,21 @@ export const CategorySelectorModal: React.FC<CategorySelectorModalProps> = ({
                 );
               })}
             </ScrollView>
+          </View>
 
-            {/* Batch Controls */}
-            <View style={styles.batchControls}>
-              <Text style={styles.countText}>
-                Showing <Text style={styles.countBold}>{filtered.length}</Text> categories
-              </Text>
-              <View style={styles.batchActions}>
-                <TouchableOpacity onPress={handleSelectAllFiltered}>
-                  <Text style={styles.actionTextCyan}>Select Shown</Text>
-                </TouchableOpacity>
-                <Text style={styles.dividerDot}>•</Text>
-                <TouchableOpacity onPress={handleClearFiltered}>
-                  <Text style={styles.actionTextSlate}>Deselect Shown</Text>
-                </TouchableOpacity>
-              </View>
+          {/* Batch Controls */}
+          <View style={styles.batchControls}>
+            <Text style={styles.countText}>
+              Showing <Text style={styles.countBold}>{filtered.length}</Text> results
+            </Text>
+            <View style={styles.batchActions}>
+              <TouchableOpacity onPress={handleSelectAllFiltered}>
+                <Text style={styles.actionTextCyan}>Select All</Text>
+              </TouchableOpacity>
+              <Text style={styles.dividerDot}>•</Text>
+              <TouchableOpacity onPress={handleClearFiltered}>
+                <Text style={styles.actionTextSlate}>Clear All</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -219,87 +363,44 @@ export const CategorySelectorModal: React.FC<CategorySelectorModalProps> = ({
             </View>
           ) : filtered.length === 0 ? (
             <View style={styles.emptyContainer}>
+              <Layers size={48} color={COLORS.slate[700]} strokeWidth={1.5} />
               <Text style={styles.emptyTitle}>No categories found</Text>
-              <Text style={styles.emptySub}>Try searching for another topic or reset filter.</Text>
+              <Text style={styles.emptySub}>Try adjusting your search or filters.</Text>
             </View>
           ) : (
             <FlatList
               data={filtered}
               keyExtractor={(item) => item.slug}
               contentContainerStyle={styles.listContent}
-              renderItem={({ item }) => {
-                const isSelected = selected.has(item.slug);
-                return (
-                  <TouchableOpacity
-                    onPress={() => toggleCategory(item.slug)}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.categoryCard,
-                      isSelected ? styles.categoryCardSelected : styles.categoryCardUnselected,
-                    ]}
-                  >
-                    <View style={styles.catHeader}>
-                      <Text
-                        style={[
-                          styles.catName,
-                          isSelected && styles.catNameSelected,
-                        ]}
-                      >
-                        {item.name}
-                      </Text>
-                      <View
-                        style={[
-                          styles.checkbox,
-                          isSelected ? styles.checkboxChecked : styles.checkboxUnchecked,
-                        ]}
-                      >
-                        {isSelected && <Check size={12} color="#07090e" strokeWidth={3} />}
-                      </View>
-                    </View>
-
-                    <Text style={styles.catDesc} numberOfLines={2}>
-                      {item.description || 'Curated word pool designed for balanced multiplayer play.'}
-                    </Text>
-
-                    <View style={styles.catFooter}>
-                      <View style={styles.groupBadge}>
-                        <Text style={styles.groupBadgeText}>
-                          {(item.group || 'GENERAL').replace(/_/g, ' ')}
-                        </Text>
-                      </View>
-                      {item.featured && (
-                        <View style={styles.featuredBadge}>
-                          <Sparkles size={10} color="#fbbf24" />
-                          <Text style={styles.featuredText}>Popular</Text>
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              }}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <CategoryCard
+                  item={item}
+                  isSelected={selected.has(item.slug)}
+                  onPress={() => toggleCategory(item.slug)}
+                />
+              )}
             />
           )}
 
           {/* Footer Bar */}
           <View style={styles.footer}>
-            <Text style={styles.footerCount}>
-              <Text style={styles.footerCountBold}>{selected.size}</Text>{' '}
-              {selected.size === 1 ? 'category' : 'categories'} selected
-            </Text>
+            <View style={styles.footerLeft}>
+              <View style={styles.selectionBadge}>
+                <Text style={styles.selectionBadgeText}>{selected.size}</Text>
+              </View>
+              <Text style={styles.footerCount}>Selected</Text>
+            </View>
 
             <View style={styles.footerActions}>
-              <TouchableOpacity onPress={onClose} style={styles.footerCancelBtn}>
-                <Text style={styles.footerCancelText}>Cancel</Text>
-              </TouchableOpacity>
-
               <TouchableOpacity onPress={handleConfirm} style={styles.footerApplyBtn}>
-                <Check size={16} color="#07090e" strokeWidth={3} />
-                <Text style={styles.footerApplyText}>Apply Selection</Text>
+                <Text style={styles.footerApplyText}>Confirm Deck</Text>
+                <Check size={18} color="#07090e" strokeWidth={3} />
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 };
@@ -307,58 +408,76 @@ export const CategorySelectorModal: React.FC<CategorySelectorModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(7, 9, 14, 0.85)',
+    backgroundColor: 'rgba(3, 4, 7, 0.75)',
     justifyContent: 'flex-end',
   },
   cardContainer: {
     backgroundColor: COLORS.dark[900],
     borderTopLeftRadius: RADIUS.xxl,
     borderTopRightRadius: RADIUS.xxl,
-    borderWidth: 1,
-    borderColor: COLORS.slate[800],
-    maxHeight: '90%',
-    flex: 1,
+    height: '92%', // Fixed slightly taller height for a true bottom sheet feel
+    paddingBottom: SPACING.xl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  dragHandleContainer: {
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+  },
+  dragHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: RADIUS.round,
+    backgroundColor: COLORS.slate[700],
   },
   header: {
-    padding: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.slate[800],
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
   },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  titleContent: {
+    flex: 1,
+    paddingRight: SPACING.md,
   },
   pillTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(6, 182, 212, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    gap: 6,
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: RADIUS.round,
-    marginBottom: 6,
+    marginBottom: 8,
     alignSelf: 'flex-start',
   },
   pillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.civilian.default,
+    letterSpacing: 0.5,
   },
   mainTitle: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
     color: COLORS.white,
+    marginBottom: 4,
   },
   subTitle: {
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.slate[400],
-    marginTop: 2,
+    lineHeight: 18,
   },
   closeBtn: {
-    padding: 6,
-    borderRadius: RADIUS.md,
+    padding: 8,
+    borderRadius: RADIUS.round,
     backgroundColor: COLORS.dark[800],
   },
   searchBar: {
@@ -366,108 +485,120 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.dark[950],
     borderWidth: 1,
-    borderColor: COLORS.slate[700],
-    borderRadius: RADIUS.md,
+    borderColor: COLORS.slate[800],
+    borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.md,
-    height: 42,
+    height: 48,
     gap: SPACING.sm,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   searchInput: {
     flex: 1,
     color: COLORS.white,
-    fontSize: 13,
+    fontSize: 15,
+    height: '100%',
   },
   groupsRow: {
     flexDirection: 'row',
-    gap: SPACING.xs,
-    paddingVertical: 4,
+    gap: SPACING.sm,
+    paddingBottom: SPACING.xs,
   },
   groupChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: RADIUS.sm,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: RADIUS.round,
+    borderWidth: 1,
   },
   groupChipInactive: {
     backgroundColor: COLORS.dark[800],
+    borderColor: 'transparent',
   },
   groupChipActive: {
-    backgroundColor: COLORS.civilian.default,
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    borderColor: COLORS.civilian.default,
   },
   groupChipText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.slate[400],
   },
   groupChipTextActive: {
-    color: COLORS.dark[950],
-    fontWeight: '800',
+    color: COLORS.civilian.default,
+    fontWeight: '700',
   },
   batchControls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.xs,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.dark[950],
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.slate[800],
   },
   countText: {
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.slate[400],
   },
   countBold: {
-    color: COLORS.slate[100],
+    color: COLORS.white,
     fontWeight: '700',
   },
   batchActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   actionTextCyan: {
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.civilian.default,
     fontWeight: '700',
   },
   dividerDot: {
     color: COLORS.slate[600],
+    fontSize: 16,
   },
   actionTextSlate: {
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.slate[400],
     fontWeight: '600',
   },
   loaderContainer: {
-    padding: 40,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   loadingText: {
-    fontSize: 12,
+    fontSize: 14,
     color: COLORS.slate[400],
+    fontWeight: '500',
   },
   emptyContainer: {
-    padding: 40,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.slate[300],
-  },
-  emptySub: {
-    fontSize: 11,
-    color: COLORS.slate[500],
-    marginTop: 4,
-  },
-  listContent: {
-    padding: SPACING.md,
     gap: SPACING.sm,
   },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.slate[300],
+    marginTop: SPACING.sm,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: COLORS.slate[500],
+    textAlign: 'center',
+  },
+  listContent: {
+    padding: SPACING.lg,
+    gap: SPACING.md,
+  },
   categoryCard: {
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
     borderWidth: 1.5,
   },
   categoryCardUnselected: {
@@ -475,28 +606,30 @@ const styles = StyleSheet.create({
     borderColor: COLORS.slate[800],
   },
   categoryCardSelected: {
-    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
     borderColor: COLORS.civilian.default,
   },
   catHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: SPACING.xs,
   },
   catName: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '800',
     color: COLORS.white,
+    flex: 1,
+    paddingRight: SPACING.sm,
   },
   catNameSelected: {
-    color: '#38bdf8',
+    color: COLORS.civilian.default,
   },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -509,88 +642,110 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.civilian.default,
   },
   catDesc: {
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.slate[400],
-    lineHeight: 16,
-    marginBottom: SPACING.sm,
+    lineHeight: 18,
+    marginBottom: SPACING.md,
+  },
+  catDescSelected: {
+    color: COLORS.slate[300],
   },
   catFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   groupBadge: {
     backgroundColor: COLORS.dark[950],
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: RADIUS.sm,
     borderWidth: 1,
     borderColor: COLORS.slate[800],
   },
+  groupBadgeSelected: {
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderColor: 'transparent',
+  },
   groupBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
     color: COLORS.slate[400],
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  groupBadgeTextSelected: {
+    color: COLORS.civilian.default,
   },
   featuredBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: RADIUS.sm,
-    gap: 3,
+    gap: 4,
   },
   featuredText: {
-    fontSize: 9,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
     color: '#fbbf24',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   footer: {
     padding: SPACING.lg,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.slate[800],
+    paddingBottom: SPACING.xl + 20, // Extra padding for safe area
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: COLORS.dark[950],
+    borderTopWidth: 1,
+    borderTopColor: COLORS.slate[800],
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
-  footerCount: {
-    fontSize: 12,
-    color: COLORS.slate[400],
-  },
-  footerCountBold: {
-    color: COLORS.civilian.default,
-    fontWeight: '800',
-  },
-  footerActions: {
+  footerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
   },
-  footerCancelBtn: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+  selectionBadge: {
+    backgroundColor: COLORS.civilian.default,
+    width: 28,
+    height: 28,
+    borderRadius: RADIUS.round,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  footerCancelText: {
-    color: COLORS.slate[400],
+  selectionBadgeText: {
+    color: COLORS.dark[950],
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  footerCount: {
+    fontSize: 14,
     fontWeight: '700',
-    fontSize: 12,
+    color: COLORS.white,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   footerApplyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.civilian.default,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: 10,
-    borderRadius: RADIUS.md,
-    gap: 4,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: 14,
+    borderRadius: RADIUS.lg,
+    gap: 8,
   },
   footerApplyText: {
     color: COLORS.dark[950],
     fontWeight: '900',
-    fontSize: 13,
+    fontSize: 15,
   },
 });
-

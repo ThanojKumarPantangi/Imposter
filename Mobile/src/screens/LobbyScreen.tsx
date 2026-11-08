@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,11 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  Animated,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+  Pressable,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
@@ -17,6 +22,8 @@ import {
   Layers,
   Users,
   LogOut,
+  Crown,
+  WifiOff,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -33,6 +40,11 @@ import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { sounds } from '../utils/sound';
 import { Player } from '../types';
+
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface LobbyScreenProps {
   route: { params: { roomCode: string } };
@@ -68,6 +80,28 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
 
   const normalizedCode = (roomCode || '').toUpperCase();
 
+  // Animations
+  const copyScaleAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Pulse animation for the start button when ready
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.03,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulseAnim]);
+
   // If player was kicked, redirect to Home
   useEffect(() => {
     if (kickedNotice) {
@@ -75,7 +109,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
     }
   }, [kickedNotice]);
 
-  // If roomState is not loaded, auto-join socket room (avoid duplicate joins during reconnect/recovery)
+  // If roomState is not loaded, auto-join socket room
   useEffect(() => {
     if (kickedNotice) return;
     if (isLeaving || roomLifecycleState === 'INTENTIONAL_EXIT' || roomLifecycleState === 'NO_ROOM' || roomLifecycleState === 'TEMPORARILY_DISCONNECTED') return;
@@ -106,6 +140,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
 
   const isHost = roomState?.hostId === player?.id;
   const players = roomState?.players || [];
+
+  // Animate layout when players join/leave
+  useEffect(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }, [players.length]);
+
   const settings = roomState?.settings || {
     impostersCount: 1,
     turnDurationSeconds: 30,
@@ -126,6 +166,13 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
     sounds.playClick();
     await Clipboard.setStringAsync(normalizedCode);
     setCopied(true);
+
+    // Pop animation
+    Animated.sequence([
+      Animated.timing(copyScaleAnim, { toValue: 1.25, duration: 150, useNativeDriver: true }),
+      Animated.timing(copyScaleAnim, { toValue: 1, duration: 150, useNativeDriver: true })
+    ]).start();
+
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -155,6 +202,32 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
     setPlayerToKick(null);
   };
 
+  // Helper component for animated toggle buttons
+  const AnimatedSegmentButton = ({ sec, isSelected, label, onSelect, activeColor }: any) => {
+    const scale = useRef(new Animated.Value(1)).current;
+
+    return (
+      <Pressable
+        onPressIn={() => Animated.spring(scale, { toValue: 0.9, useNativeDriver: true }).start()}
+        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+        onPress={onSelect}
+        style={{ flex: 1 }}
+      >
+        <Animated.View
+          style={[
+            styles.segmentedBtn,
+            isSelected ? [styles.segmentedBtnSelected, { borderColor: activeColor, backgroundColor: `${activeColor}20` }] : styles.segmentedBtnUnselected,
+            { transform: [{ scale }] }
+          ]}
+        >
+          <Text style={[styles.segmentedBtnText, isSelected && { color: activeColor }]}>
+            {label}
+          </Text>
+        </Animated.View>
+      </Pressable>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Top Header Bar */}
@@ -164,30 +237,30 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
             onPress={handleLeaveRoom}
             disabled={isLeaving}
             style={styles.leaveBtn}
+            activeOpacity={0.7}
           >
-            <LogOut size={16} color={COLORS.slate[400]} />
+            <LogOut size={18} color={COLORS.slate[300]} />
           </TouchableOpacity>
 
-          {/* Room Code Badge */}
-          <View style={styles.codeBadge}>
-            <Text style={styles.codeLabel}>ROOM CODE</Text>
-            <Text style={styles.codeText}>{normalizedCode}</Text>
-            <TouchableOpacity onPress={copyRoomCode} style={styles.copyBtn}>
-              {copied ? (
-                <Check size={14} color={COLORS.accent.emerald} />
-              ) : (
-                <Copy size={14} color={COLORS.slate[300]} />
-              )}
-            </TouchableOpacity>
-          </View>
+          {/* Premium Room Code Badge */}
+          <TouchableOpacity onPress={copyRoomCode} activeOpacity={0.8}>
+            <Animated.View style={[styles.codeBadge, { transform: [{ scale: copyScaleAnim }] }]}>
+              <Text style={styles.codeText}>{normalizedCode}</Text>
+              <View style={styles.copyBtnInner}>
+                {copied ? (
+                  <Check size={18} color={COLORS.accent.emerald} strokeWidth={3} />
+                ) : (
+                  <Copy size={18} color={COLORS.civilian.default} />
+                )}
+              </View>
+            </Animated.View>
+          </TouchableOpacity>
         </View>
 
-        {/* Audio and Mic Voice Controls */}
         <VoiceControls compact />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Disconnected Player Countdown Banner */}
         <DisconnectedBanner alertData={disconnectAlert} />
 
         {startError ? (
@@ -200,51 +273,57 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
         <Card style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.rowAlign}>
-              <Users size={18} color={COLORS.civilian.default} />
-              <Text style={styles.sectionTitle}>Players in Lobby ({players.length})</Text>
+              <View style={styles.iconContainerBlue}>
+                <Users size={16} color={COLORS.civilian.default} />
+              </View>
+              <Text style={styles.sectionTitle}>Lobby Players</Text>
             </View>
             <View style={styles.playerCountTag}>
-              <Text style={styles.playerCountText}>Min 3 • Max 50</Text>
+              <Text style={styles.playerCountText}>{players.length} / 50</Text>
             </View>
           </View>
 
-          {/* Players Grid / List */}
           <View style={styles.playerList}>
             {players.map((p) => {
               const isSelf = p.id === player?.id;
+              const isDisconnected = !p.isConnected;
               return (
                 <View
                   key={p.id}
                   style={[
                     styles.playerItem,
-                    isSelf ? styles.playerItemSelf : styles.playerItemOther,
-                    !p.isConnected && styles.playerItemDisconnected,
+                    isSelf && styles.playerItemSelf,
+                    isDisconnected && styles.playerItemDisconnected,
                   ]}
                 >
                   <View style={styles.playerItemLeft}>
                     <PlayerAvatar player={p} size="sm" isSpeaking={Boolean(activeSpeakerIds?.includes(p.id))} />
                     <View style={styles.playerNameColumn}>
                       <View style={styles.nameRow}>
-                        <Text style={styles.playerName}>{p.username}</Text>
+                        <Text style={[styles.playerName, isDisconnected && styles.playerNameDimmed]}>
+                          {p.username}
+                        </Text>
                         {isSelf && (
                           <View style={styles.youBadge}>
                             <Text style={styles.youBadgeText}>YOU</Text>
                           </View>
                         )}
-                      </View>
-                      <Text style={styles.playerStatusSub}>
-                        {p.isHost ? (
-                          <Text style={styles.hostStatus}>Room Host</Text>
-                        ) : !p.isConnected ? (
-                          <Text style={styles.reconnectingStatus}>Reconnecting...</Text>
-                        ) : (
-                          <Text style={styles.readyStatus}>Ready</Text>
+                        {p.isHost && (
+                          <Crown size={14} color="#fbbf24" style={{ marginLeft: 4 }} />
                         )}
-                      </Text>
+                      </View>
+
+                      {isDisconnected ? (
+                        <View style={styles.statusRow}>
+                          <WifiOff size={10} color={COLORS.imposter.default} />
+                          <Text style={styles.reconnectingStatus}>Reconnecting...</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.readyStatus}>Ready to play</Text>
+                      )}
                     </View>
                   </View>
 
-                  {/* Host Kick Option */}
                   {isHost && !isSelf && (
                     <TouchableOpacity
                       onPress={() => {
@@ -252,8 +331,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
                         setPlayerToKick(p);
                       }}
                       style={styles.kickBtn}
+                      activeOpacity={0.7}
                     >
-                      <UserX size={16} color={COLORS.slate[500]} />
+                      <UserX size={16} color={COLORS.slate[400]} />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -267,26 +347,29 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
               {!minPlayersMet ? (
                 <Text style={styles.warnAmber}>⚠️ Waiting for {3 - players.length} more players</Text>
               ) : hasDisconnected ? (
-                <Text style={styles.warnRose}>⚠️ Start Game locked while player disconnected</Text>
+                <Text style={styles.warnRose}>⚠️ Start locked while a player is disconnected</Text>
               ) : !hasCategories ? (
                 <Text style={styles.warnAmber}>⚠️ At least 1 word category required</Text>
               ) : (
-                <Text style={styles.readyEmerald}>✅ Lobby Ready to Start!</Text>
+                <Text style={styles.readyEmerald}>✨ All players ready!</Text>
               )}
             </Text>
 
             {isHost ? (
-              <GradientButton
-                title="Start Game"
-                onPress={handleStartGame}
-                disabled={!canStart}
-                icon={<Play size={16} color={COLORS.white} fill={COLORS.white} />}
-                iconPosition="left"
-                style={styles.startBtn}
-              />
+              <Animated.View style={canStart ? { transform: [{ scale: pulseAnim }] } : {}}>
+                <GradientButton
+                  title="Start Game"
+                  onPress={handleStartGame}
+                  disabled={!canStart}
+                  icon={<Play size={18} color={COLORS.white} fill={COLORS.white} />}
+                  iconPosition="left"
+                  style={styles.startBtn}
+                />
+              </Animated.View>
             ) : (
               <View style={styles.waitingForHostBox}>
-                <Text style={styles.waitingForHostText}>Waiting for Host to start...</Text>
+                <View style={styles.waitingDot} />
+                <Text style={styles.waitingForHostText}>Waiting for Host to start</Text>
               </View>
             )}
           </View>
@@ -295,23 +378,33 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
         {/* Word Categories Card */}
         <Card style={styles.sectionCard}>
           <View style={styles.categoryCardInner}>
-            <View style={styles.rowAlign}>
-              <Layers size={16} color={COLORS.civilian.default} />
-              <Text style={styles.categoryCardTitle}>
-                Word Categories ({sharedCategorySlugs.length})
-              </Text>
+            <View style={styles.categoryHeader}>
+              <View style={styles.rowAlign}>
+                <View style={styles.iconContainerBlue}>
+                  <Layers size={16} color={COLORS.civilian.default} />
+                </View>
+                <Text style={styles.sectionTitle}>
+                  Categories <Text style={styles.categoryCount}>({sharedCategorySlugs.length})</Text>
+                </Text>
+              </View>
+
+              {/* Removed the isHost check here so anyone can edit */}
+              <TouchableOpacity
+                style={styles.editCategoriesBtn}
+                onPress={() => setShowCategorySelector(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.editCategoriesText}>Edit</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.categoryCardNames} numberOfLines={2}>
-              {sharedCategoryNames.join(', ')}
-            </Text>
-            <GradientButton
-              title="Change Categories"
-              onPress={() => setShowCategorySelector(true)}
-              variant="cyan"
-              size="sm"
-              icon={<Layers size={14} color={COLORS.white} />}
-              iconPosition="left"
-            />
+
+            <View style={styles.categoryPillContainer}>
+              {sharedCategoryNames.map((name, index) => (
+                <View key={index} style={styles.categoryPill}>
+                  <Text style={styles.categoryPillText}>{name}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         </Card>
 
@@ -319,8 +412,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
         <Card style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.rowAlign}>
-              <Settings size={18} color={COLORS.imposter.default} />
-              <Text style={styles.sectionTitle}>Game Settings</Text>
+              <View style={styles.iconContainerRed}>
+                <Settings size={16} color={COLORS.imposter.default} />
+              </View>
+              <Text style={styles.sectionTitle}>Game Rules</Text>
             </View>
             <View style={isHost ? styles.hostSettingsTag : styles.readOnlyTag}>
               <Text style={isHost ? styles.hostSettingsTagText : styles.readOnlyTagText}>
@@ -330,171 +425,109 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
           </View>
 
           {isHost ? (
-            /* Interactive Host Controls */
             <View style={styles.hostControlsList}>
-              {/* Imposter Count */}
               <View style={styles.settingBlock}>
                 <Text style={styles.settingLabel}>Number of Imposters</Text>
                 <View style={styles.segmentedRow}>
-                  {[1, 2, 3].map((num) => {
-                    const isSelected = settings.impostersCount === num;
-                    return (
-                      <TouchableOpacity
-                        key={num}
-                        onPress={() => {
-                          sounds.playClick();
-                          if (player?.id) {
-                            updateSettings(normalizedCode, player.id, { impostersCount: num });
-                          }
-                        }}
-                        style={[
-                          styles.segmentedBtn,
-                          isSelected ? styles.segmentedBtnSelectedRose : styles.segmentedBtnUnselected,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.segmentedBtnText,
-                            isSelected && styles.segmentedBtnTextRose,
-                          ]}
-                        >
-                          {num} {num === 1 ? 'Imposter' : 'Imposters'}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {[1, 2, 3].map((num) => (
+                    <AnimatedSegmentButton
+                      key={num}
+                      sec={num}
+                      label={`${num}`}
+                      isSelected={settings.impostersCount === num}
+                      activeColor="#fb7185" // Rose
+                      onSelect={() => {
+                        sounds.playClick();
+                        if (player?.id) updateSettings(normalizedCode, player.id, { impostersCount: num });
+                      }}
+                    />
+                  ))}
                 </View>
               </View>
 
-              {/* Turn Duration */}
               <View style={styles.settingBlock}>
                 <Text style={styles.settingLabel}>Turn Clue Timer</Text>
                 <View style={styles.segmentedRow}>
-                  {[15, 30, 45, 60].map((sec) => {
-                    const isSelected = settings.turnDurationSeconds === sec;
-                    return (
-                      <TouchableOpacity
-                        key={sec}
-                        onPress={() => {
-                          sounds.playClick();
-                          if (player?.id) {
-                            updateSettings(normalizedCode, player.id, { turnDurationSeconds: sec });
-                          }
-                        }}
-                        style={[
-                          styles.segmentedBtn,
-                          isSelected ? styles.segmentedBtnSelectedCyan : styles.segmentedBtnUnselected,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.segmentedBtnText,
-                            isSelected && styles.segmentedBtnTextCyan,
-                          ]}
-                        >
-                          {sec}s
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {[15, 30, 45, 60].map((sec) => (
+                    <AnimatedSegmentButton
+                      key={sec}
+                      sec={sec}
+                      label={`${sec}s`}
+                      isSelected={settings.turnDurationSeconds === sec}
+                      activeColor="#38bdf8" // Cyan
+                      onSelect={() => {
+                        sounds.playClick();
+                        if (player?.id) updateSettings(normalizedCode, player.id, { turnDurationSeconds: sec });
+                      }}
+                    />
+                  ))}
                 </View>
               </View>
 
-              {/* Voting Duration */}
               <View style={styles.settingBlock}>
                 <Text style={styles.settingLabel}>Voting Timer</Text>
                 <View style={styles.segmentedRow}>
-                  {[30, 45, 60].map((sec) => {
-                    const isSelected = settings.votingDurationSeconds === sec;
-                    return (
-                      <TouchableOpacity
-                        key={sec}
-                        onPress={() => {
-                          sounds.playClick();
-                          if (player?.id) {
-                            updateSettings(normalizedCode, player.id, { votingDurationSeconds: sec });
-                          }
-                        }}
-                        style={[
-                          styles.segmentedBtn,
-                          isSelected ? styles.segmentedBtnSelectedCyan : styles.segmentedBtnUnselected,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.segmentedBtnText,
-                            isSelected && styles.segmentedBtnTextCyan,
-                          ]}
-                        >
-                          {sec}s
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {[30, 45, 60].map((sec) => (
+                    <AnimatedSegmentButton
+                      key={sec}
+                      sec={sec}
+                      label={`${sec}s`}
+                      isSelected={settings.votingDurationSeconds === sec}
+                      activeColor="#38bdf8"
+                      onSelect={() => {
+                        sounds.playClick();
+                        if (player?.id) updateSettings(normalizedCode, player.id, { votingDurationSeconds: sec });
+                      }}
+                    />
+                  ))}
                 </View>
               </View>
 
-              {/* Lobby Disconnect Timeout */}
               <View style={styles.settingBlock}>
-                <Text style={styles.settingLabel}>Lobby Disconnect Timeout</Text>
+                <Text style={styles.settingLabel}>Disconnect Timeout</Text>
                 <View style={styles.segmentedRow}>
-                  {[3, 5, 10, 15, 30].map((sec) => {
-                    const isSelected = (settings.lobbyDisconnectTimeout || 5) === sec;
-                    return (
-                      <TouchableOpacity
-                        key={sec}
-                        onPress={() => {
-                          sounds.playClick();
-                          if (player?.id) {
-                            updateSettings(normalizedCode, player.id, { lobbyDisconnectTimeout: sec });
-                          }
-                        }}
-                        style={[
-                          styles.segmentedBtn,
-                          isSelected ? styles.segmentedBtnSelectedRose : styles.segmentedBtnUnselected,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.segmentedBtnText,
-                            isSelected && styles.segmentedBtnTextRose,
-                          ]}
-                        >
-                          {sec}s
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {[3, 5, 10, 15, 30].map((sec) => (
+                    <AnimatedSegmentButton
+                      key={sec}
+                      sec={sec}
+                      label={`${sec}s`}
+                      isSelected={(settings.lobbyDisconnectTimeout || 5) === sec}
+                      activeColor="#fb7185"
+                      onSelect={() => {
+                        sounds.playClick();
+                        if (player?.id) updateSettings(normalizedCode, player.id, { lobbyDisconnectTimeout: sec });
+                      }}
+                    />
+                  ))}
                 </View>
               </View>
             </View>
           ) : (
-            /* Non-Host Read-Only Summary */
             <View style={styles.readOnlySummaryBox}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Imposters</Text>
                 <Text style={styles.summaryValue}>
-                  {settings.impostersCount || 1} {settings.impostersCount === 1 ? 'Imposter' : 'Imposters'}
+                  {settings.impostersCount || 1}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Turn Clue Timer</Text>
-                <Text style={styles.summaryValue}>{settings.turnDurationSeconds || 30} seconds</Text>
+                <Text style={styles.summaryValue}>{settings.turnDurationSeconds || 30}s</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Voting Timer</Text>
-                <Text style={styles.summaryValue}>{settings.votingDurationSeconds || 45} seconds</Text>
+                <Text style={styles.summaryValue}>{settings.votingDurationSeconds || 45}s</Text>
               </View>
-              <View style={styles.summaryRow}>
+              <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
                 <Text style={styles.summaryLabel}>Disconnect Timeout</Text>
-                <Text style={styles.summaryValue}>{settings.lobbyDisconnectTimeout || 5} seconds</Text>
+                <Text style={styles.summaryValue}>{settings.lobbyDisconnectTimeout || 5}s</Text>
               </View>
             </View>
           )}
         </Card>
       </ScrollView>
 
-      {/* Multi-Category Picker Modal */}
+      {/* Modals remain exactly the same functionally */}
       <CategorySelectorModal
         visible={showCategorySelector}
         selectedSlugs={sharedCategorySlugs}
@@ -512,7 +545,6 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
         onClose={() => setShowCategorySelector(false)}
       />
 
-      {/* Kick Player Modal */}
       {playerToKick && (
         <KickConfirmModal
           player={playerToKick}
@@ -521,7 +553,6 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
         />
       )}
 
-      {/* Host Approval Modal for Kicked Player Rejoin Request */}
       {isHost && pendingRejoinRequest && (
         <RejoinApprovalModal
           request={pendingRejoinRequest}
@@ -554,109 +585,124 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.dark[950],
+    backgroundColor: '#030509', // Deeper, more premium dark
   },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingTop: SPACING.xl + 10, // Account for notch
+    paddingBottom: SPACING.md,
+    backgroundColor: 'rgba(5, 7, 12, 0.85)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(30, 41, 59, 0.7)',
-    backgroundColor: 'rgba(7, 9, 14, 0.95)',
+    borderBottomColor: COLORS.slate[800],
+    zIndex: 10,
   },
   topBarLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   leaveBtn: {
-    padding: SPACING.sm,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.dark[900],
+    padding: 10,
+    borderRadius: RADIUS.round,
+    backgroundColor: COLORS.dark[800],
     borderWidth: 1,
-    borderColor: COLORS.slate[800],
+    borderColor: COLORS.slate[700],
   },
   codeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.dark[900],
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
     borderWidth: 1,
-    borderColor: COLORS.slate[800],
-    borderRadius: RADIUS.lg,
+    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderRadius: RADIUS.round,
     paddingHorizontal: SPACING.md,
     paddingVertical: 6,
     gap: SPACING.sm,
   },
-  codeLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: COLORS.slate[400],
-  },
   codeText: {
     fontFamily: 'monospace',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
-    color: COLORS.civilian.default,
+    color: COLORS.white,
     letterSpacing: 2,
   },
-  copyBtn: {
-    padding: 5,
-    borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.dark[800],
+  copyBtnInner: {
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     padding: SPACING.md,
-    paddingBottom: 40,
-    gap: SPACING.md,
+    paddingBottom: 60,
+    gap: SPACING.lg,
   },
   errorBox: {
-    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    backgroundColor: 'rgba(244, 63, 94, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(244, 63, 94, 0.35)',
+    borderColor: 'rgba(244, 63, 94, 0.4)',
     borderRadius: RADIUS.md,
     padding: SPACING.md,
   },
   errorText: {
     color: COLORS.imposter.default,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
   },
   sectionCard: {
     width: '100%',
+    backgroundColor: COLORS.dark[900],
+    borderColor: COLORS.slate[800],
+    borderWidth: 1,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   rowAlign: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
   },
+  iconContainerBlue: {
+    padding: 6,
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderRadius: RADIUS.sm,
+  },
+  iconContainerRed: {
+    padding: 6,
+    backgroundColor: 'rgba(244, 63, 94, 0.15)',
+    borderRadius: RADIUS.sm,
+  },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
     color: COLORS.white,
+    letterSpacing: 0.5,
   },
   playerCountTag: {
     backgroundColor: COLORS.dark[800],
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: RADIUS.round,
+    borderWidth: 1,
+    borderColor: COLORS.slate[700],
   },
   playerCountText: {
-    fontSize: 10,
-    color: COLORS.slate[400],
-    fontWeight: '600',
+    fontSize: 11,
+    color: COLORS.slate[300],
+    fontWeight: '700',
   },
   playerList: {
     gap: SPACING.sm,
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.xl,
   },
   playerItem: {
     flexDirection: 'row',
@@ -664,19 +710,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: SPACING.md,
     borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.dark[800],
     borderWidth: 1,
-  },
-  playerItemOther: {
-    backgroundColor: 'rgba(22, 30, 46, 0.6)',
-    borderColor: COLORS.slate[800],
+    borderColor: 'transparent',
   },
   playerItemSelf: {
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
-    borderColor: 'rgba(6, 182, 212, 0.35)',
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+    borderColor: 'rgba(6, 182, 212, 0.3)',
   },
   playerItemDisconnected: {
-    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-    borderColor: 'rgba(244, 63, 94, 0.35)',
+    backgroundColor: 'rgba(244, 63, 94, 0.05)',
+    borderColor: 'rgba(244, 63, 94, 0.2)',
+    opacity: 0.8,
   },
   playerItemLeft: {
     flexDirection: 'row',
@@ -686,6 +731,7 @@ const styles = StyleSheet.create({
   },
   playerNameColumn: {
     flex: 1,
+    justifyContent: 'center',
   },
   nameRow: {
     flexDirection: 'row',
@@ -693,51 +739,57 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   playerName: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: COLORS.white,
   },
+  playerNameDimmed: {
+    color: COLORS.slate[400],
+  },
   youBadge: {
-    backgroundColor: 'rgba(6, 182, 212, 0.2)',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    backgroundColor: COLORS.civilian.default,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 4,
   },
   youBadgeText: {
     fontSize: 9,
-    fontWeight: '800',
-    color: COLORS.civilian.default,
+    fontWeight: '900',
+    color: COLORS.dark[950],
   },
-  playerStatusSub: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  hostStatus: {
-    color: '#fbbf24',
-    fontWeight: '700',
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
   },
   reconnectingStatus: {
+    fontSize: 11,
     color: COLORS.imposter.default,
     fontWeight: '700',
   },
   readyStatus: {
-    color: COLORS.accent.emerald,
+    fontSize: 11,
+    color: COLORS.slate[400],
     fontWeight: '600',
+    marginTop: 2,
   },
   kickBtn: {
-    padding: 6,
-    borderRadius: RADIUS.sm,
-    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+    padding: 8,
+    borderRadius: RADIUS.round,
+    backgroundColor: COLORS.dark[900],
+    borderWidth: 1,
+    borderColor: COLORS.slate[700],
   },
   startActionFooter: {
     borderTopWidth: 1,
     borderTopColor: COLORS.slate[800],
-    paddingTop: SPACING.md,
-    gap: SPACING.sm,
+    paddingTop: SPACING.lg,
+    gap: SPACING.md,
   },
   statusHelperText: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     textAlign: 'center',
   },
   warnAmber: {
@@ -751,41 +803,81 @@ const styles = StyleSheet.create({
   },
   startBtn: {
     width: '100%',
+    shadowColor: COLORS.civilian.default,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
   waitingForHostBox: {
+    flexDirection: 'row',
     backgroundColor: COLORS.dark[800],
     borderRadius: RADIUS.lg,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.slate[700],
+  },
+  waitingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fbbf24',
   },
   waitingForHostText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
-    color: COLORS.slate[400],
+    color: COLORS.slate[300],
   },
   categoryCardInner: {
-    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+    gap: SPACING.md,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  categoryCount: {
+    color: COLORS.slate[500],
+    fontSize: 16,
+  },
+  editCategoriesBtn: {
+    backgroundColor: COLORS.dark[800],
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.round,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.25)',
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
+    borderColor: COLORS.slate[700],
+  },
+  editCategoriesText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  categoryPillContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: SPACING.sm,
   },
-  categoryCardTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#38bdf8',
-    textTransform: 'uppercase',
+  categoryPill: {
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.round,
   },
-  categoryCardNames: {
-    fontSize: 12,
-    color: COLORS.slate[300],
-    fontWeight: '600',
+  categoryPillText: {
+    color: '#38bdf8',
+    fontSize: 13,
+    fontWeight: '700',
   },
   hostSettingsTag: {
     backgroundColor: 'rgba(244, 63, 94, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: RADIUS.round,
   },
   hostSettingsTagText: {
@@ -795,9 +887,11 @@ const styles = StyleSheet.create({
   },
   readOnlyTag: {
     backgroundColor: COLORS.dark[800],
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: RADIUS.round,
+    borderWidth: 1,
+    borderColor: COLORS.slate[700],
   },
   readOnlyTagText: {
     fontSize: 10,
@@ -805,72 +899,63 @@ const styles = StyleSheet.create({
     color: COLORS.slate[400],
   },
   hostControlsList: {
-    gap: SPACING.md,
+    gap: SPACING.lg,
   },
   settingBlock: {
-    gap: SPACING.xs,
+    gap: SPACING.sm,
   },
   settingLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
     color: COLORS.slate[400],
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   segmentedRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   segmentedBtn: {
-    flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: RADIUS.md,
     alignItems: 'center',
     borderWidth: 1,
   },
   segmentedBtnUnselected: {
-    backgroundColor: COLORS.dark[950],
-    borderColor: COLORS.slate[800],
+    backgroundColor: COLORS.dark[800],
+    borderColor: COLORS.slate[700],
   },
-  segmentedBtnSelectedRose: {
-    backgroundColor: 'rgba(244, 63, 94, 0.15)',
-    borderColor: COLORS.imposter.default,
-  },
-  segmentedBtnSelectedCyan: {
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
-    borderColor: COLORS.civilian.default,
+  segmentedBtnSelected: {
+    // Dynamic styles applied inline based on activeColor
   },
   segmentedBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: COLORS.slate[400],
   },
-  segmentedBtnTextRose: {
-    color: '#fb7185',
-  },
-  segmentedBtnTextCyan: {
-    color: '#38bdf8',
-  },
   readOnlySummaryBox: {
-    backgroundColor: COLORS.dark[950],
+    backgroundColor: COLORS.dark[800],
     borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.slate[700],
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.slate[800],
+    borderBottomColor: COLORS.slate[700],
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: 14,
     color: COLORS.slate[400],
+    fontWeight: '600',
   },
   summaryValue: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: COLORS.white,
   },
 });
-

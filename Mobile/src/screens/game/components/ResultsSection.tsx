@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-import { Skull, Clock } from 'lucide-react-native';
+import { Skull, Clock, Vote, FastForward } from 'lucide-react-native';
 import { Card } from '../../../components/common/Card';
+import { PlayerAvatar } from '../../../components/PlayerAvatar';
 import { ResultsSectionProps } from '../types/gameComponentTypes';
 import { RoleandResultStyles } from '../styles/RoleandResultStyles';
 import { serverTimeSync } from '../../../utils/serverTimeSync';
@@ -50,6 +51,33 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
   const imposterRemainText =
     remainingCount === 1 ? '1 imposter remains' : `${remainingCount} imposters remain`;
 
+  // Aggregate votes: from eliminationResult.voteCounts or fallback to roomState.votes
+  const voteCounts: Record<string, number> = {
+    ...(eliminationResult?.voteCounts || {}),
+  };
+  let skipVotes =
+    typeof eliminationResult?.skipVotes === 'number' ? eliminationResult.skipVotes : 0;
+
+  if (Object.keys(voteCounts).length === 0 && skipVotes === 0 && roomState?.votes) {
+    for (const targetId of Object.values(roomState.votes)) {
+      if (targetId === 'SKIP') {
+        skipVotes++;
+      } else if (targetId) {
+        voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+      }
+    }
+  }
+
+  // Filter only who got votes >= 1, sorted descending by count
+  const playerVoteEntries = Object.entries(voteCounts)
+    .filter(([_, count]) => typeof count === 'number' && count >= 1)
+    .sort((a, b) => b[1] - a[1]);
+
+  const hasSkipVotes = skipVotes >= 1;
+  const hasVotes = playerVoteEntries.length > 0 || hasSkipVotes;
+
+  const playersMap = new Map((roomState?.players || []).map((p) => [p.id, p]));
+
   return (
     <View style={RoleandResultStyles.resultsWrapper}>
       <Card style={RoleandResultStyles.centerPhaseCard}>
@@ -78,6 +106,82 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
                 ? 'The majority voted to skip!\nMoving to the next round.'
                 : 'The vote was tied!\nNo player was eliminated this round.'}
             </Text>
+          </View>
+        )}
+
+        {/* Vote tally breakdown (only showing targets with votes >= 1) */}
+        {hasVotes && (
+          <View style={RoleandResultStyles.votesTallyContainer}>
+            <View style={RoleandResultStyles.votesTallyHeader}>
+              <Vote size={14} color="#94A3B8" />
+              <Text style={RoleandResultStyles.votesTallyTitle}>Votes Cast</Text>
+            </View>
+
+            <View style={RoleandResultStyles.votesTallyList}>
+              {/* Skip Votes */}
+              {hasSkipVotes && (
+                <View style={RoleandResultStyles.voteItemRow}>
+                  <View style={RoleandResultStyles.voteItemLeft}>
+                    <View style={RoleandResultStyles.skipVoteIconCircle}>
+                      <FastForward size={14} color="#F59E0B" />
+                    </View>
+                    <Text style={RoleandResultStyles.voteItemName}>Skip Vote</Text>
+                  </View>
+                  <View style={RoleandResultStyles.voteCountBadge}>
+                    <Text style={RoleandResultStyles.voteCountBadgeText}>
+                      {skipVotes} {skipVotes === 1 ? 'vote' : 'votes'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Player Votes (votes >= 1) */}
+              {playerVoteEntries.map(([playerId, count]) => {
+                const player = playersMap.get(playerId);
+                const username =
+                  player?.username ||
+                  (eliminationResult.eliminatedPlayer?.id === playerId
+                    ? eliminationResult.eliminatedPlayer.username
+                    : 'Unknown Player');
+                const isEliminated = eliminationResult.eliminatedPlayer?.id === playerId;
+
+                return (
+                  <View key={playerId} style={RoleandResultStyles.voteItemRow}>
+                    <View style={RoleandResultStyles.voteItemLeft}>
+                      <PlayerAvatar
+                        player={player}
+                        username={username}
+                        size="sm"
+                        showStatus={false}
+                      />
+                      <Text style={RoleandResultStyles.voteItemName} numberOfLines={1}>
+                        {username}
+                      </Text>
+                      {isEliminated && (
+                        <View style={RoleandResultStyles.eliminatedTagSmall}>
+                          <Text style={RoleandResultStyles.eliminatedTagSmallText}>ELIMINATED</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View
+                      style={[
+                        RoleandResultStyles.voteCountBadge,
+                        isEliminated && RoleandResultStyles.voteCountBadgeEliminated,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          RoleandResultStyles.voteCountBadgeText,
+                          isEliminated && RoleandResultStyles.voteCountBadgeTextEliminated,
+                        ]}
+                      >
+                        {count} {count === 1 ? 'vote' : 'votes'}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           </View>
         )}
 
