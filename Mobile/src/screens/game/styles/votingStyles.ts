@@ -20,11 +20,14 @@ export const votingStyles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 4,
   },
+
+  // --- NEW PROGRESS UI ---
   progressContainer: {
-    backgroundColor: COLORS.dark[950],
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    gap: SPACING.xs,
+    backgroundColor: '#1A1A1A', // Matches the new player card background
+    borderRadius: 24,           // Sleek, pill-like rounding
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    gap: 12,
   },
   progressHeaderRow: {
     flexDirection: 'row',
@@ -32,50 +35,73 @@ export const votingStyles = StyleSheet.create({
     alignItems: 'center',
   },
   progressLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.slate[300],
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   progressCount: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
-    color: COLORS.accent.emerald,
+    color: '#34D399', // Bright emerald green
+  },
+  progressCountMuted: {
+    color: '#6B7280', // Slate 500
+    fontWeight: '600',
   },
   progressBarTrack: {
-    height: 6,
-    backgroundColor: COLORS.slate[800],
-    borderRadius: RADIUS.round,
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 8,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: COLORS.accent.emerald,
-    borderRadius: RADIUS.round,
+    backgroundColor: '#34D399', // Bright emerald green
+    borderRadius: 8,
   },
   notVotedSection: {
-    marginTop: 6,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    paddingTop: 12,
   },
   notVotedLabel: {
-    fontSize: 10,
-    color: COLORS.slate[400],
-    marginBottom: 4,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    marginBottom: 8,
+    textTransform: 'uppercase',
   },
-  notVotedChipsRow: {
+  notVotedChipsScrollContent: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 16, // Breathing room at the end of the scroll
   },
   notVotedChip: {
-    backgroundColor: COLORS.dark[800],
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: RADIUS.round,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16, // Pill shape
+    gap: 6,
+  },
+  pendingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F59E0B', // Amber color indicating 'waiting'
   },
   notVotedChipText: {
-    fontSize: 10,
-    color: COLORS.slate[300],
+    fontSize: 11,
+    color: '#D1D5DB', // Light slate
     fontWeight: '600',
   },
+
+  // --- EXISTING VOTING GRID/TARGET STYLES ---
   votingGrid: {
     gap: SPACING.sm,
   },
@@ -90,7 +116,7 @@ export const votingStyles = StyleSheet.create({
     gap: 14,
   },
   voteTargetSelected: {
-    backgroundColor: '#007BFF',
+    backgroundColor: '#007BFF', // Matches active player blue
     borderWidth: 0,
   },
   voteTargetSelf: {
@@ -156,10 +182,10 @@ export const votingStyles = StyleSheet.create({
     flex: 1,
     borderWidth: 0,
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    borderRadius: RADIUS.xl,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   skipVoteDisabled: {
     opacity: 0.4,
@@ -167,7 +193,7 @@ export const votingStyles = StyleSheet.create({
   skipVoteText: {
     color: COLORS.accent.amber,
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 14,
   },
   spectatorVoteList: {
     gap: SPACING.sm,
@@ -215,4 +241,3 @@ export const votingStyles = StyleSheet.create({
     fontStyle: 'italic',
   },
 });
-

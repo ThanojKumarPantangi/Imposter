@@ -20,9 +20,9 @@ export interface GameLoadingProps {
   isLeaving?: boolean;
 }
 
-export interface RoleRevealSectionProps {}
+export interface RoleRevealSectionProps { }
 
-export interface EliminatedBannerProps {}
+export interface EliminatedBannerProps { }
 
 export interface DisconnectCountdownBadgeProps {
   deadline?: number | null;
@@ -38,11 +38,10 @@ export interface CluePlayerRowProps {
   clueEntry?: ClueEntry;
   isSpeaking: boolean;
   isGameOver: boolean;
-}
-
-export interface PreviousRoundsProps {
-  clueHistory: ClueEntry[];
-  currentRound: number;
+  clueInput?: string;
+  onClueInputChange?: (text: string) => void;
+  onClueSubmit?: () => void;
+  isImposter?: boolean;
 }
 
 export interface ClueRoundSectionProps {

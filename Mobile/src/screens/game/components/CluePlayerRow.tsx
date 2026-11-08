@@ -1,5 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  Animated,
+  StyleSheet,
+  TextInput,
+  ScrollView,
+} from 'react-native';
 import { PlayerAvatar } from '../../../components/PlayerAvatar';
 import { clueStyles } from '../styles/clueStyles';
 import { CluePlayerRowProps } from '../types/gameComponentTypes';
@@ -14,8 +21,16 @@ const TypingIndicator = () => {
       return Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.timing(anim, { toValue: 1, duration: 350, useNativeDriver: true }),
-          Animated.timing(anim, { toValue: 0.3, duration: 350, useNativeDriver: true }),
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 350,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0.3,
+            duration: 350,
+            useNativeDriver: true,
+          }),
         ])
       );
     };
@@ -59,22 +74,44 @@ const typingStyles = StyleSheet.create({
   },
 });
 
-export const CluePlayerRow: React.FC<CluePlayerRowProps> = ({
+export const CluePlayerRow: React.FC<CluePlayerRowProps & { pastClues?: any[] }> = ({
   player,
   isCurrentPlayer,
   activeTurnPlayerId,
   clueEntry,
+  pastClues = [],
   isSpeaking,
+  clueInput = '',
+  onClueInputChange,
+  onClueSubmit,
+  isImposter = false,
 }) => {
   const isDisconnected =
     (!player.isConnected || player.connectionStatus === 'DISCONNECTED') &&
     player.isAlive &&
     !player.permanentlyDeparted;
+
   const isActive = activeTurnPlayerId === player.id && !isDisconnected;
+
   const isEliminated = !player.isAlive || player.permanentlyDeparted;
 
   const hasEnteredWord = Boolean(clueEntry?.clue && clueEntry.clue.trim());
-  const hasSkipped = !hasEnteredWord && Boolean(clueEntry?.skipped || clueEntry?.status === 'SKIPPED');
+
+  const hasSkipped =
+    !hasEnteredWord &&
+    Boolean(clueEntry?.skipped || clueEntry?.status === 'SKIPPED');
+
+  const isMyTurnActive =
+    isActive &&
+    isCurrentPlayer &&
+    !hasEnteredWord &&
+    !hasSkipped &&
+    !isEliminated;
+
+  const handleClueSubmit = () => {
+    if (!clueInput.trim()) return;
+    onClueSubmit?.();
+  };
 
   return (
     <View
@@ -110,7 +147,6 @@ export const CluePlayerRow: React.FC<CluePlayerRowProps> = ({
           ) : null}
         </Text>
 
-        {/* Word Display: Submitted Word / Skipped / Turn Typing Indicator */}
         {hasEnteredWord ? (
           <Text
             style={[
@@ -131,11 +167,62 @@ export const CluePlayerRow: React.FC<CluePlayerRowProps> = ({
           >
             Skipped
           </Text>
+        ) : isMyTurnActive ? (
+          <View style={clueStyles.inlineInputContainer}>
+            <View style={clueStyles.inlineInputRow}>
+              <TextInput
+                value={clueInput}
+                onChangeText={onClueInputChange}
+                placeholder={isImposter ? 'Clue or word guess...' : 'Enter your clue...'}
+                maxLength={40}
+                autoFocus
+                returnKeyType="send"
+                submitBehavior="blurAndSubmit"
+                onSubmitEditing={handleClueSubmit}
+                style={clueStyles.inlineTextInput}
+              />
+            </View>
+          </View>
         ) : isActive ? (
           <TypingIndicator />
         ) : null}
+
+        {/* Previous Rounds Clues Display: Now Horizontal Scrollable */}
+        {pastClues && pastClues.length > 0 && (
+          <View style={clueStyles.pastCluesWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={clueStyles.pastCluesScrollContent}
+            >
+              {pastClues.map((pastClue, index) => {
+                const clueText =
+                  pastClue.skipped || pastClue.status === 'SKIPPED'
+                    ? 'Skipped'
+                    : pastClue.clue;
+                const isLast = index === pastClues.length - 1;
+
+                return (
+                  <View key={`past-${pastClue.round}`} style={clueStyles.pastClueItem}>
+                    <Text style={clueStyles.pastClueRoundText}>R{pastClue.round}</Text>
+                    <Text
+                      style={[
+                        clueStyles.pastClueWordText,
+                        (pastClue.skipped || pastClue.status === 'SKIPPED') &&
+                        clueStyles.pastClueWordSkipped,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {clueText}
+                    </Text>
+                    {!isLast && <View style={clueStyles.pastClueSeparator} />}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
       </View>
     </View>
   );
 };
-

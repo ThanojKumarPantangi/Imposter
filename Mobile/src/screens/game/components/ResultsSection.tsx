@@ -1,49 +1,46 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Skull } from 'lucide-react-native';
 import { Card } from '../../../components/common/Card';
-import { COLORS } from '../../../theme/colors';
-import { resultsStyles } from '../styles/resultsStyles';
-import { gameStyles } from '../styles/gameStyles';
 import { ResultsSectionProps } from '../types/gameComponentTypes';
+import { RoleandResultStyles } from '../styles/RoleandResultStyles';
 
 export const ResultsSection: React.FC<ResultsSectionProps> = ({
   eliminationResult,
 }) => {
   return (
-    <Card style={gameStyles.centerPhaseCard}>
-      <View style={resultsStyles.skullCircle}>
-        <Skull size={32} color={COLORS.imposter.default} />
+    <Card style={RoleandResultStyles.centerPhaseCard}>
+      <View style={RoleandResultStyles.skullCircle}>
+        <Skull size={32} color="#F43F5E" />
       </View>
 
-      <Text style={gameStyles.phaseMainTitle}>Round Elimination</Text>
+      <Text style={RoleandResultStyles.phaseMainTitle}>Round Elimination</Text>
 
       {eliminationResult.eliminatedPlayer ? (
-        <View style={resultsStyles.eliminationBox}>
-          <Text style={resultsStyles.eliminatedTag}>Eliminated by Vote</Text>
-          <Text style={resultsStyles.eliminatedPlayerName}>
+        <View style={RoleandResultStyles.eliminationBox}>
+          <Text style={RoleandResultStyles.eliminatedTag}>ELIMINATED BY VOTE</Text>
+          <Text style={RoleandResultStyles.eliminatedPlayerName}>
             {eliminationResult.eliminatedPlayer.username}
           </Text>
-          <View style={resultsStyles.eliminatedRoleBadge}>
-            <Text style={resultsStyles.eliminatedRoleText}>
+          <View style={RoleandResultStyles.eliminatedRoleBadge}>
+            <Text style={RoleandResultStyles.eliminatedRoleText}>
               Identity: {eliminationResult.eliminatedPlayer.role}
             </Text>
           </View>
         </View>
       ) : (
-        <View style={resultsStyles.tieBox}>
-          <Text style={resultsStyles.tieText}>
+        <View style={RoleandResultStyles.tieBox}>
+          <Text style={RoleandResultStyles.tieText}>
             {eliminationResult.wasSkipped
-              ? 'The majority voted to skip! Moving to the next round.'
-              : 'The vote was tied! No player was eliminated this round.'}
+              ? 'The majority voted to skip!\nMoving to the next round.'
+              : 'The vote was tied!\nNo player was eliminated this round.'}
           </Text>
         </View>
       )}
 
-      <Text style={gameStyles.phaseSubTitle}>
+      <Text style={RoleandResultStyles.phaseSubTitle}>
         Checking victory conditions and preparing for the next round...
       </Text>
     </Card>
   );
 };
-

@@ -87,10 +87,10 @@ export const clueStyles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 0,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 18,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+    alignItems: 'flex-start',
+    gap: 16,
   },
   playerClueRowActive: {
     backgroundColor: '#007BFF',
@@ -108,10 +108,12 @@ export const clueStyles = StyleSheet.create({
   },
   playerAvatarWrapper: {
     flexShrink: 0,
+    paddingTop: 2,
   },
   playerInfoCol: {
     flex: 1,
     justifyContent: 'center',
+    overflow: 'hidden', // Ensures the ScrollView doesn't break out of the column
   },
   clueRowTop: {
     flexDirection: 'row',
@@ -166,6 +168,25 @@ export const clueStyles = StyleSheet.create({
   },
   skippedWordTextInactive: {
     color: '#f59e0b',
+  },
+  inlineInputContainer: {
+    marginTop: 6,
+    width: '100%',
+  },
+  inlineInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inlineTextInput: {
+    flex: 1,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: '#FFFFFF',
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
+    backgroundColor: 'transparent',
   },
   statusColRight: {
     alignItems: 'flex-end',
@@ -222,40 +243,43 @@ export const clueStyles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.slate[600],
   },
-  prevRoundsBox: {
-    marginTop: SPACING.md,
-    paddingTop: SPACING.md,
+
+  // HORIZONTAL SCROLL STYLES FOR PAST CLUES
+  pastCluesWrapper: {
+    marginTop: 8,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: COLORS.slate[800],
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    width: '100%',
   },
-  prevRoundsTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: COLORS.slate[400],
-    textTransform: 'uppercase',
-    marginBottom: SPACING.xs,
-  },
-  prevClueItem: {
+  pastCluesScrollContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 3,
+    alignItems: 'center',
+    paddingRight: 16, // Adds breathing room at the very end of the scroll
   },
-  prevClueText: {
+  pastClueItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  pastClueRoundText: {
     fontSize: 11,
-    color: COLORS.slate[400],
-  },
-  boldWhite: {
-    color: COLORS.white,
     fontWeight: '700',
+    color: '#34D399',
+    marginRight: 4,
   },
-  skippedAmber: {
-    color: COLORS.accent.amber,
+  pastClueWordText: {
+    fontSize: 15,
+    color: '#F8FAFC',
+  },
+  pastClueWordSkipped: {
     fontStyle: 'italic',
+    color: '#f59e0b',
   },
-  prevRoundNum: {
-    fontSize: 9,
-    color: COLORS.slate[500],
-    fontWeight: '700',
+  pastClueSeparator: {
+    width: 1,
+    height: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 8,
   },
 });
-

@@ -1,7 +1,6 @@
 import React from 'react';
-import { View, Text } from 'react-native';
-import { Trophy, RotateCcw, Home as HomeIcon } from 'lucide-react-native';
-import { Card } from '../../../components/common/Card';
+import { View, Text, Image } from 'react-native';
+import { AlertTriangle, ShieldCheck, RotateCcw, Home as HomeIcon } from 'lucide-react-native';
 import { GradientButton } from '../../../components/common/GradientButton';
 import { Badge } from '../../../components/common/Badge';
 import { COLORS } from '../../../theme/colors';
@@ -14,74 +13,83 @@ export const FinishedSection: React.FC<FinishedSectionProps> = ({
   onLeaveGame,
   onReturnToLobby,
 }) => {
+  const isImposterWin = winnerResult.winnerRole === 'IMPOSTER';
+
   return (
-    <Card style={gameStyles.centerPhaseCard}>
-      <View style={resultsStyles.trophyCircle}>
-        <Trophy size={40} color="#f59e0b" />
+    <View style={resultsStyles.finishedContainer}>
+      {/* Header Animation / Icon Area */}
+      <View style={resultsStyles.winHeader}>
+        {isImposterWin ? (
+          <AlertTriangle size={64} color="#F43F5E" fill="#F43F5E" />
+        ) : (
+          <ShieldCheck size={64} color="#38BDF8" fill="rgba(56, 189, 248, 0.2)" />
+        )}
+
+        <Text style={[
+          resultsStyles.winHeadline,
+          isImposterWin ? resultsStyles.textImposter : resultsStyles.textCivilian
+        ]}>
+          {winnerResult.winCondition === 'IMPOSTER_GUESSED_WORD'
+            ? 'An imposter guessed the\nword!'
+            : winnerResult.winCondition === 'ALL_IMPOSTERS_ELIMINATED'
+              ? 'All imposters\neliminated!'
+              : winnerResult.winCondition === 'IMPOSTERS_PARITY'
+                ? 'Imposters took over!'
+                : isImposterWin ? 'Imposters win!' : 'Civilians win!'}
+        </Text>
       </View>
 
-      <Text style={resultsStyles.winnerHeadline}>
-        {winnerResult.winnerRole === 'IMPOSTER' ? (
-          <Text style={resultsStyles.imposterWinText}>IMPOSTERS WIN!</Text>
+      {/* Character Illustration / Animation Area */}
+      <View style={resultsStyles.illustrationContainer}>
+        {/* Replace this View with your actual Lottie Animation or Image component */}
+        {isImposterWin ? (
+          <View style={resultsStyles.placeholderGraphic}>
+            {/* Example of where to put your Imposter image */}
+            <Image source={require('../../../../assets/Civilian-win.png')} style={resultsStyles.characterImage} />
+          </View>
         ) : (
-          <Text style={resultsStyles.civilianWinText}>CIVILIANS WIN!</Text>
+          <View style={resultsStyles.placeholderGraphic}>
+            {/* Example of where to put your Civilian image */}
+            <Image source={require('../../../../assets/Imposter-win.png')} style={resultsStyles.characterImage} />
+          </View>
         )}
-      </Text>
+      </View>
 
-      <Text style={resultsStyles.winConditionDesc}>
-        {winnerResult.winCondition === 'IMPOSTER_GUESSED_WORD'
-          ? '💥 An Imposter correctly entered the exact secret word!'
-          : winnerResult.winCondition === 'ALL_IMPOSTERS_ELIMINATED'
-            ? '🎉 All Imposters were successfully identified and eliminated!'
-            : winnerResult.winCondition === 'IMPOSTERS_PARITY'
-              ? '🎭 Imposters have reached equal numbers with the Civilians!'
-              : 'Match completed!'}
-      </Text>
+      {/* Bottom Card Area (Secret Word & Players) */}
+      <View style={resultsStyles.bottomInfoCard}>
+        <Text style={resultsStyles.secretWordLabel}>SECRET WORD:</Text>
+        <Text style={resultsStyles.secretWordValue}>{winnerResult.secretWord}</Text>
 
-      {/* Secret Reveal Box */}
-      <View style={resultsStyles.secretRevealBox}>
-        <View style={resultsStyles.secretRevealRow}>
-          <View style={resultsStyles.secretRevealCol}>
-            <Text style={resultsStyles.revealLabel}>Secret Word</Text>
-            <Text style={resultsStyles.revealSecretWord}>{winnerResult.secretWord}</Text>
-          </View>
-          <View style={resultsStyles.secretRevealCol}>
-            <Text style={resultsStyles.revealLabel}>Imposter Hint</Text>
-            <Text style={resultsStyles.revealHint}>{winnerResult.hint}</Text>
-          </View>
-        </View>
-
+        {/* Showing Imposters */}
         <View style={resultsStyles.impostersListSection}>
-          <Text style={resultsStyles.revealLabel}>Imposters in this Match</Text>
           <View style={resultsStyles.imposterChipsRow}>
             {winnerResult.imposters?.map((imp) => (
               <Badge key={imp.id} label={imp.username} variant="imposter" />
             ))}
           </View>
         </View>
-      </View>
 
-      {/* Actions */}
-      <View style={resultsStyles.winnerActionsRow}>
-        <GradientButton
-          title="Back to Home"
-          onPress={onLeaveGame}
-          variant="secondary"
-          icon={<HomeIcon size={16} color={COLORS.slate[300]} />}
-          iconPosition="left"
-          style={resultsStyles.halfBtn}
-        />
+        {/* Actions */}
+        <View style={resultsStyles.winnerActionsRow}>
+          <GradientButton
+            title="Home"
+            onPress={onLeaveGame}
+            variant="secondary"
+            icon={<HomeIcon size={16} color={COLORS.slate[300]} />}
+            iconPosition="left"
+            style={resultsStyles.halfBtn}
+          />
 
-        <GradientButton
-          title="Return to Lobby"
-          onPress={onReturnToLobby}
-          variant="primary"
-          icon={<RotateCcw size={16} color={COLORS.white} />}
-          iconPosition="left"
-          style={resultsStyles.halfBtn}
-        />
+          <GradientButton
+            title="Play Again"
+            onPress={onReturnToLobby}
+            variant="primary"
+            icon={<RotateCcw size={16} color={COLORS.white} />}
+            iconPosition="left"
+            style={resultsStyles.halfBtn}
+          />
+        </View>
       </View>
-    </Card>
+    </View>
   );
 };
-
