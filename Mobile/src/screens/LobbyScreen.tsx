@@ -308,9 +308,6 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
                             <Text style={styles.youBadgeText}>YOU</Text>
                           </View>
                         )}
-                        {p.isHost && (
-                          <Crown size={14} color="#fbbf24" style={{ marginLeft: 4 }} />
-                        )}
                       </View>
 
                       {isDisconnected ? (
