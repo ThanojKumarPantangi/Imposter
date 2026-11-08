@@ -13,12 +13,17 @@ interface VoiceControlsProps {
 export const VoiceControls: React.FC<VoiceControlsProps> = ({ compact = false }) => {
   const {
     micEnabled,
+    micLifecycleState,
     speakerEnabled,
     toggleMicrophone,
     toggleSpeaker,
   } = useVoiceChat();
 
+  const isMicBusy =
+    micLifecycleState === 'initializing' || micLifecycleState === 'requesting_permission';
+
   const handleToggleMic = () => {
+    if (isMicBusy) return;
     sounds.playClick();
     toggleMicrophone();
   };
@@ -28,16 +33,25 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ compact = false })
     toggleSpeaker();
   };
 
+  const getMicLabel = () => {
+    if (micLifecycleState === 'requesting_permission') return 'Prompting...';
+    if (micLifecycleState === 'initializing') return 'Connecting...';
+    if (micEnabled) return 'Mic ON';
+    return 'Mic OFF';
+  };
+
   return (
     <View style={styles.wrapper}>
       <View style={styles.controlsRow}>
         {/* Mic Button */}
         <TouchableOpacity
           onPress={handleToggleMic}
+          disabled={isMicBusy}
           activeOpacity={0.7}
           style={[
             styles.button,
             micEnabled ? styles.micActive : styles.buttonInactive,
+            isMicBusy && { opacity: 0.6 },
           ]}
         >
           {micEnabled ? (
@@ -47,7 +61,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ compact = false })
           )}
           {!compact && (
             <Text style={[styles.buttonText, micEnabled && styles.micTextActive]}>
-              {micEnabled ? 'Mic ON' : 'Mic OFF'}
+              {getMicLabel()}
             </Text>
           )}
         </TouchableOpacity>

@@ -635,7 +635,7 @@ class GameEngine {
 
     room.lastImposters = newImposterIds;
     room.status = 'ROLE_REVEAL';
-    room.roleRevealDeadline = Date.now() + 3000;
+    room.roleRevealDeadline = Date.now() + 5000;
     room.resultsDeadline = null;
     room.currentRound = 1;
     room.clueHistory = [];
@@ -1058,7 +1058,7 @@ class GameEngine {
       }
     }
 
-    const resultsDurationSeconds = 3;
+    const resultsDurationSeconds = 5;
     const resultsDeadline = Date.now() + (resultsDurationSeconds * 1000);
 
     const livingImposters = room.players.filter(p => p.isAlive && !p.permanentlyDeparted && p.role === 'IMPOSTER');

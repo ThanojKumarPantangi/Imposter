@@ -24,6 +24,7 @@ import {
   LogOut,
   Crown,
   WifiOff,
+  Pencil,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -33,6 +34,7 @@ import { CategorySelectorModal } from '../components/CategorySelectorModal';
 import { KickConfirmModal } from '../components/KickConfirmModal';
 import { DisconnectedBanner } from '../components/DisconnectedBanner';
 import { RejoinApprovalModal } from '../components/RejoinApprovalModal';
+import { EditUsernameModal } from '../components/EditUsernameModal';
 import { VoiceControls } from '../components/VoiceControls';
 import { Card } from '../components/common/Card';
 import { GradientButton } from '../components/common/GradientButton';
@@ -74,6 +76,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
 
   const [copied, setCopied] = useState<boolean>(false);
   const [showCategorySelector, setShowCategorySelector] = useState<boolean>(false);
+  const [showEditProfile, setShowEditProfile] = useState<boolean>(false);
   const [playerToKick, setPlayerToKick] = useState<Player | null>(null);
   const [startError, setStartError] = useState<string>('');
   const [isLeaving, setIsLeaving] = useState<boolean>(false);
@@ -304,9 +307,22 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
                           {p.username}
                         </Text>
                         {isSelf && (
-                          <View style={styles.youBadge}>
-                            <Text style={styles.youBadgeText}>YOU</Text>
-                          </View>
+                          <>
+                            <View style={styles.youBadge}>
+                              <Text style={styles.youBadgeText}>YOU</Text>
+                            </View>
+                            <TouchableOpacity
+                              onPress={() => {
+                                sounds.playClick();
+                                setShowEditProfile(true);
+                              }}
+                              style={styles.renameButton}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              activeOpacity={0.7}
+                            >
+                              <Pencil size={12} color={COLORS.slate[400]} />
+                            </TouchableOpacity>
+                          </>
                         )}
                       </View>
 
@@ -575,6 +591,11 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
           }}
         />
       )}
+
+      <EditUsernameModal
+        visible={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+      />
     </View>
   );
 };
@@ -753,6 +774,13 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     color: COLORS.dark[950],
+  },
+  renameButton: {
+    padding: 3,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusRow: {
     flexDirection: 'row',

@@ -14,8 +14,18 @@ import { permissionService, MicPermissionStatus } from '../services/audio/permis
 import { audioRouteService, AudioRouteType } from '../services/audio/audioRouteService';
 import { showError } from '../components/Toast';
 
+export type MicLifecycleState =
+  | 'permission_required'
+  | 'requesting_permission'
+  | 'permission_denied'
+  | 'initializing'
+  | 'enabled'
+  | 'disabled'
+  | 'error';
+
 export interface VoiceChatContextType {
   micEnabled: boolean;
+  micLifecycleState: MicLifecycleState;
   speakerEnabled: boolean;
   inVoiceRoom: boolean;
   voiceError: string | null;
@@ -62,6 +72,7 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { player } = useAuth();
 
   const [micEnabled, setMicEnabled] = useState<boolean>(false);
+  const [micLifecycleState, setMicLifecycleState] = useState<MicLifecycleState>('disabled');
   const [speakerEnabled, setSpeakerEnabled] = useState<boolean>(true);
   const [inVoiceRoom, setInVoiceRoom] = useState<boolean>(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -71,12 +82,13 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Synchronous refs to prevent race conditions and stale closure traps in WebRTC callbacks
   const micEnabledRef = useRef<boolean>(false);
+  const micLifecycleStateRef = useRef<MicLifecycleState>('disabled');
   const speakerEnabledRef = useRef<boolean>(true);
   const localStreamRef = useRef<any>(null);
   const peersRef = useRef<{ [peerSocketId: string]: { pc: any; playerId: string; makingOffer: boolean } }>({});
   const iceCandidateQueuesRef = useRef<{ [peerSocketId: string]: any[] }>({});
   const remoteTracksRef = useRef<{ [peerSocketId: string]: any }>({});
-  const isAcquiringMicRef = useRef<boolean>(false);
+  const acquiringPromiseRef = useRef<Promise<any> | null>(null);
   const appStateRef = useRef<AppStateStatus>((AppState.currentState as AppStateStatus) || 'active');
 
   // Lifecycle & Session Idempotency Refs
@@ -88,6 +100,10 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     micEnabledRef.current = micEnabled;
   }, [micEnabled]);
+
+  useEffect(() => {
+    micLifecycleStateRef.current = micLifecycleState;
+  }, [micLifecycleState]);
 
   useEffect(() => {
     speakerEnabledRef.current = speakerEnabled;
@@ -107,7 +123,6 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (status === 'never_ask_again') {
         const errorMsg = 'Microphone permission permanently disabled. Enable in Settings.';
         setVoiceError(errorMsg);
-        // Only show settings prompt once per 'never_ask_again' state, OR when user explicitly clicks Mic
         if (isUserAction || !permissionService.hasWarned('never_ask_again')) {
           permissionService.setWarned('never_ask_again', true);
           permissionService.promptSettingsRedirect();
@@ -134,6 +149,10 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           const val = savedMic === 'true';
           setMicEnabled(val);
           micEnabledRef.current = val;
+          if (val) {
+            setMicLifecycleState('initializing');
+            micLifecycleStateRef.current = 'initializing';
+          }
         }
         if (savedSpeaker !== null) {
           const val = savedSpeaker !== 'false';
@@ -178,58 +197,35 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
-  // Attach local audio track across all active RTCPeerConnections
-  const attachTrackToAllPeers = useCallback(async (audioTrack: any) => {
-    if (!audioTrack) return;
-    console.log(`[WEBRTC] Attaching local audio track (${audioTrack.id}) across all active peers...`);
-
-    for (const [peerSocketId, peer] of Object.entries(peersRef.current)) {
-      const { pc } = peer;
-      try {
-        const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
-        const transceiver = transceivers.find(
-          (t: any) => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio'
-        );
-
-        if (transceiver && transceiver.sender) {
-          if (transceiver.direction !== 'sendrecv') {
-            transceiver.direction = 'sendrecv';
-          }
-          await transceiver.sender.replaceTrack(audioTrack);
-          console.log(`[WEBRTC] Replaced audio track for peer ${peerSocketId}`);
-        } else {
-          const senders = pc.getSenders ? pc.getSenders() : [];
-          const sender = senders.find((s: any) => s.track?.kind === 'audio' || !s.track);
-          if (sender) {
-            await sender.replaceTrack(audioTrack);
-            console.log(`[WEBRTC] Replaced track on existing sender for peer ${peerSocketId}`);
-          } else if (localStreamRef.current) {
-            pc.addTrack(audioTrack, localStreamRef.current);
-            console.log(`[WEBRTC] Added new track to pc for peer ${peerSocketId}`);
-          }
-        }
-      } catch (err: any) {
-        console.warn(`[WEBRTC] Error attaching audio track to peer ${peerSocketId}:`, err.message);
-      }
-    }
-  }, []);
-
-  // Acquire local microphone stream via react-native-webrtc mediaDevices
+  // Acquire local microphone stream via react-native-webrtc mediaDevices (Idempotent Promise Mutex)
   const acquireLocalStream = useCallback(async (): Promise<any> => {
-    if (isAcquiringMicRef.current) return localStreamRef.current;
-    isAcquiringMicRef.current = true;
+    if (acquiringPromiseRef.current) {
+      return acquiringPromiseRef.current;
+    }
 
-    try {
-      // Check existing stream vitality
+    const acquireTask = async () => {
+      // 1. Check existing stream vitality
       const existingStream = localStreamRef.current;
       const existingTrack = existingStream?.getAudioTracks()[0];
       if (existingStream && existingTrack && existingTrack.readyState === 'live') {
-        existingTrack.enabled = micEnabledRef.current;
-        await attachTrackToAllPeers(existingTrack);
+        console.log(`[MIC] Existing local audio track live, reusing id=${existingTrack.id}`);
         return existingStream;
       }
 
-      console.log('[MIC] Requesting local media stream from react-native-webrtc mediaDevices...');
+      // 2. Clean up any stale or ended track
+      if (existingStream) {
+        try {
+          existingStream.getTracks().forEach((t: any) => {
+            t.enabled = false;
+            t.stop();
+          });
+        } catch {
+          // ignore
+        }
+        localStreamRef.current = null;
+      }
+
+      console.log('[MIC] Creating local audio stream: audio constraints applied');
       let stream: any;
       try {
         stream = (await mediaDevices.getUserMedia({
@@ -241,7 +237,7 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           video: false,
         })) as any;
       } catch (e: any) {
-        console.warn('[MIC] Audio constraints getUserMedia fallback to { audio: true }:', e.message);
+        console.warn('[MIC] Primary constraints failed, falling back to basic audio: true:', e.message);
         stream = (await mediaDevices.getUserMedia({
           audio: true,
           video: false,
@@ -251,19 +247,89 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       localStreamRef.current = stream;
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = micEnabledRef.current;
-        console.log(`[MIC] Local microphone track acquired: id=${audioTrack.id}, enabled=${audioTrack.enabled}`);
-        await attachTrackToAllPeers(audioTrack);
+        console.log(`[MIC] Audio track created: id=${audioTrack.id}, readyState=${audioTrack.readyState}`);
       }
 
       return stream;
-    } catch (err: any) {
-      console.error('[MIC] Failed to acquire microphone stream:', err.message);
-      throw err;
-    } finally {
-      isAcquiringMicRef.current = false;
+    };
+
+    acquiringPromiseRef.current = acquireTask().finally(() => {
+      acquiringPromiseRef.current = null;
+    });
+
+    return acquiringPromiseRef.current;
+  }, []);
+
+  // Attach local audio track across all active RTCPeerConnections
+  const attachTrackToAllPeers = useCallback(async (audioTrack: any) => {
+    if (!audioTrack) return;
+    console.log(`[MIC] Attaching local audio track (${audioTrack.id}) across all active peers...`);
+
+    for (const [peerSocketId, peer] of Object.entries(peersRef.current)) {
+      const { pc } = peer;
+      if (!pc || pc.connectionState === 'closed') continue;
+
+      try {
+        const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
+        const audioTransceiver = transceivers.find(
+          (t: any) => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio'
+        );
+
+        if (audioTransceiver && audioTransceiver.sender) {
+          if (audioTransceiver.direction !== 'sendrecv') {
+            audioTransceiver.direction = 'sendrecv';
+          }
+          await audioTransceiver.sender.replaceTrack(audioTrack);
+          console.log(`[MIC] Audio sender attached: Replaced audio track on transceiver for peer ${peerSocketId}`);
+        } else {
+          const senders = pc.getSenders ? pc.getSenders() : [];
+          const audioSender = senders.find((s: any) => s.track?.kind === 'audio' || !s.track);
+          if (audioSender) {
+            await audioSender.replaceTrack(audioTrack);
+            console.log(`[MIC] Audio sender attached: Replaced audio track on sender for peer ${peerSocketId}`);
+          } else if (localStreamRef.current) {
+            pc.addTrack(audioTrack, localStreamRef.current);
+            console.log(`[MIC] Audio sender attached: Added new audio track to pc for peer ${peerSocketId}`);
+          }
+        }
+      } catch (err: any) {
+        console.warn(`[WEBRTC] Error attaching audio track to peer ${peerSocketId}:`, err.message);
+      }
     }
-  }, [attachTrackToAllPeers]);
+  }, []);
+
+  // Ensure WebRTC connection can actively transmit audio
+  const ensureAudioTransmission = useCallback(async () => {
+    for (const [peerSocketId, peer] of Object.entries(peersRef.current)) {
+      const { pc } = peer;
+      if (!pc || pc.connectionState === 'closed') continue;
+
+      try {
+        const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
+        const audioTransceiver = transceivers.find(
+          (t: any) => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio'
+        );
+
+        if (audioTransceiver && audioTransceiver.direction !== 'sendrecv') {
+          audioTransceiver.direction = 'sendrecv';
+        }
+
+        // Renegotiate offer if connection is stable so the remote peer receives active RTP packets
+        if (pc.signalingState === 'stable') {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket?.emit('voice_signal_offer', {
+            targetSocketId: peerSocketId,
+            offer,
+            callerId: player?.id,
+          });
+          console.log(`[WEBRTC] Renegotiated offer sent to peer ${peerSocketId}`);
+        }
+      } catch (err: any) {
+        console.warn(`[WEBRTC] Error ensuring audio transmission for peer ${peerSocketId}:`, err.message);
+      }
+    }
+  }, [socket, player?.id]);
 
   // Flush queued ICE candidates that arrived before setRemoteDescription
   const flushQueuedCandidates = useCallback(async (peerSocketId: string) => {
@@ -345,15 +411,17 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         console.log(`[WEBRTC] Creating new RTCPeerConnection for peer ${peerSocketId} (player ${peerPlayerId})`);
         const pc = new (RTCPeerConnection as any)(getIceServers());
 
-        // Attach local audio track if available (enabled=true if mic is on, enabled=false if mic is muted)
+        // Attach local audio track if already available (enabled = true if unmuted, enabled = false if muted)
         const audioTrack = localStreamRef.current?.getAudioTracks()[0];
         if (audioTrack && audioTrack.readyState === 'live') {
+          audioTrack.enabled = micEnabledRef.current;
           pc.addTrack(audioTrack, localStreamRef.current);
           console.log(`[WEBRTC] Attached local mic track to new peer ${peerSocketId} (enabled: ${audioTrack.enabled})`);
         } else {
           // Add audio transceiver upfront with sendrecv direction so SDP offer/answer includes the m=audio section
           try {
             pc.addTransceiver('audio', { direction: 'sendrecv' });
+            console.log(`[WEBRTC] Added audio transceiver upfront for peer ${peerSocketId}`);
           } catch (e: any) {
             console.warn('[WEBRTC] Could not add audio transceiver upfront:', e.message);
           }
@@ -410,6 +478,120 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [socket, player?.id, cleanupPeer]
   );
 
+  // Robust, separate microphone activation
+  const activateMicrophone = useCallback(async () => {
+    try {
+      // 1. Check current permission status
+      const currentStatus = permissionService.getStatus();
+      console.log(`[MIC] Permission status: ${currentStatus}`);
+
+      let hasPermission = await permissionService.checkMicrophonePermission();
+
+      // 2. Request permission if necessary
+      if (!hasPermission) {
+        setMicLifecycleState('requesting_permission');
+        micLifecycleStateRef.current = 'requesting_permission';
+        console.log('[MIC] Requesting permission: android.permission.RECORD_AUDIO');
+
+        const status = await permissionService.requestMicrophonePermission();
+        if (status !== 'granted') {
+          setMicLifecycleState('permission_denied');
+          micLifecycleStateRef.current = 'permission_denied';
+          console.log('[MIC] Permission status: permission_denied');
+          handlePermissionWarning(status, true);
+          return;
+        }
+        hasPermission = true;
+      }
+
+      console.log('[MIC] Permission granted: true');
+
+      // 3. Initialize audio capture
+      setMicLifecycleState('initializing');
+      micLifecycleStateRef.current = 'initializing';
+
+      // 4. Create or reuse audio stream
+      const stream = await acquireLocalStream();
+      if (!stream) {
+        throw new Error('Failed to acquire local audio stream');
+      }
+
+      const audioTrack = stream.getAudioTracks()[0];
+      if (!audioTrack) {
+        throw new Error('No audio track present in media stream');
+      }
+
+      // 5. Ensure local WebRTC audio track is enabled
+      audioTrack.enabled = true;
+      console.log('[MIC] Audio track enabled: true');
+
+      // 6. Ensure audio track is attached across all active peer connections
+      await attachTrackToAllPeers(audioTrack);
+
+      // 7. Ensure audio transmission
+      await ensureAudioTransmission();
+      console.log('[MIC] Audio transmission state: transmitting');
+
+      // 8. Update UI & persisted state only after genuine activation
+      micEnabledRef.current = true;
+      setMicEnabled(true);
+      setMicLifecycleState('enabled');
+      micLifecycleStateRef.current = 'enabled';
+      await AsyncStorage.setItem(STORAGE_KEY_MIC, 'true');
+
+      if (socket && roomState?.code && player?.id) {
+        socket.emit('voice_mute_state', {
+          roomCode: roomState.code,
+          playerId: player.id,
+          isMuted: false,
+          isDeafened: !speakerEnabledRef.current,
+        });
+      }
+    } catch (err: any) {
+      console.error('[MIC] Microphone initialization failed:', err.message || err);
+      setMicLifecycleState('error');
+      micLifecycleStateRef.current = 'error';
+      const msg = err.message || 'Microphone initialization failed';
+      setVoiceError(msg);
+      showError(msg);
+      micEnabledRef.current = false;
+      setMicEnabled(false);
+    }
+  }, [acquireLocalStream, attachTrackToAllPeers, ensureAudioTransmission, handlePermissionWarning, socket, roomState?.code, player?.id]);
+
+  // Robust, separate microphone deactivation
+  const deactivateMicrophone = useCallback(async () => {
+    try {
+      if (localStreamRef.current) {
+        const audioTrack = localStreamRef.current.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = false;
+          console.log('[MIC] Audio track enabled: false');
+        }
+      }
+
+      console.log('[MIC] Microphone disabled: user muted');
+      console.log('[MIC] Audio transmission state: muted');
+
+      micEnabledRef.current = false;
+      setMicEnabled(false);
+      setMicLifecycleState('disabled');
+      micLifecycleStateRef.current = 'disabled';
+      await AsyncStorage.setItem(STORAGE_KEY_MIC, 'false');
+
+      if (socket && roomState?.code && player?.id) {
+        socket.emit('voice_mute_state', {
+          roomCode: roomState.code,
+          playerId: player.id,
+          isMuted: true,
+          isDeafened: !speakerEnabledRef.current,
+        });
+      }
+    } catch (err: any) {
+      console.error('[MIC] Error disabling microphone:', err);
+    }
+  }, [socket, roomState?.code, player?.id]);
+
   // Centralized Idempotent Voice Session Initializer
   const initVoiceSession = useCallback(
     async (forceReconnect: boolean = false) => {
@@ -447,30 +629,27 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           console.warn('[AUDIO-ROUTE] Error initializing VoIP audio session:', err.message);
         }
 
-        // Centralized microphone permission check
+        // Check permission state on room join
         try {
-          let hasPermission = await permissionService.checkMicrophonePermission();
-          if (!hasPermission && micEnabledRef.current) {
-            // Only request if mic preference was on and permission not already permanently denied
-            if (permissionService.getStatus() !== 'never_ask_again') {
-              const status = await permissionService.requestMicrophonePermission();
-              hasPermission = status === 'granted';
-              handlePermissionWarning(status, false);
+          const hasPermission = await permissionService.checkMicrophonePermission();
+          if (hasPermission) {
+            if (micEnabledRef.current) {
+              await activateMicrophone();
             } else {
-              handlePermissionWarning('never_ask_again', false);
+              setMicLifecycleState('disabled');
+              micLifecycleStateRef.current = 'disabled';
+            }
+          } else {
+            setMicLifecycleState(permissionService.getStatus() === 'never_ask_again' ? 'permission_denied' : 'permission_required');
+            micLifecycleStateRef.current = permissionService.getStatus() === 'never_ask_again' ? 'permission_denied' : 'permission_required';
+            if (micEnabledRef.current) {
+              setMicEnabled(false);
+              micEnabledRef.current = false;
+              await AsyncStorage.setItem(STORAGE_KEY_MIC, 'false');
             }
           }
-
-          if (hasPermission) {
-            await acquireLocalStream();
-          } else if (micEnabledRef.current) {
-            console.warn('[MIC] Mic was saved as ON but permission not granted. Resetting to OFF.');
-            setMicEnabled(false);
-            micEnabledRef.current = false;
-            await AsyncStorage.setItem(STORAGE_KEY_MIC, 'false');
-          }
         } catch (err: any) {
-          console.warn('[MIC] Could not acquire local mic stream on room join:', err.message);
+          console.warn('[MIC] Could not verify mic permission on room join:', err.message);
         }
 
         // Join voice signaling room on backend
@@ -484,10 +663,10 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isInitializingVoiceRef.current = false;
       }
     },
-    [socket, roomState?.code, player?.id, acquireLocalStream, handlePermissionWarning]
+    [socket, roomState?.code, player?.id, activateMicrophone]
   );
 
-  // Centralized recheck of permission when app resumes (e.g. from Android Settings)
+  // Centralized recheck of permission when app resumes (e.g. from Android Settings or OS Dialog)
   const recheckPermissionOnResume = useCallback(async () => {
     try {
       const hasPerm = await permissionService.checkMicrophonePermission();
@@ -495,19 +674,22 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         console.log('[MIC] Microphone permission detected as granted upon foreground resume.');
         setVoiceError(null);
         permissionService.resetWarnings();
+
         if (micEnabledRef.current) {
-          const stream = await acquireLocalStream();
-          const audioTrack = stream?.getAudioTracks()[0];
-          if (audioTrack) {
-            audioTrack.enabled = true;
-            await attachTrackToAllPeers(audioTrack);
-          }
+          await activateMicrophone();
+        } else {
+          setMicLifecycleState('disabled');
+          micLifecycleStateRef.current = 'disabled';
         }
+      } else {
+        const currentStatus = permissionService.getStatus();
+        setMicLifecycleState(currentStatus === 'never_ask_again' ? 'permission_denied' : 'permission_required');
+        micLifecycleStateRef.current = currentStatus === 'never_ask_again' ? 'permission_denied' : 'permission_required';
       }
     } catch (err: any) {
       console.warn('[MIC] Error rechecking permission on resume:', err.message);
     }
-  }, [acquireLocalStream, attachTrackToAllPeers]);
+  }, [activateMicrophone]);
 
   // Main Voice Room Lifecycle Effect
   useEffect(() => {
@@ -524,6 +706,8 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         AsyncStorage.removeItem(STORAGE_KEY_SPEAKER).catch(() => {});
         setMicEnabled(false);
         micEnabledRef.current = false;
+        setMicLifecycleState('disabled');
+        micLifecycleStateRef.current = 'disabled';
         setSpeakerEnabled(true);
         speakerEnabledRef.current = true;
       }
@@ -642,23 +826,24 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         await flushQueuedCandidates(callerSocketId);
 
-        // Ensure our audio track is attached if mic is ON
+        // Ensure our audio track is attached if available
         const audioTrack = localStreamRef.current?.getAudioTracks()[0];
-        if (audioTrack && audioTrack.readyState === 'live' && micEnabledRef.current) {
+        if (audioTrack && audioTrack.readyState === 'live') {
+          audioTrack.enabled = micEnabledRef.current;
           const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
-          const transceiver = transceivers.find(
+          const audioTransceiver = transceivers.find(
             (t: any) => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio'
           );
-          if (transceiver && transceiver.sender) {
-            if (transceiver.direction !== 'sendrecv') {
-              transceiver.direction = 'sendrecv';
+          if (audioTransceiver && audioTransceiver.sender) {
+            if (audioTransceiver.direction !== 'sendrecv') {
+              audioTransceiver.direction = 'sendrecv';
             }
-            await transceiver.sender.replaceTrack(audioTrack);
+            await audioTransceiver.sender.replaceTrack(audioTrack);
           } else {
             const senders = pc.getSenders ? pc.getSenders() : [];
-            const sender = senders.find((s: any) => s.track?.kind === 'audio');
-            if (sender) {
-              await sender.replaceTrack(audioTrack);
+            const audioSender = senders.find((s: any) => s.track?.kind === 'audio');
+            if (audioSender) {
+              await audioSender.replaceTrack(audioTrack);
             }
           }
         }
@@ -763,11 +948,6 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       socket.off('voice_signal_ice_candidate', handleSignalIceCandidate);
       socket.off('voice_peer_left', handlePeerLeft);
       socket.off('connect', handleSocketConnect);
-
-      // NOTE: We do NOT call cleanupAllPeers() here.
-      // WebRTC peer connections and native VoIP session are preserved across
-      // screen transitions (e.g. Lobby <-> GameView) and component re-renders.
-      // Only actual room exits or session ends clean up peer connections.
     };
   }, [
     socket,
@@ -797,7 +977,7 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       if (nextAppState === 'active' && prevAppState.match(/inactive|background/)) {
         console.log('[VOICE] Returned to foreground. Idempotent audio routing & permission verification...');
 
-        // 1. Recheck microphone permission in case user granted it in Android Settings
+        // 1. Recheck microphone permission
         await recheckPermissionOnResume();
 
         // 2. If in active room, verify audio routing idempotently without destroying peer connections
@@ -829,105 +1009,20 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Toggle Microphone (Default OFF -> ON)
   const toggleMicrophone = async () => {
-    try {
-      setVoiceError(null);
+    if (
+      micLifecycleStateRef.current === 'initializing' ||
+      micLifecycleStateRef.current === 'requesting_permission'
+    ) {
+      console.log('[MIC] Microphone operation in progress, ignoring toggle request');
+      return;
+    }
 
-      if (!micEnabledRef.current) {
-        // Turning Mic ON
-        console.log('[MIC] User requested microphone UNMUTE');
-
-        // Check runtime permission centrally
-        let hasPermission = await permissionService.checkMicrophonePermission();
-        if (!hasPermission) {
-          const status = await permissionService.requestMicrophonePermission();
-          if (status !== 'granted') {
-            // User explicitly requested unmute, show settings prompt or error
-            handlePermissionWarning(status, true);
-            return;
-          }
-          hasPermission = true;
-        }
-
-        // Acquire local stream & enable track
-        const stream = await acquireLocalStream();
-        const audioTrack = stream?.getAudioTracks()[0];
-        if (audioTrack) {
-          audioTrack.enabled = true;
-          await attachTrackToAllPeers(audioTrack);
-
-          // Renegotiate with peers if needed
-          for (const [peerSocketId, peer] of Object.entries(peersRef.current)) {
-            const { pc } = peer;
-            const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
-            const transceiver = transceivers.find(
-              (t: any) => t.receiver?.track?.kind === 'audio' || t.sender?.track?.kind === 'audio'
-            );
-            const needsRenegotiate =
-              !transceiver ||
-              transceiver.currentDirection === 'recvonly' ||
-              transceiver.currentDirection === 'inactive';
-
-            if (needsRenegotiate && pc.signalingState === 'stable') {
-              try {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                socket?.emit('voice_signal_offer', {
-                  targetSocketId: peerSocketId,
-                  offer,
-                  callerId: player?.id,
-                });
-                console.log(`[WEBRTC] Sent renegotiated offer to ${peerSocketId} upon unmuting mic`);
-              } catch (err: any) {
-                console.warn(`[WEBRTC] Error renegotiating offer for ${peerSocketId}:`, err.message);
-              }
-            }
-          }
-        }
-
-        setMicEnabled(true);
-        micEnabledRef.current = true;
-        await AsyncStorage.setItem(STORAGE_KEY_MIC, 'true');
-
-        if (socket && roomState?.code && player?.id) {
-          socket.emit('voice_mute_state', {
-            roomCode: roomState.code,
-            playerId: player.id,
-            isMuted: false,
-            isDeafened: !speakerEnabledRef.current,
-          });
-        }
-        console.log('[MIC] Microphone successfully unmuted');
-      } else {
-        // Turning Mic OFF (Mute)
-        console.log('[MIC] User requested microphone MUTE');
-        if (localStreamRef.current) {
-          const audioTrack = localStreamRef.current.getAudioTracks()[0];
-          if (audioTrack) {
-            audioTrack.enabled = false;
-          }
-        }
-
-        setMicEnabled(false);
-        micEnabledRef.current = false;
-        await AsyncStorage.setItem(STORAGE_KEY_MIC, 'false');
-
-        if (socket && roomState?.code && player?.id) {
-          socket.emit('voice_mute_state', {
-            roomCode: roomState.code,
-            playerId: player.id,
-            isMuted: true,
-            isDeafened: !speakerEnabledRef.current,
-          });
-        }
-        console.log('[MIC] Microphone successfully muted');
-      }
-    } catch (err: any) {
-      console.error('[MIC] Error toggling microphone:', err);
-      const msg = err.message || 'Microphone error';
-      setVoiceError(msg);
-      showError(msg);
-      setMicEnabled(false);
-      micEnabledRef.current = false;
+    if (!micEnabledRef.current) {
+      console.log('[MIC] User requested microphone UNMUTE');
+      await activateMicrophone();
+    } else {
+      console.log('[MIC] User requested microphone MUTE');
+      await deactivateMicrophone();
     }
   };
 
@@ -984,6 +1079,7 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     <VoiceChatContext.Provider
       value={{
         micEnabled,
+        micLifecycleState,
         speakerEnabled,
         inVoiceRoom,
         voiceError,

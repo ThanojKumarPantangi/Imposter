@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -43,6 +43,14 @@ export const EditUsernameModal: React.FC<EditUsernameModalProps> = ({
   const [selectedAvatar, setSelectedAvatar] = useState<string>(player?.avatar || 'avatar-1');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    if (visible) {
+      setUsername(player?.username || '');
+      setSelectedAvatar(player?.avatar || 'avatar-1');
+      setError('');
+    }
+  }, [visible, player?.username, player?.avatar]);
 
   const handleSave = async () => {
     if (!username.trim() || username.trim().length < 2) {

@@ -11,6 +11,11 @@ export function navigate<RouteName extends keyof RootStackParamList>(
   params?: RootStackParamList[RouteName]
 ) {
   if (navigationRef.isReady()) {
+    const current = getCurrentRouteName();
+    if (current === name) {
+      console.log(`[NAVIGATION] Screen ${name} already active. Skipping redundant navigate.`);
+      return;
+    }
     (navigationRef as any).navigate(name, params);
   }
 }
@@ -23,6 +28,11 @@ export function replace<RouteName extends keyof RootStackParamList>(
   params?: RootStackParamList[RouteName]
 ) {
   if (navigationRef.isReady()) {
+    const current = getCurrentRouteName();
+    if (current === name) {
+      console.log(`[NAVIGATION] Screen ${name} already active. Skipping redundant replace.`);
+      return;
+    }
     navigationRef.dispatch(StackActions.replace(name, params));
   }
 }
@@ -68,6 +78,7 @@ export function restoreSessionScreen(
 
   // If already on the correct screen, do not disrupt the user
   if (currentRoute === targetScreen) {
+    console.log('[SESSION-RESTORE] Navigation already correct');
     return;
   }
 
@@ -85,4 +96,7 @@ export function restoreSessionScreen(
     navigationRef.dispatch(StackActions.replace(targetScreen, { roomCode }));
     return;
   }
+
+  // Fallback if user was in another screen (e.g. Leaderboard, AdminLogin)
+  navigationRef.navigate(targetScreen, { roomCode });
 }

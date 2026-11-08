@@ -7,8 +7,8 @@ import { roomApi } from '../services/api/roomApi';
 import { sounds } from '../utils/sound';
 import { serverTimeSync } from '../utils/serverTimeSync';
 import { CONFIG, STORAGE_KEYS } from '../config/constants';
-import { RoomState, DisconnectAlert, RejoinRequest, RejoinState, Player, RoomSettings } from '../types';
-import { restoreSessionScreen } from '../navigation/navigationService';
+import { RoomState, DisconnectAlert, RejoinRequest, RejoinState, Player, RoomSettings, RoomStatus } from '../types';
+import { restoreSessionScreen, getCurrentRouteName, replace } from '../navigation/navigationService';
 import { showToast as triggerGlobalToast } from '../components/Toast';
 
 type RoomLifecycle = 'ACTIVE_ROOM' | 'TEMPORARILY_DISCONNECTED' | 'INTENTIONAL_EXIT' | 'NO_ROOM';
@@ -58,10 +58,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const socketRef = useRef<Socket | null>(null);
   const appStateRef = useRef<AppStateStatus>((AppState.currentState as AppStateStatus) || 'active');
   const isReconnectingRef = useRef<boolean>(false);
-  const lastToastRef = useRef<{ message: string; timestamp: number }>({ message: '', timestamp: 0 });
+  const isRecoveringSessionRef = useRef<boolean>(false);
+  const lastProcessedTransitionIdRef = useRef<string | null>(null);
 
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [roomState, setRoomState] = useState<RoomState | null>(null);
+  const roomStateRef = useRef<RoomState | null>(null);
   const [disconnectAlert, setDisconnectAlert] = useState<DisconnectAlert | null>(null);
   const [kickedNotice, setKickedNotice] = useState<string | null>(null);
   const [pendingRejoinRequest, setPendingRejoinRequest] = useState<RejoinRequest | null>(null);
@@ -77,10 +79,32 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     playerRef.current = player;
   }, [player]);
 
+  // Keep roomStateRef synchronized
+  useEffect(() => {
+    roomStateRef.current = roomState;
+  }, [roomState]);
+
   // Keep roomLifecycleRef synchronized
   useEffect(() => {
     roomLifecycleRef.current = roomLifecycleState;
   }, [roomLifecycleState]);
+
+  // Initialize roomLifecycleState from persisted storage on launch
+  useEffect(() => {
+    async function initPersistedRoomState() {
+      try {
+        const savedRoomCode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_ROOM_CODE);
+        if (savedRoomCode && roomLifecycleRef.current === 'NO_ROOM') {
+          console.log(`[SESSION-RESTORE] Found saved active room in storage: ${savedRoomCode}`);
+          roomLifecycleRef.current = 'ACTIVE_ROOM';
+          setRoomLifecycleState('ACTIVE_ROOM');
+        }
+      } catch (e: any) {
+        console.warn('[SESSION-RESTORE] Error reading saved room code:', e.message);
+      }
+    }
+    initPersistedRoomState();
+  }, []);
 
   // Unified single global toast notifications
   const showToast = useCallback((message: string) => {
@@ -89,27 +113,53 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Centralized session recovery request (strictly invoked after connection is verified)
   const recoverActiveSession = useCallback(async (socket: Socket) => {
-    const currentPlayer = playerRef.current;
-    const currentLifecycle = roomLifecycleRef.current;
-    const savedRoomCode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_ROOM_CODE);
-
-    if (currentPlayer?.id) {
-      socket.emit('register_user', { playerId: currentPlayer.id });
-    }
-
-    if (currentLifecycle === 'INTENTIONAL_EXIT' || currentLifecycle === 'NO_ROOM' || !savedRoomCode) {
+    if (isRecoveringSessionRef.current) {
+      console.log('[SESSION-RESTORE] Session restoration already in progress. Skipping parallel call.');
       return;
     }
+    isRecoveringSessionRef.current = true;
 
-    if (currentPlayer?.id) {
-      console.log(`🔄 [Socket] Emitting recover_session for player ${currentPlayer.id} in room ${savedRoomCode}`);
-      socket.emit('recover_session', {
-        playerId: currentPlayer.id,
-        roomCode: savedRoomCode,
-      });
-    } else if (savedRoomCode) {
-      console.log(`🔄 [Socket] Emitting request_sync fallback for room ${savedRoomCode}`);
-      socket.emit('request_sync', { roomCode: savedRoomCode });
+    try {
+      console.log('[SESSION-RESTORE] Checking active session');
+      const currentPlayer = playerRef.current;
+      const currentLifecycle = roomLifecycleRef.current;
+      const savedRoomCode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_ROOM_CODE);
+
+      if (currentPlayer?.id) {
+        socket.emit('register_user', { playerId: currentPlayer.id });
+      }
+
+      if (currentLifecycle === 'INTENTIONAL_EXIT') {
+        console.log('[SESSION-RESTORE] User intentionally left room. Skipping restoration.');
+        return;
+      }
+
+      if (!savedRoomCode) {
+        console.log('[SESSION-RESTORE] No active session found');
+        return;
+      }
+
+      console.log('[SESSION-RESTORE] Socket connection status:', socket.connected ? 'CONNECTED' : 'DISCONNECTED');
+      if (!socket.connected) {
+        console.log('[SESSION-RESTORE] Reconnecting socket');
+        isReconnectingRef.current = true;
+        socket.connect();
+        return;
+      }
+
+      console.log(`[SESSION-RESTORE] Fetching latest session state for room: ${savedRoomCode}`);
+      if (currentPlayer?.id) {
+        socket.emit('recover_session', {
+          playerId: currentPlayer.id,
+          roomCode: savedRoomCode,
+        });
+      } else {
+        socket.emit('request_sync', { roomCode: savedRoomCode });
+      }
+    } catch (err: any) {
+      console.warn('⚠️ [SESSION-RESTORE] Error recovering session:', err.message);
+    } finally {
+      isRecoveringSessionRef.current = false;
     }
   }, []);
 
@@ -118,23 +168,24 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const socket = socketRef.current;
     if (!socket) return;
 
-    console.log('📱 [Foreground] App returned to active state. Verifying socket and session...');
+    console.log('[SESSION-RESTORE] Checking active session on foreground resume');
 
     // If socket is disconnected, trigger immediate reconnect without waiting for backoff
     if (!socket.connected) {
-      console.log('📱 [Foreground] Socket is disconnected. Forcing immediate reconnection...');
+      console.log('[SESSION-RESTORE] Socket connection status: DISCONNECTED');
+      console.log('[SESSION-RESTORE] Reconnecting socket');
       isReconnectingRef.current = true;
       socket.connect();
       return;
     }
 
-    // Socket is already connected. Do not forcibly disconnect a healthy socket.
-    // Sync time and recover session idempotently.
+    console.log('[SESSION-RESTORE] Socket connection status: CONNECTED');
+    // Socket is already connected. Sync time and recover session idempotently.
     try {
       serverTimeSync.syncWithSocket(socket);
-      recoverActiveSession(socket);
+      await recoverActiveSession(socket);
     } catch (err: any) {
-      console.warn('⚠️ [Foreground] Error syncing session on foreground resume:', err.message);
+      console.warn('⚠️ [SESSION-RESTORE] Error syncing session on foreground resume:', err.message);
     }
   }, [recoverActiveSession]);
 
@@ -145,10 +196,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       appStateRef.current = nextAppState;
 
       if (nextAppState.match(/inactive|background/)) {
-        console.log(`📱 [AppState] Application moving to background (${nextAppState}). Preserving socket and session.`);
-        // Note: We do NOT disconnect or destroy the socket here. We let Android manage background naturally.
+        console.log('[APP-LIFECYCLE] App entered background');
       } else if (nextAppState === 'active' && prevAppState.match(/inactive|background/)) {
-        console.log('📱 [AppState] Application restored to foreground (active).');
+        console.log('[APP-LIFECYCLE] App returned to foreground');
         handleForegroundResume();
       }
     });
@@ -164,6 +214,56 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       recoverActiveSession(socketRef.current);
     }
   }, [player?.id, recoverActiveSession]);
+
+  // Centralized Game Phase Transition Processor (Deduplication & Single Transition Guarantee)
+  const processGamePhaseTransition = useCallback(
+    (
+      eventName: string,
+      incomingPhase: RoomStatus,
+      payload: any,
+      applyStateUpdate: () => void
+    ) => {
+      const roomCode = (payload?.roomCode || roomStateRef.current?.code || '').toUpperCase();
+      const roundId = payload?.round ?? payload?.currentRound ?? roomStateRef.current?.currentRound ?? 1;
+      const transitionId = `${roomCode}_${roundId}_${incomingPhase}`;
+
+      console.log(`[GAME-PHASE] Received phase event: ${eventName}`);
+      console.log(`[GAME-PHASE] Current phase: ${roomStateRef.current?.status || 'UNKNOWN'}`);
+      console.log(`[GAME-PHASE] Incoming phase: ${incomingPhase}`);
+      console.log(`[GAME-PHASE] Round ID: ${roundId}`);
+      console.log(`[GAME-PHASE] Transition ID: ${transitionId}`);
+
+      if (lastProcessedTransitionIdRef.current === transitionId) {
+        console.log(`[GAME-PHASE] Duplicate transition ignored: ${transitionId}`);
+        return;
+      }
+
+      console.log(`[GAME-PHASE] Processing valid transition: ${transitionId}`);
+      lastProcessedTransitionIdRef.current = transitionId;
+
+      // Apply authoritative state changes exactly once
+      applyStateUpdate();
+
+      // Check navigation destination and prevent redundant transitions
+      const currentRoute = getCurrentRouteName();
+      const destinationScreen = incomingPhase === 'WAITING' ? 'Lobby' : 'GameView';
+
+      if (currentRoute === destinationScreen) {
+        console.log(`[GAME-PHASE] Destination screen already active: ${currentRoute}`);
+      } else {
+        if (currentRoute === 'Lobby' && destinationScreen === 'GameView') {
+          replace('GameView', { roomCode });
+          console.log('[GAME-PHASE] Navigation completed: Replaced Lobby with GameView');
+        } else if (currentRoute === 'GameView' && destinationScreen === 'Lobby') {
+          replace('Lobby', { roomCode });
+          console.log('[GAME-PHASE] Navigation completed: Replaced GameView with Lobby');
+        } else {
+          console.log(`[GAME-PHASE] Navigation completed: Current screen is ${currentRoute}`);
+        }
+      }
+    },
+    []
+  );
 
   // Main Socket Initialization (Strict Singleton pattern)
   useEffect(() => {
@@ -218,17 +318,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       socket.on('connect_error', (error: Error) => {
         setIsConnected(false);
         console.warn(`⚠️ [Socket] Connection error: ${error.message}`);
-        // Socket.IO auto-reconnect handles network retries with backoff & jitter
       });
 
       socket.on('reconnect_attempt', (attempt: number) => {
         console.log(`🔄 [Socket] Reconnection attempt #${attempt}`);
       });
 
-      socket.on('reconnect', () => {
+      socket.on('reconnect', async () => {
         console.log('✅ [Socket] Reconnected successfully');
         setIsConnected(true);
         isReconnectingRef.current = false;
+        await recoverActiveSession(socket);
       });
 
       // Authoritative Session Recovery Response from Backend
@@ -244,23 +344,35 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           roomLifecycleRef.current = 'ACTIVE_ROOM';
           setRoomLifecycleState('ACTIVE_ROOM');
           setRoomState(data.room);
+          roomStateRef.current = data.room;
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_ROOM_CODE, data.room.code);
           serverTimeSync.syncWithSocket(socket);
+
+          // Record current transition ID to prevent duplicate phase processing on recovery
+          const transitionId = `${data.room.code}_${data.room.currentRound || 1}_${data.room.status}`;
+          lastProcessedTransitionIdRef.current = transitionId;
 
           // Clear any disconnect countdown alerts for self
           const currentPlayer = playerRef.current;
           setDisconnectAlert((prev) => (prev && prev.playerId === currentPlayer?.id ? null : prev));
 
+          if (data.room.status === 'WAITING') {
+            console.log(`[SESSION-RESTORE] Active lobby restored: ${data.room.code}`);
+          } else {
+            console.log(`[SESSION-RESTORE] Active game restored: ${data.room.code} (Phase: ${data.room.status})`);
+          }
+
           // Restore appropriate screen based on authoritative room status
           const targetScreen = data.room.status === 'WAITING' ? 'Lobby' : 'GameView';
           restoreSessionScreen(targetScreen, data.room.code);
         } else {
-          // Backend authoritative cleanup: Player was removed or room no longer exists under backend rules
+          console.log('[SESSION-RESTORE] Session expired');
           await AsyncStorage.removeItem(STORAGE_KEYS.ACTIVE_ROOM_CODE);
           const wasActive = roomLifecycleRef.current === 'ACTIVE_ROOM' || roomLifecycleRef.current === 'TEMPORARILY_DISCONNECTED';
           roomLifecycleRef.current = 'NO_ROOM';
           setRoomLifecycleState('NO_ROOM');
           setRoomState(null);
+          roomStateRef.current = null;
 
           if (wasActive) {
             restoreSessionScreen('Home');
@@ -284,6 +396,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               roomLifecycleRef.current = 'NO_ROOM';
               setRoomLifecycleState('NO_ROOM');
               setRoomState(null);
+              roomStateRef.current = null;
               setPendingRejoinRequest(null);
               setKickedNotice('You have been removed from this room by the host.');
               restoreSessionScreen('Home');
@@ -294,6 +407,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           roomLifecycleRef.current = 'ACTIVE_ROOM';
           setRoomLifecycleState('ACTIVE_ROOM');
           setRoomState(updatedRoom);
+          roomStateRef.current = updatedRoom;
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_ROOM_CODE, updatedRoom.code);
 
           const hasDisconnected = updatedRoom.players?.some((p) => !p.isConnected);
@@ -350,6 +464,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         roomLifecycleRef.current = 'NO_ROOM';
         setRoomLifecycleState('NO_ROOM');
         setRoomState(null);
+        roomStateRef.current = null;
         setPendingRejoinRequest(null);
         setRejoinState(null);
         setKickedNotice(data.reason || 'You have been removed from this room by the host.');
@@ -387,6 +502,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           roomLifecycleRef.current = 'ACTIVE_ROOM';
           setRoomLifecycleState('ACTIVE_ROOM');
           setRoomState(data.room);
+          roomStateRef.current = data.room;
           await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_ROOM_CODE, data.roomCode);
           restoreSessionScreen(data.room.status === 'WAITING' ? 'Lobby' : 'GameView', data.roomCode);
         }
@@ -415,6 +531,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         roomLifecycleRef.current = 'NO_ROOM';
         setRoomLifecycleState('NO_ROOM');
         setRoomState(null);
+        roomStateRef.current = null;
         setPendingRejoinRequest(null);
         restoreSessionScreen('Home');
         showToast(`🔒 ${data.reason || 'The room has been closed'}`);
@@ -425,78 +542,94 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         showToast(`⏱️ ${data.message || `${data.username} skipped the turn`}`);
       });
 
+      // 1. GAME STARTED (ROLE REVEAL)
       socket.on('game_started', (data: any) => {
-        sounds.playReveal();
-        showToast('🎭 Game Started! Reveal your secret roles!');
-        if (data) {
-          setRoomState((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              status: data.status || 'ROLE_REVEAL',
-              roleRevealDeadline: data.roleRevealDeadline || prev.roleRevealDeadline,
-              turnOrder: data.turnOrder || prev.turnOrder,
-              settings: {
-                ...prev.settings,
-                ...(data.settings || {}),
-                ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {}),
-                ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {}),
-              },
-            };
-          });
-        }
+        processGamePhaseTransition('game_started', 'ROLE_REVEAL', data, () => {
+          sounds.playReveal();
+          showToast('🎭 Game Started! Reveal your secret roles!');
+          if (data) {
+            setRoomState((prev) => {
+              if (!prev) return prev;
+              const next: RoomState = {
+                ...prev,
+                status: 'ROLE_REVEAL',
+                roleRevealDeadline: data.roleRevealDeadline || prev.roleRevealDeadline,
+                turnOrder: data.turnOrder || prev.turnOrder,
+                settings: {
+                  ...prev.settings,
+                  ...(data.settings || {}),
+                  ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {}),
+                  ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {}),
+                },
+              };
+              roomStateRef.current = next;
+              return next;
+            });
+          }
+        });
       });
 
+      // 2. ROUND RESULTS
       socket.on('round_results', (data: any) => {
-        sounds.playTurnAlert();
-        showToast('💀 Round results calculated!');
-        if (data) {
-          setRoomState((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              status: 'RESULTS',
-              eliminationResult: data,
-              resultsDeadline: data.resultsDeadline || prev.resultsDeadline,
-            };
-          });
-        }
+        processGamePhaseTransition('round_results', 'RESULTS', data, () => {
+          sounds.playTurnAlert();
+          showToast('💀 Round results calculated!');
+          if (data) {
+            setRoomState((prev) => {
+              if (!prev) return prev;
+              const next: RoomState = {
+                ...prev,
+                status: 'RESULTS',
+                eliminationResult: data,
+                resultsDeadline: data.resultsDeadline || prev.resultsDeadline,
+              };
+              roomStateRef.current = next;
+              return next;
+            });
+          }
+        });
       });
 
-      const handleRoundStarted = (data: any) => {
-        sounds.playTurnAlert();
-        showToast(`📝 Round ${data?.round || 1}: Clue submission has begun!`);
-        if (data) {
-          setRoomState((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              status: 'CLUE_ROUND',
-              currentRound: data.round || prev.currentRound,
-              activeTurnPlayerId: data.activeTurnPlayerId || prev.activeTurnPlayerId,
-              activeTurnIndex: data.activeTurnIndex !== undefined ? data.activeTurnIndex : prev.activeTurnIndex,
-              turnDeadline: data.turnDeadline || prev.turnDeadline,
-              turnOrder: data.turnOrder || prev.turnOrder,
-              settings: {
-                ...prev.settings,
-                ...(data.settings || {}),
-                ...(data.duration ? { turnDurationSeconds: data.duration } : {}),
-                ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {}),
-                ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {}),
-              },
-            };
-          });
-        }
+      // 3. CLUE ROUND STARTED (Consolidated handler deduplicating clue_round_started & round_started)
+      const handleRoundStarted = (eventName: string, data: any) => {
+        processGamePhaseTransition(eventName, 'CLUE_ROUND', data, () => {
+          sounds.playTurnAlert();
+          showToast(`📝 Round ${data?.round || 1}: Clue submission has begun!`);
+          if (data) {
+            setRoomState((prev) => {
+              if (!prev) return prev;
+              const next: RoomState = {
+                ...prev,
+                status: 'CLUE_ROUND',
+                currentRound: data.round || prev.currentRound,
+                activeTurnPlayerId: data.activeTurnPlayerId || prev.activeTurnPlayerId,
+                activeTurnIndex: data.activeTurnIndex !== undefined ? data.activeTurnIndex : prev.activeTurnIndex,
+                turnDeadline: data.turnDeadline || prev.turnDeadline,
+                turnOrder: data.turnOrder || prev.turnOrder,
+                settings: {
+                  ...prev.settings,
+                  ...(data.settings || {}),
+                  ...(data.duration ? { turnDurationSeconds: data.duration } : {}),
+                  ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {}),
+                  ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {}),
+                },
+              };
+              roomStateRef.current = next;
+              return next;
+            });
+          }
+        });
       };
 
-      socket.on('clue_round_started', handleRoundStarted);
-      socket.on('round_started', handleRoundStarted);
+      socket.on('clue_round_started', (data: any) => handleRoundStarted('clue_round_started', data));
+      socket.on('round_started', (data: any) => handleRoundStarted('round_started', data));
 
+      // 4. TURN STARTED (In-round progression)
       socket.on('turn_started', (data: any) => {
         if (data) {
           setRoomState((prev) => {
             if (!prev) return prev;
-            return {
+            const next: RoomState = {
               ...prev,
               status: 'CLUE_ROUND',
               activeTurnPlayerId: data.activeTurnPlayerId || prev.activeTurnPlayerId,
@@ -511,42 +644,67 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {}),
               },
             };
+            roomStateRef.current = next;
+            return next;
           });
         }
       });
 
-      const handleVotingStarted = (data: any) => {
-        sounds.playTurnAlert();
-        showToast('🗳️ Voting Phase started! Cast your vote for the Imposter!');
-        if (data) {
-          setRoomState((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              status: 'VOTING',
-              turnDeadline: null,
-              votingDeadline: data.votingDeadline || prev.votingDeadline,
-              settings: {
-                ...prev.settings,
-                ...(data.settings || {}),
-                ...(data.duration ? { votingDurationSeconds: data.duration } : {}),
-                ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {}),
-              },
-            };
-          });
-        }
+      // 5. VOTING STARTED (Consolidated handler deduplicating voting_phase_started & voting_started)
+      const handleVotingStarted = (eventName: string, data: any) => {
+        processGamePhaseTransition(eventName, 'VOTING', data, () => {
+          sounds.playTurnAlert();
+          showToast('🗳️ Voting Phase started! Cast your vote for the Imposter!');
+          if (data) {
+            setRoomState((prev) => {
+              if (!prev) return prev;
+              const next: RoomState = {
+                ...prev,
+                status: 'VOTING',
+                turnDeadline: null,
+                votingDeadline: data.votingDeadline || prev.votingDeadline,
+                settings: {
+                  ...prev.settings,
+                  ...(data.settings || {}),
+                  ...(data.duration ? { votingDurationSeconds: data.duration } : {}),
+                  ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {}),
+                },
+              };
+              roomStateRef.current = next;
+              return next;
+            });
+          }
+        });
       };
 
-      socket.on('voting_phase_started', handleVotingStarted);
-      socket.on('voting_started', handleVotingStarted);
+      socket.on('voting_phase_started', (data: any) => handleVotingStarted('voting_phase_started', data));
+      socket.on('voting_started', (data: any) => handleVotingStarted('voting_started', data));
 
+      // 6. GAME FINISHED
       socket.on('game_finished', (result: any) => {
-        sounds.playWin();
-        showToast(result.winnerRole === 'IMPOSTER' ? '💥 Imposters Win!' : '🎉 Civilians Win!');
+        processGamePhaseTransition('game_finished', 'FINISHED', result, () => {
+          sounds.playWin();
+          showToast(result.winnerRole === 'IMPOSTER' ? '💥 Imposters Win!' : '🎉 Civilians Win!');
+          setRoomState((prev) => {
+            if (!prev) return prev;
+            const next: RoomState = { ...prev, status: 'FINISHED' };
+            roomStateRef.current = next;
+            return next;
+          });
+        });
       });
 
-      socket.on('room_returned_to_lobby', () => {
-        showToast('🔄 Host returned room to lobby');
+      // 7. RETURN TO LOBBY
+      socket.on('room_returned_to_lobby', (data: any) => {
+        processGamePhaseTransition('room_returned_to_lobby', 'WAITING', data, () => {
+          showToast('🔄 Host returned room to lobby');
+          setRoomState((prev) => {
+            if (!prev) return prev;
+            const next: RoomState = { ...prev, status: 'WAITING' };
+            roomStateRef.current = next;
+            return next;
+          });
+        });
       });
 
       socket.on('player_username_updated', (data: { newUsername: string }) => {
@@ -554,14 +712,19 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       socket.on('settings_updated', (newSettings: RoomSettings) => {
-        setRoomState((prev) => (prev ? { ...prev, settings: newSettings } : prev));
+        setRoomState((prev) => {
+          if (!prev) return prev;
+          const next: RoomState = { ...prev, settings: newSettings };
+          roomStateRef.current = next;
+          return next;
+        });
         showToast('⚙️ Game settings updated by host');
       });
 
       socket.on('room_categories_updated', (data: { categorySlugs: string[]; categoryNames: string[] }) => {
         setRoomState((prev) => {
           if (!prev) return prev;
-          return {
+          const next: RoomState = {
             ...prev,
             settings: {
               ...prev.settings,
@@ -571,6 +734,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               categoryName: data.categoryNames?.join(', '),
             },
           };
+          roomStateRef.current = next;
+          return next;
         });
         showToast(`🏷️ Shared categories updated (${data.categorySlugs?.length || 0} selected)`);
       });
@@ -601,12 +766,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         socketRef.current = null;
       }
     };
-  }, [recoverActiveSession, showToast]);
+  }, [recoverActiveSession, processGamePhaseTransition]);
 
   const joinRoom = async (roomCode: string, playerData: Player | null) => {
-    if (roomLifecycleRef.current === 'INTENTIONAL_EXIT') {
-      return;
-    }
     if (socketRef.current && roomCode) {
       const code = roomCode.toUpperCase();
       roomLifecycleRef.current = 'ACTIVE_ROOM';
@@ -630,6 +792,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     await AsyncStorage.removeItem(STORAGE_KEYS.ACTIVE_ROOM_CODE);
 
     setRoomState(null);
+    roomStateRef.current = null;
     setDisconnectAlert(null);
     setPendingRejoinRequest(null);
     setRejoinState(null);

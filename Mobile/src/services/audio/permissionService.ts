@@ -48,7 +48,7 @@ class PermissionService {
 
   private updateStatus(newStatus: MicPermissionStatus): void {
     if (this.currentStatus !== newStatus) {
-      console.log(`[MIC] Central permission status updated: ${this.currentStatus} -> ${newStatus}`);
+      console.log(`[MIC] Permission status: ${newStatus}`);
       this.currentStatus = newStatus;
       if (newStatus === 'granted') {
         this.resetWarnings();
@@ -69,6 +69,7 @@ class PermissionService {
   async checkMicrophonePermission(): Promise<boolean> {
     if (Platform.OS !== 'android') {
       this.updateStatus('granted');
+      console.log('[MIC] Permission status: granted');
       return true;
     }
 
@@ -76,11 +77,13 @@ class PermissionService {
       const isGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
       if (isGranted) {
         this.updateStatus('granted');
+        console.log('[MIC] Permission status: granted');
         return true;
       }
 
       // If not granted, but previously detected as permanently denied, preserve 'never_ask_again'
       if (this.currentStatus === 'never_ask_again') {
+        console.log('[MIC] Permission status: never_ask_again');
         return false;
       }
 
@@ -88,6 +91,7 @@ class PermissionService {
       if (this.currentStatus === 'undetermined') {
         this.updateStatus('denied');
       }
+      console.log('[MIC] Permission status: denied');
       return false;
     } catch (err) {
       console.warn('[MIC] Error checking RECORD_AUDIO permission:', err);
@@ -101,6 +105,7 @@ class PermissionService {
   async requestMicrophonePermission(): Promise<MicPermissionStatus> {
     if (Platform.OS !== 'android') {
       this.updateStatus('granted');
+      console.log('[MIC] Permission granted: true');
       return 'granted';
     }
 
@@ -111,7 +116,7 @@ class PermissionService {
     }
 
     try {
-      console.log('[MIC] Requesting Android RECORD_AUDIO permission...');
+      console.log('[MIC] Requesting permission: android.permission.RECORD_AUDIO');
       const result = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
         {
@@ -125,15 +130,15 @@ class PermissionService {
       );
 
       if (result === PermissionsAndroid.RESULTS.GRANTED) {
-        console.log('[MIC] RECORD_AUDIO permission GRANTED');
+        console.log('[MIC] Permission granted: true');
         this.updateStatus('granted');
         return 'granted';
       } else if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-        console.warn('[MIC] RECORD_AUDIO permission NEVER_ASK_AGAIN (permanently denied)');
+        console.warn('[MIC] Permission status: never_ask_again');
         this.updateStatus('never_ask_again');
         return 'never_ask_again';
       } else {
-        console.warn('[MIC] RECORD_AUDIO permission DENIED');
+        console.warn('[MIC] Permission status: denied');
         this.updateStatus('denied');
         return 'denied';
       }

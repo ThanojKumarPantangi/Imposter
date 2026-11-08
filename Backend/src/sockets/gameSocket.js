@@ -8,6 +8,12 @@ const activeVotingTimers = new Map();
 const activeNextRoundTimers = new Map();
 const activeRoleRevealTimers = new Map();
 
+// Configurable phase durations
+const ROLE_REVEAL_DURATION_SECONDS = 5;
+const ROLE_REVEAL_DURATION_MS = ROLE_REVEAL_DURATION_SECONDS * 1000;
+const NEXT_ROUND_DELAY_SECONDS = 5;
+const NEXT_ROUND_DELAY_MS = NEXT_ROUND_DELAY_SECONDS * 1000;
+
 export function clearRoomPhaseTimers(roomCode) {
   if (!roomCode) return;
   const normalized = roomCode.toUpperCase();
@@ -622,7 +628,7 @@ function setupNamespace(nsp) {
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
         const gameStartedPayload = {
           status: 'ROLE_REVEAL',
-          duration: 3,
+          duration: ROLE_REVEAL_DURATION_SECONDS,
           roleRevealDeadline: room.roleRevealDeadline,
           turnDurationSeconds: room.settings.turnDurationSeconds,
           votingDurationSeconds: room.settings.votingDurationSeconds,
@@ -653,7 +659,7 @@ function setupNamespace(nsp) {
               scheduleTurnTimeout(nsp, normalizedCode);
             }
           }
-        }, 3000);
+        }, ROLE_REVEAL_DURATION_MS);
         activeRoleRevealTimers.set(normalizedCode, revealTimer);
       } catch (err) {
         socket.emit('error', { message: err.message });
@@ -1215,7 +1221,7 @@ function scheduleNextRound(nsp, roomCode) {
         scheduleTurnTimeout(nsp, normalizedCode);
       }
     }
-  }, 3000);
+  }, NEXT_ROUND_DELAY_MS);
 
   activeNextRoundTimers.set(normalizedCode, timerId);
 }

@@ -147,7 +147,7 @@ export const clueStyles = StyleSheet.create({
     fontSize: 12,
   },
   clueWordText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     marginTop: 2,
   },

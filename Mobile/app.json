@@ -8,7 +8,10 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.imposter.game"
+      "bundleIdentifier": "com.imposter.game",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Imposter needs access to your microphone so other players can hear your voice clues during multiplayer games."
+      }
     },
     "android": {
       "package": "com.imposter.game",

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -54,14 +55,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [showRules, setShowRules] = useState<boolean>(false);
   const [showEditProfile, setShowEditProfile] = useState<boolean>(false);
 
-  // If returning to Home while an active session exists, smoothly restore the player to their room
+  const isFocused = useIsFocused();
+
+  // If currently focused on Home while an active session exists, smoothly restore the player to their room
   useEffect(() => {
+    if (!isFocused) return;
     const lingeringCode = roomState?.code;
     if (lingeringCode && roomLifecycleState === 'ACTIVE_ROOM') {
       const targetScreen = roomState.status === 'WAITING' ? 'Lobby' : 'GameView';
       navigation.navigate(targetScreen, { roomCode: lingeringCode });
     }
-  }, [roomState?.code, roomState?.status, roomLifecycleState]);
+  }, [roomState?.code, roomState?.status, roomLifecycleState, isFocused]);
 
   // Watch for approval to auto-enter lobby
   useEffect(() => {
