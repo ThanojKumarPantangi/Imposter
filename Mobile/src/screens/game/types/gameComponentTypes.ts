@@ -20,7 +20,9 @@ export interface GameLoadingProps {
   isLeaving?: boolean;
 }
 
-export interface RoleRevealSectionProps { }
+export interface RoleRevealSectionProps {
+  deadline?: number | null;
+}
 
 export interface EliminatedBannerProps { }
 
@@ -95,6 +97,7 @@ export interface SpectatorVotingSectionProps {
 
 export interface ResultsSectionProps {
   eliminationResult: EliminationResult;
+  deadline?: number | null;
 }
 
 export interface FinishedSectionProps {

@@ -125,6 +125,21 @@ function setupNamespace(nsp) {
           };
           socket.emit('voting_phase_started', votingPayload);
           socket.emit('voting_started', votingPayload);
+        } else if (room.status === 'ROLE_REVEAL' && room.roleRevealDeadline) {
+          socket.emit('game_started', {
+            status: 'ROLE_REVEAL',
+            duration: 3,
+            roleRevealDeadline: room.roleRevealDeadline,
+            turnDurationSeconds: room.settings?.turnDurationSeconds || 30,
+            votingDurationSeconds: room.settings?.votingDurationSeconds || 45,
+            settings: room.settings
+          });
+        } else if (room.status === 'RESULTS' && room.eliminationResult) {
+          socket.emit('round_results', {
+            ...room.eliminationResult,
+            resultsDeadline: room.resultsDeadline || room.eliminationResult.resultsDeadline,
+            duration: 3
+          });
         }
 
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
@@ -176,6 +191,21 @@ function setupNamespace(nsp) {
           };
           socket.emit('voting_phase_started', votingPayload);
           socket.emit('voting_started', votingPayload);
+        } else if (room.status === 'ROLE_REVEAL' && room.roleRevealDeadline) {
+          socket.emit('game_started', {
+            status: 'ROLE_REVEAL',
+            duration: 3,
+            roleRevealDeadline: room.roleRevealDeadline,
+            turnDurationSeconds: room.settings?.turnDurationSeconds || 30,
+            votingDurationSeconds: room.settings?.votingDurationSeconds || 45,
+            settings: room.settings
+          });
+        } else if (room.status === 'RESULTS' && room.eliminationResult) {
+          socket.emit('round_results', {
+            ...room.eliminationResult,
+            resultsDeadline: room.resultsDeadline || room.eliminationResult.resultsDeadline,
+            duration: 3
+          });
         }
       }
     });
@@ -255,6 +285,21 @@ function setupNamespace(nsp) {
           };
           socket.emit('voting_phase_started', votingPayload);
           socket.emit('voting_started', votingPayload);
+        } else if (room.status === 'ROLE_REVEAL' && room.roleRevealDeadline) {
+          socket.emit('game_started', {
+            status: 'ROLE_REVEAL',
+            duration: 3,
+            roleRevealDeadline: room.roleRevealDeadline,
+            turnDurationSeconds: room.settings?.turnDurationSeconds || 30,
+            votingDurationSeconds: room.settings?.votingDurationSeconds || 45,
+            settings: room.settings
+          });
+        } else if (room.status === 'RESULTS' && room.eliminationResult) {
+          socket.emit('round_results', {
+            ...room.eliminationResult,
+            resultsDeadline: room.resultsDeadline || room.eliminationResult.resultsDeadline,
+            duration: 3
+          });
         }
 
         nsp.to(`room:${normalizedCode}`).emit('game_disconnect_cancelled', {
@@ -577,7 +622,8 @@ function setupNamespace(nsp) {
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
         const gameStartedPayload = {
           status: 'ROLE_REVEAL',
-          duration: 6,
+          duration: 3,
+          roleRevealDeadline: room.roleRevealDeadline,
           turnDurationSeconds: room.settings.turnDurationSeconds,
           votingDurationSeconds: room.settings.votingDurationSeconds,
           settings: room.settings
@@ -607,7 +653,7 @@ function setupNamespace(nsp) {
               scheduleTurnTimeout(nsp, normalizedCode);
             }
           }
-        }, 6000);
+        }, 3000);
         activeRoleRevealTimers.set(normalizedCode, revealTimer);
       } catch (err) {
         socket.emit('error', { message: err.message });
@@ -759,7 +805,7 @@ function setupNamespace(nsp) {
           if (p.playerId === playerId || p.socketId === socket.id) return false;
           const liveSocket = nsp.sockets.get(p.socketId);
           if (!liveSocket) {
-            roomRepository.removeVoiceParticipant(normalizedCode, p.playerId).catch(() => {});
+            roomRepository.removeVoiceParticipant(normalizedCode, p.playerId).catch(() => { });
             return false;
           }
           return true;
@@ -1169,7 +1215,7 @@ function scheduleNextRound(nsp, roomCode) {
         scheduleTurnTimeout(nsp, normalizedCode);
       }
     }
-  }, 7000);
+  }, 3000);
 
   activeNextRoundTimers.set(normalizedCode, timerId);
 }

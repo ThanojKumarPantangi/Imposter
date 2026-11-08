@@ -434,6 +434,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return {
               ...prev,
               status: data.status || 'ROLE_REVEAL',
+              roleRevealDeadline: data.roleRevealDeadline || prev.roleRevealDeadline,
               turnOrder: data.turnOrder || prev.turnOrder,
               settings: {
                 ...prev.settings,
@@ -441,6 +442,22 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {}),
                 ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {}),
               },
+            };
+          });
+        }
+      });
+
+      socket.on('round_results', (data: any) => {
+        sounds.playTurnAlert();
+        showToast('💀 Round results calculated!');
+        if (data) {
+          setRoomState((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              status: 'RESULTS',
+              eliminationResult: data,
+              resultsDeadline: data.resultsDeadline || prev.resultsDeadline,
             };
           });
         }

@@ -55,6 +55,42 @@ function DisconnectCountdownBadge({ deadline, timeout = 15, isGameOver = false }
   );
 }
 
+function PhaseCountdownBadge({ deadline, label = 'Starting in', defaultSeconds = 3, color = 'cyan' }) {
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    if (!deadline) return defaultSeconds;
+    return Math.max(0, serverTimeSync.getRemainingSeconds(deadline));
+  });
+
+  useEffect(() => {
+    if (!deadline) return;
+
+    const tick = () => {
+      const remaining = serverTimeSync.getRemainingSeconds(deadline);
+      setSecondsLeft(Math.max(0, remaining));
+    };
+
+    tick();
+    const timer = setInterval(tick, 250);
+    const unsubscribe = serverTimeSync.subscribe(tick);
+    return () => {
+      clearInterval(timer);
+      unsubscribe();
+    };
+  }, [deadline]);
+
+  const borderClass = color === 'rose' ? 'border-rose-500/30' : 'border-cyan-500/30';
+  const textClass = color === 'rose' ? 'text-rose-400' : 'text-cyan-400';
+
+  return (
+    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-dark-950 border ${borderClass} text-xs sm:text-sm font-bold text-slate-300`}>
+      <Clock className={`w-4 h-4 animate-pulse ${textClass}`} />
+      <span>
+        {label} <span className={`font-black ${textClass}`}>{secondsLeft}s</span>...
+      </span>
+    </div>
+  );
+}
+
 export function GameView() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
@@ -249,6 +285,15 @@ export function GameView() {
 
         <div className="flex items-center justify-end gap-3">
           {/* Phase Countdown Timer */}
+          {roomState.status === 'ROLE_REVEAL' && roomState.roleRevealDeadline && (
+            <CountdownTimer
+              key={`reveal-${roomState.roleRevealDeadline}`}
+              deadline={roomState.roleRevealDeadline}
+              totalSeconds={roomState.roleRevealDuration || 3}
+              label="Role Reveal"
+            />
+          )}
+
           {roomState.status === 'CLUE_ROUND' && roomState.turnDeadline && (
             <CountdownTimer
               key={`turn-${roomState.currentRound}-${roomState.activeTurnIndex}-${roomState.turnDeadline}`}
@@ -264,6 +309,15 @@ export function GameView() {
               deadline={roomState.votingDeadline}
               totalSeconds={roomState.settings?.votingDurationSeconds || 45}
               label="Voting Deadline"
+            />
+          )}
+
+          {roomState.status === 'RESULTS' && (roomState.resultsDeadline || roomState.eliminationResult?.resultsDeadline) && (
+            <CountdownTimer
+              key={`results-${roomState.currentRound}-${roomState.resultsDeadline || roomState.eliminationResult?.resultsDeadline}`}
+              deadline={roomState.resultsDeadline || roomState.eliminationResult?.resultsDeadline}
+              totalSeconds={roomState.eliminationResult?.duration || 3}
+              label="Next Round"
             />
           )}
         </div>
@@ -372,10 +426,12 @@ export function GameView() {
           <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mb-6">
             Memorize your word or hint above! Clue rounds will begin in a moment.
           </p>
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-dark-950 border border-slate-800 text-xs sm:text-sm font-bold text-slate-300">
-            <Clock className="w-4 h-4 text-cyan-400" />
-            <span>Starting round 1 shortly...</span>
-          </div>
+          <PhaseCountdownBadge
+            deadline={roomState.roleRevealDeadline}
+            label="Starting round 1 in"
+            defaultSeconds={3}
+            color="cyan"
+          />
         </div>
       )}
 
@@ -849,9 +905,17 @@ export function GameView() {
             </div>
           )}
 
-          <p className="text-xs text-slate-400">
-            Checking victory conditions and preparing for the next round...
-          </p>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <PhaseCountdownBadge
+              deadline={roomState.resultsDeadline || roomState.eliminationResult?.resultsDeadline}
+              label="Next round starting in"
+              defaultSeconds={3}
+              color="rose"
+            />
+            <p className="text-xs text-slate-500">
+              Checking victory conditions and preparing for the next round...
+            </p>
+          </div>
         </div>
       )}
 

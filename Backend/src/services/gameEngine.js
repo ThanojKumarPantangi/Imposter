@@ -81,6 +81,8 @@ class GameEngine {
       clueHistory: [],
       votes: {},
       votingDeadline: null,
+      roleRevealDeadline: null,
+      resultsDeadline: null,
       eliminationResult: null,
       winnerResult: null,
       lastImposters: [],
@@ -633,6 +635,8 @@ class GameEngine {
 
     room.lastImposters = newImposterIds;
     room.status = 'ROLE_REVEAL';
+    room.roleRevealDeadline = Date.now() + 3000;
+    room.resultsDeadline = null;
     room.currentRound = 1;
     room.clueHistory = [];
     room.votes = {};
@@ -674,6 +678,8 @@ class GameEngine {
 
     room.turnDeadline = Date.now() + (room.settings.turnDurationSeconds * 1000);
     room.status = 'CLUE_ROUND';
+    room.roleRevealDeadline = null;
+    room.resultsDeadline = null;
 
     await roomRepository.setTurnTimer(roomCode, room.turnDeadline, room.settings.turnDurationSeconds);
     await roomRepository.saveRoom(roomCode, room);
@@ -1052,6 +1058,9 @@ class GameEngine {
       }
     }
 
+    const resultsDurationSeconds = 3;
+    const resultsDeadline = Date.now() + (resultsDurationSeconds * 1000);
+
     room.eliminationResult = {
       eliminatedPlayer: eliminatedPlayer
         ? {
@@ -1064,11 +1073,14 @@ class GameEngine {
       wasSkipped,
       skipVotes,
       voteCounts,
-      round: room.currentRound
+      round: room.currentRound,
+      resultsDeadline,
+      duration: resultsDurationSeconds
     };
 
     room.status = 'RESULTS';
     room.votingDeadline = null;
+    room.resultsDeadline = resultsDeadline;
 
     await roomRepository.clearVotingTimer(roomCode);
 
@@ -1245,6 +1257,8 @@ class GameEngine {
     room.clueHistory = [];
     room.votes = {};
     room.votingDeadline = null;
+    room.roleRevealDeadline = null;
+    room.resultsDeadline = null;
     room.eliminationResult = null;
     room.winnerResult = null;
 
@@ -1275,6 +1289,8 @@ class GameEngine {
 
     room.turnDeadline = null;
     room.votingDeadline = null;
+    room.roleRevealDeadline = null;
+    room.resultsDeadline = null;
     await roomRepository.clearTurnTimer(room.code);
     await roomRepository.clearVotingTimer(room.code);
     await roomRepository.saveRoom(room.code, room);

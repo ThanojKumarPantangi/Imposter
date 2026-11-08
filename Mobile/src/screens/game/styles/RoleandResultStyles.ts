@@ -101,4 +101,34 @@ export const RoleandResultStyles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 22,
     },
+
+    countdownBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#0A0E17',
+        borderWidth: 1,
+        borderColor: 'rgba(56, 189, 248, 0.3)',
+        borderRadius: 14,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        marginTop: 6,
+    },
+    countdownBadgeResults: {
+        borderColor: 'rgba(244, 63, 94, 0.3)',
+        marginTop: 12,
+    },
+    countdownText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#CBD5E1',
+    },
+    countdownNumberCyan: {
+        color: '#38BDF8',
+        fontWeight: '900',
+    },
+    countdownNumberRose: {
+        color: '#F43F5E',
+        fontWeight: '900',
+    },
 });

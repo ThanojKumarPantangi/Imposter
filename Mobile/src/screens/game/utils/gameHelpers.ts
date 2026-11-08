@@ -9,6 +9,12 @@ export const getActiveDeadline = (roomState?: RoomState | null): number | null =
   if (roomState.status === 'VOTING') {
     return roomState.votingDeadline ?? null;
   }
+  if (roomState.status === 'ROLE_REVEAL') {
+    return roomState.roleRevealDeadline ?? null;
+  }
+  if (roomState.status === 'RESULTS') {
+    return roomState.resultsDeadline ?? roomState.eliminationResult?.resultsDeadline ?? null;
+  }
   return null;
 };
 
@@ -19,6 +25,12 @@ export const getActiveDuration = (roomState?: RoomState | null): number => {
   }
   if (roomState.status === 'VOTING') {
     return roomState.settings?.votingDurationSeconds || 45;
+  }
+  if (roomState.status === 'ROLE_REVEAL') {
+    return 3;
+  }
+  if (roomState.status === 'RESULTS') {
+    return roomState.eliminationResult?.duration || 3;
   }
   return 30;
 };

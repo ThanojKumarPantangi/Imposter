@@ -204,7 +204,9 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
         {/* ========================================================== */}
         {/* PHASE 1: ROLE REVEAL */}
         {/* ========================================================== */}
-        {roomState.status === 'ROLE_REVEAL' && <RoleRevealSection />}
+        {roomState.status === 'ROLE_REVEAL' && (
+          <RoleRevealSection deadline={roomState.roleRevealDeadline} />
+        )}
 
         {/* ========================================================== */}
         {/* PHASE 2: CLUE ROUND */}
@@ -254,7 +256,10 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
         {/* PHASE 4: RESULTS */}
         {/* ========================================================== */}
         {roomState.status === 'RESULTS' && roomState.eliminationResult && (
-          <ResultsSection eliminationResult={roomState.eliminationResult} />
+          <ResultsSection
+            eliminationResult={roomState.eliminationResult}
+            deadline={roomState.resultsDeadline || roomState.eliminationResult?.resultsDeadline}
+          />
         )}
 
         {/* ========================================================== */}

@@ -277,12 +277,30 @@ export function SocketProvider({ children }) {
           return {
             ...prev,
             status: data.status || 'ROLE_REVEAL',
+            roleRevealDeadline: data.roleRevealDeadline || prev.roleRevealDeadline,
+            roleRevealDuration: data.duration || 3,
             settings: {
               ...prev.settings,
               ...(data.settings || {}),
               ...(data.turnDurationSeconds ? { turnDurationSeconds: data.turnDurationSeconds } : {}),
               ...(data.votingDurationSeconds ? { votingDurationSeconds: data.votingDurationSeconds } : {})
             }
+          };
+        });
+      }
+    });
+
+    socket.on('round_results', (data) => {
+      sounds.playTurnAlert();
+      showToast('💀 Round results calculated!');
+      if (data) {
+        setRoomState(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: 'RESULTS',
+            eliminationResult: data,
+            resultsDeadline: data.resultsDeadline || prev.resultsDeadline
           };
         });
       }

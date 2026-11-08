@@ -60,7 +60,10 @@ export interface EliminationResult {
   eliminatedPlayer?: Player | null;
   wasSkipped?: boolean;
   tie?: boolean;
+  wasTie?: boolean;
   round?: number;
+  resultsDeadline?: number | null;
+  duration?: number;
 }
 
 export interface WinnerResult {
@@ -88,6 +91,8 @@ export interface RoomState {
   activeTurnIndex?: number;
   turnDeadline?: number | null;
   votingDeadline?: number | null;
+  roleRevealDeadline?: number | null;
+  resultsDeadline?: number | null;
   clueHistory?: ClueEntry[];
   votes?: Record<string, string>;
   myRole?: Role;
