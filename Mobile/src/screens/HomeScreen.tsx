@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import {
   View,
@@ -8,6 +8,9 @@ import {
   ScrollView,
   StyleSheet,
   Modal,
+  Animated,
+  Easing,
+  Pressable,
 } from 'react-native';
 import {
   Play,
@@ -20,6 +23,7 @@ import {
   X,
   Shield,
   Layers,
+  ChevronRight,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -36,6 +40,23 @@ import { sounds } from '../utils/sound';
 interface HomeScreenProps {
   navigation: any;
 }
+
+// Helper component for interactive scaling cards
+const AnimatedPressableCard = ({ onPress, children, style }: any) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => Animated.spring(scale, { toValue: 0.95, useNativeDriver: true }).start()}
+      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+    >
+      <Animated.View style={[style, { transform: [{ scale }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const { player } = useAuth();
@@ -54,10 +75,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const [error, setError] = useState<string>('');
   const [showRules, setShowRules] = useState<boolean>(false);
   const [showEditProfile, setShowEditProfile] = useState<boolean>(false);
+  const [isInputFocused, setIsInputFocused] = useState<boolean>(false);
 
   const isFocused = useIsFocused();
 
-  // If currently focused on Home while an active session exists, smoothly restore the player to their room
+  // --- Animations ---
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Screen entrance animation
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true, easing: Easing.out(Easing.ease) })
+    ]).start();
+
+    // Floating hero badge animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: 1, duration: 2000, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 2000, useNativeDriver: true, easing: Easing.inOut(Easing.ease) })
+      ])
+    ).start();
+  }, []);
+
+  const badgeTranslateY = floatAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -6]
+  });
+
+  // --- Core Logic (Untouched) ---
   useEffect(() => {
     if (!isFocused) return;
     const lingeringCode = roomState?.code;
@@ -67,7 +115,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
   }, [roomState?.code, roomState?.status, roomLifecycleState, isFocused]);
 
-  // Watch for approval to auto-enter lobby
   useEffect(() => {
     if (rejoinState && rejoinState.status === 'APPROVED' && rejoinState.roomCode) {
       const code = rejoinState.roomCode;
@@ -77,12 +124,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     }
   }, [rejoinState, player]);
 
-  // Polling fallback while waiting for approval
   useEffect(() => {
     if (!rejoinState || rejoinState.status !== 'PENDING' || !rejoinState.roomCode || !player?.id) {
       return;
     }
-
     const pollInterval = setInterval(async () => {
       try {
         const res = await roomApi.checkRejoinStatus(rejoinState.roomCode!, player.id);
@@ -105,7 +150,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         // safe
       }
     }, 2000);
-
     return () => clearInterval(pollInterval);
   }, [rejoinState, player?.id]);
 
@@ -115,7 +159,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
       setError('Please enter a valid room code');
       return;
     }
-
     try {
       setLoading(true);
       setError('');
@@ -126,12 +169,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         navigation.navigate('Lobby', { roomCode: cleanCode });
       }
     } catch (err: any) {
-      if (
-        err.requiresApproval ||
-        err.status === 403 ||
-        err.kicked ||
-        err.message?.includes('previously removed')
-      ) {
+      if (err.requiresApproval || err.status === 403 || err.kicked || err.message?.includes('previously removed')) {
         requestRejoin(cleanCode, player!);
       } else {
         setError(err.message || 'Room not found or game in progress');
@@ -173,18 +211,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
     <View style={styles.container}>
       <Header
         onOpenProfile={() => setShowEditProfile(true)}
-        onNavigateHome={() => {}}
+        onNavigateHome={() => { }}
       />
 
-      <ScrollView
+      <Animated.ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
       >
-        {/* Hero Tag */}
-        <View style={styles.heroBadge}>
-          <Sparkles size={12} color="#fb7185" />
-          <Text style={styles.heroBadgeText}>Real-Time Online Social Deduction</Text>
-        </View>
+        {/* Animated Hero Tag */}
+        <Animated.View style={[styles.heroBadge, { transform: [{ translateY: badgeTranslateY }] }]}>
+          <Sparkles size={14} color="#fb7185" />
+          <Text style={styles.heroBadgeText}>Real-Time Social Deduction</Text>
+        </Animated.View>
 
         {/* Hero Headline */}
         <Text style={styles.heroTitle}>
@@ -193,7 +232,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </Text>
 
         <Text style={styles.heroSubtitle}>
-          Civilians receive the secret word. Imposters get only a hint. Enter subtle clues, vote out the suspect, or guess the secret word to win instantly!
+          Civilians receive the secret word. Imposters get only a hint. Subtly drop clues, vote out the suspect, or guess the word to win!
         </Text>
 
         {error ? (
@@ -227,10 +266,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                 style={{ flex: 1 }}
               />
               <TouchableOpacity
-                onPress={() => {
-                  if (player?.id) leaveRoom(roomState.code, player.id);
-                }}
+                onPress={() => { if (player?.id) leaveRoom(roomState.code, player.id); }}
                 style={styles.leaveActiveSessionBtn}
+                activeOpacity={0.7}
               >
                 <Text style={styles.leaveActiveSessionText}>Leave</Text>
               </TouchableOpacity>
@@ -238,7 +276,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           </Card>
         ) : null}
 
-        {/* Action Cards */}
+        {/* Action Cards Section */}
         <View style={styles.cardsSection}>
           {/* Join Room Card */}
           <Card style={styles.actionCard}>
@@ -248,19 +286,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               </View>
               <View>
                 <Text style={styles.cardTitle}>Join A Room</Text>
-                <Text style={styles.cardSub}>Enter your friend's room code to jump in</Text>
+                <Text style={styles.cardSub}>Enter your friend's room code</Text>
               </View>
             </View>
 
-            <TextInput
-              value={roomCodeInput}
-              onChangeText={(text) => setRoomCodeInput(text.toUpperCase())}
-              placeholder="e.g. ABCD"
-              placeholderTextColor={COLORS.slate[600]}
-              maxLength={6}
-              autoCapitalize="characters"
-              style={styles.roomCodeInput}
-            />
+            <View style={[styles.inputWrapper, isInputFocused && styles.inputWrapperFocused]}>
+              <TextInput
+                value={roomCodeInput}
+                onChangeText={(text) => setRoomCodeInput(text.toUpperCase())}
+                placeholder="e.g. ABCD"
+                placeholderTextColor={COLORS.slate[600]}
+                maxLength={6}
+                autoCapitalize="characters"
+                style={styles.roomCodeInput}
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => setIsInputFocused(false)}
+                selectionColor={COLORS.civilian.default}
+              />
+            </View>
 
             <GradientButton
               title="Join Game"
@@ -268,34 +311,34 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               variant="cyan"
               loading={loading}
               disabled={loading || !roomCodeInput.trim()}
-              icon={<ArrowRight size={16} color={COLORS.white} />}
+              icon={<ArrowRight size={18} color={COLORS.dark[950]} />}
               style={styles.fullWidthBtn}
             />
           </Card>
 
           {/* Host Room Card */}
-          <Card variant="imposter" style={styles.actionCard}>
+          <Card style={styles.actionCardDark}>
             <View style={styles.cardHeader}>
               <View style={styles.iconBoxRose}>
                 <Plus size={22} color={COLORS.imposter.default} />
               </View>
               <View>
                 <Text style={styles.cardTitle}>Host New Room</Text>
-                <Text style={styles.cardSub}>Choose words, timers, and invite your crew</Text>
+                <Text style={styles.cardSub}>Create a private lobby</Text>
               </View>
             </View>
 
             <Text style={styles.hostDesc}>
-              Create a private lobby with custom word categories, voice chat, and 3 to 50 player capacity.
+              Custom words, timers, and voice chat for 3 to 50 players.
             </Text>
 
             <GradientButton
-              title="Create Private Lobby"
+              title="Create Lobby"
               onPress={handleCreate}
               variant="primary"
               loading={loading}
               disabled={loading}
-              icon={<ArrowRight size={16} color={COLORS.white} />}
+              icon={<ArrowRight size={18} color={COLORS.white} />}
               style={styles.fullWidthBtn}
             />
           </Card>
@@ -304,103 +347,93 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         {/* Quick Modes Section */}
         <View style={styles.quickModesGrid}>
           {/* Pass & Play */}
-          <TouchableOpacity
-            onPress={() => {
-              sounds.playClick();
-              navigation.navigate('PassAndPlay');
-            }}
-            activeOpacity={0.8}
+          <AnimatedPressableCard
+            onPress={() => { sounds.playClick(); navigation.navigate('PassAndPlay'); }}
             style={styles.quickModeCard}
           >
             <View style={styles.iconBoxPurple}>
-              <Smartphone size={18} color={COLORS.accent.purple} />
+              <Smartphone size={20} color={COLORS.accent.purple} />
             </View>
-            <View>
+            <View style={styles.quickModeContent}>
               <Text style={styles.quickModeTitle}>Pass & Play</Text>
               <Text style={styles.quickModeSub}>Single device party mode</Text>
             </View>
-          </TouchableOpacity>
+            <ChevronRight size={16} color={COLORS.slate[600]} />
+          </AnimatedPressableCard>
 
           {/* Leaderboard */}
-          <TouchableOpacity
-            onPress={() => {
-              sounds.playClick();
-              navigation.navigate('Leaderboard');
-            }}
-            activeOpacity={0.8}
+          <AnimatedPressableCard
+            onPress={() => { sounds.playClick(); navigation.navigate('Leaderboard'); }}
             style={styles.quickModeCard}
           >
             <View style={styles.iconBoxAmber}>
-              <Trophy size={18} color={COLORS.accent.amber} />
+              <Trophy size={20} color={COLORS.accent.amber} />
             </View>
-            <View>
-              <Text style={styles.quickModeTitle}>Leaderboard</Text>
+            <View style={styles.quickModeContent}>
+              <Text style={styles.quickModeTitle}>Leaderboards</Text>
               <Text style={styles.quickModeSub}>Top detectives & bluffers</Text>
             </View>
-          </TouchableOpacity>
+            <ChevronRight size={16} color={COLORS.slate[600]} />
+          </AnimatedPressableCard>
 
           {/* How to Play */}
-          <TouchableOpacity
-            onPress={() => {
-              sounds.playClick();
-              setShowRules(true);
-            }}
-            activeOpacity={0.8}
+          <AnimatedPressableCard
+            onPress={() => { sounds.playClick(); setShowRules(true); }}
             style={styles.quickModeCard}
           >
             <View style={styles.iconBoxEmerald}>
-              <BookOpen size={18} color={COLORS.accent.emerald} />
+              <BookOpen size={20} color={COLORS.accent.emerald} />
             </View>
-            <View>
+            <View style={styles.quickModeContent}>
               <Text style={styles.quickModeTitle}>How To Play</Text>
               <Text style={styles.quickModeSub}>Rules & winning strategies</Text>
             </View>
-          </TouchableOpacity>
+            <ChevronRight size={16} color={COLORS.slate[600]} />
+          </AnimatedPressableCard>
         </View>
 
         {/* Admin Link */}
         <TouchableOpacity
-          onPress={() => {
-            sounds.playClick();
-            navigation.navigate('AdminLogin');
-          }}
-          activeOpacity={0.7}
+          onPress={() => { sounds.playClick(); navigation.navigate('AdminLogin'); }}
+          activeOpacity={0.6}
           style={styles.adminFooterLink}
         >
           <Shield size={14} color={COLORS.slate[500]} />
           <Text style={styles.adminFooterText}>Admin Portal</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Rules Modal */}
-      <Modal visible={showRules} transparent animationType="fade" onRequestClose={() => setShowRules(false)}>
+      <Modal visible={showRules} transparent animationType="slide" onRequestClose={() => setShowRules(false)}>
         <View style={styles.rulesBackdrop}>
           <View style={styles.rulesCard}>
             <View style={styles.rulesHeader}>
-              <Text style={styles.rulesTitle}>Game Rules & Roles</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.iconBoxEmerald}>
+                  <BookOpen size={18} color={COLORS.accent.emerald} />
+                </View>
+                <Text style={styles.rulesTitle}>Game Rules</Text>
+              </View>
               <TouchableOpacity onPress={() => setShowRules(false)} style={styles.rulesCloseBtn}>
-                <X size={18} color={COLORS.slate[400]} />
+                <X size={20} color={COLORS.slate[400]} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.rulesScroll}>
-              {/* Civilian */}
               <View style={styles.ruleBoxCiv}>
-                <Text style={styles.ruleRoleCiv}>Civilian</Text>
+                <Text style={styles.ruleRoleCiv}>Civilian Role</Text>
                 <Text style={styles.ruleDesc}>
                   Receives the actual secret word (e.g. "Apple"). Must submit a related word each turn and vote to eliminate the Imposter.
                 </Text>
               </View>
 
-              {/* Imposter */}
               <View style={styles.ruleBoxImp}>
-                <Text style={styles.ruleRoleImp}>Imposter</Text>
+                <Text style={styles.ruleRoleImp}>Imposter Role</Text>
                 <Text style={styles.ruleDesc}>
                   Does NOT receive the secret word! Receives only a persistent hint (e.g. "Crisp fruit, often red or green"). Must blend in by entering believable related words, or enter the exact secret word during their turn to win instantly!
                 </Text>
               </View>
 
-              {/* Flow */}
               <View style={styles.ruleBoxFlow}>
                 <Text style={styles.ruleRoleFlow}>Gameplay Flow</Text>
                 <Text style={styles.ruleStep}>1. <Text style={styles.boldWhite}>Role Reveal:</Text> Everyone privately sees their word or hint.</Text>
@@ -421,20 +454,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* Edit Profile Modal */}
-      <EditUsernameModal
-        visible={showEditProfile}
-        onClose={() => setShowEditProfile(false)}
-      />
-
-      {/* Rejoin Waiting Modal */}
-      {rejoinState && (
-        <RejoinWaitingModal
-          rejoinState={rejoinState}
-          onCancel={clearRejoinState}
-          onReturnHome={clearRejoinState}
-        />
-      )}
+      <EditUsernameModal visible={showEditProfile} onClose={() => setShowEditProfile(false)} />
+      {rejoinState && <RejoinWaitingModal rejoinState={rejoinState} onCancel={clearRejoinState} onReturnHome={clearRejoinState} />}
     </View>
   );
 };
@@ -442,63 +463,69 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.dark[950],
+    backgroundColor: '#030509', // Deeper, more premium dark background
   },
   scrollContent: {
     padding: SPACING.lg,
     alignItems: 'center',
-    paddingBottom: 40,
+    paddingBottom: 60,
   },
   heroBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    gap: 8,
+    backgroundColor: 'rgba(244, 63, 94, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(244, 63, 94, 0.3)',
+    borderColor: 'rgba(244, 63, 94, 0.25)',
     borderRadius: RADIUS.round,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 5,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 6,
     marginBottom: SPACING.md,
+    shadowColor: COLORS.imposter.default,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
   },
   heroBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     color: '#fb7185',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   heroTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '900',
     color: COLORS.white,
     textAlign: 'center',
-    lineHeight: 34,
+    lineHeight: 40,
     marginBottom: SPACING.sm,
+    letterSpacing: 0.5,
   },
   heroHighlight: {
     color: COLORS.imposter.default,
   },
   heroSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.slate[400],
     textAlign: 'center',
-    lineHeight: 19,
-    maxWidth: 380,
+    lineHeight: 20,
+    maxWidth: '90%',
     marginBottom: SPACING.xl,
   },
   errorBox: {
     width: '100%',
-    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    backgroundColor: 'rgba(244, 63, 94, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(244, 63, 94, 0.35)',
+    borderColor: 'rgba(244, 63, 94, 0.4)',
     borderRadius: RADIUS.md,
     padding: SPACING.md,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   errorText: {
     color: COLORS.imposter.default,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -506,8 +533,8 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: SPACING.lg,
     borderWidth: 1.5,
-    borderColor: 'rgba(244, 63, 94, 0.4)',
-    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+    borderColor: 'rgba(244, 63, 94, 0.5)',
+    backgroundColor: 'rgba(244, 63, 94, 0.1)',
   },
   resumeBtnRow: {
     flexDirection: 'row',
@@ -516,17 +543,17 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
   leaveActiveSessionBtn: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: 12,
-    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: 14,
+    borderRadius: RADIUS.lg,
     backgroundColor: COLORS.dark[800],
     borderWidth: 1,
     borderColor: COLORS.slate[700],
   },
   leaveActiveSessionText: {
     color: COLORS.slate[300],
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   cardsSection: {
     width: '100%',
@@ -535,6 +562,18 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     width: '100%',
+    backgroundColor: COLORS.dark[900],
+    borderColor: COLORS.slate[800],
+    borderWidth: 1,
+    borderRadius: RADIUS.xl,
+  },
+  actionCardDark: {
+    width: '100%',
+    backgroundColor: 'rgba(15, 20, 28, 0.6)',
+    borderColor: COLORS.slate[800],
+    borderWidth: 1,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -543,212 +582,224 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   iconBoxCyan: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: RADIUS.lg,
     backgroundColor: 'rgba(6, 182, 212, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconBoxRose: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: RADIUS.lg,
     backgroundColor: 'rgba(244, 63, 94, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '900',
     color: COLORS.white,
   },
   cardSub: {
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.slate[400],
     marginTop: 2,
   },
-  roomCodeInput: {
+  inputWrapper: {
     backgroundColor: COLORS.dark[950],
-    borderWidth: 1.5,
-    borderColor: COLORS.slate[700],
-    borderRadius: RADIUS.md,
+    borderWidth: 2,
+    borderColor: COLORS.slate[800],
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.md,
+    overflow: 'hidden',
+  },
+  inputWrapperFocused: {
+    borderColor: COLORS.civilian.default,
+    backgroundColor: 'rgba(6, 182, 212, 0.05)',
+  },
+  roomCodeInput: {
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.lg,
     color: COLORS.white,
     fontFamily: 'monospace',
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
-    letterSpacing: 6,
+    letterSpacing: 8,
     textAlign: 'center',
-    marginBottom: SPACING.md,
   },
   fullWidthBtn: {
     width: '100%',
   },
   hostDesc: {
-    fontSize: 12,
-    color: COLORS.slate[300],
-    lineHeight: 18,
+    fontSize: 13,
+    color: COLORS.slate[400],
+    lineHeight: 20,
     marginBottom: SPACING.lg,
   },
   quickModesGrid: {
     width: '100%',
-    gap: SPACING.sm,
+    gap: SPACING.md,
     marginBottom: SPACING.xl,
   },
   quickModeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(13, 17, 23, 0.9)',
+    backgroundColor: COLORS.dark[900],
     borderWidth: 1,
     borderColor: COLORS.slate[800],
     borderRadius: RADIUS.xl,
     padding: SPACING.md,
     gap: SPACING.md,
   },
+  quickModeContent: {
+    flex: 1,
+  },
   iconBoxPurple: {
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
     borderRadius: RADIUS.md,
     backgroundColor: 'rgba(168, 85, 247, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconBoxAmber: {
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
     borderRadius: RADIUS.md,
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconBoxEmerald: {
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
     borderRadius: RADIUS.md,
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickModeTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '900',
     color: COLORS.white,
   },
   quickModeSub: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.slate[400],
-    marginTop: 1,
+    marginTop: 2,
   },
   adminFooterLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
+    gap: 8,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    backgroundColor: COLORS.dark[900],
+    borderRadius: RADIUS.round,
+    borderWidth: 1,
+    borderColor: COLORS.slate[800],
   },
   adminFooterText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.slate[500],
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.slate[400],
   },
   rulesBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(7, 9, 14, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: SPACING.lg,
+    backgroundColor: 'rgba(3, 5, 9, 0.9)',
+    justifyContent: 'flex-end',
   },
   rulesCard: {
     width: '100%',
-    maxWidth: 420,
-    maxHeight: '80%',
+    maxHeight: '90%',
     backgroundColor: COLORS.dark[900],
+    borderTopLeftRadius: RADIUS.xxl,
+    borderTopRightRadius: RADIUS.xxl,
     borderWidth: 1,
     borderColor: COLORS.slate[800],
-    borderRadius: RADIUS.xxl,
     padding: SPACING.xl,
+    paddingBottom: SPACING.xl * 2,
   },
   rulesHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   rulesTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     color: COLORS.white,
   },
   rulesCloseBtn: {
-    padding: 6,
-    borderRadius: RADIUS.md,
+    padding: 8,
+    borderRadius: RADIUS.round,
     backgroundColor: COLORS.dark[800],
   },
   rulesScroll: {
     marginVertical: SPACING.sm,
   },
   ruleBoxCiv: {
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.25)',
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
+    borderColor: 'rgba(6, 182, 212, 0.3)',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   ruleRoleCiv: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '900',
     color: COLORS.civilian.default,
-    marginBottom: 4,
-  },
-  ruleBoxImp: {
-    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(244, 63, 94, 0.25)',
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  ruleRoleImp: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.imposter.default,
-    marginBottom: 4,
-  },
-  ruleBoxFlow: {
-    backgroundColor: COLORS.dark[800],
-    borderWidth: 1,
-    borderColor: COLORS.slate[700],
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  ruleRoleFlow: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.slate[200],
     marginBottom: 6,
   },
+  ruleBoxImp: {
+    backgroundColor: 'rgba(244, 63, 94, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.3)',
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  ruleRoleImp: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: COLORS.imposter.default,
+    marginBottom: 6,
+  },
+  ruleBoxFlow: {
+    backgroundColor: COLORS.dark[950],
+    borderWidth: 1,
+    borderColor: COLORS.slate[800],
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    marginBottom: SPACING.xl,
+  },
+  ruleRoleFlow: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: COLORS.white,
+    marginBottom: 10,
+  },
   ruleStep: {
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.slate[400],
-    lineHeight: 16,
-    marginBottom: 4,
+    lineHeight: 20,
+    marginBottom: 8,
   },
   boldWhite: {
     color: COLORS.white,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   ruleDesc: {
-    fontSize: 11,
+    fontSize: 13,
     color: COLORS.slate[300],
-    lineHeight: 17,
+    lineHeight: 20,
   },
   rulesUnderstoodBtn: {
-    marginTop: SPACING.sm,
+    marginTop: SPACING.md,
     width: '100%',
   },
 });
-
