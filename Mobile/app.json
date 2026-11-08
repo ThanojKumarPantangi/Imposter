@@ -32,7 +32,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#07090e"
         }
-      ]
+      ],
+      "expo-video"
     ]
   }
 }

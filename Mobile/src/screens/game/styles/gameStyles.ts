@@ -77,6 +77,11 @@ export const gameStyles = StyleSheet.create({
     paddingBottom: 220,
     gap: SPACING.md,
   },
+  scrollContentFinished: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.xl,
+    gap: SPACING.md,
+  },
   spectatorBanner: {
     flexDirection: 'row',
     alignItems: 'center',

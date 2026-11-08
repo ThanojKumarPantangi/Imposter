@@ -185,7 +185,11 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
       </GameTopBar>
 
       <ScrollView
-        contentContainerStyle={gameStyles.scrollContent}
+        contentContainerStyle={
+          roomState.status === 'FINISHED'
+            ? gameStyles.scrollContentFinished
+            : gameStyles.scrollContent
+        }
         showsVerticalScrollIndicator={false}
       >
         {/* Eliminated Spectator Banner */}
