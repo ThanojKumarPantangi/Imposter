@@ -259,6 +259,7 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
           <ResultsSection
             eliminationResult={roomState.eliminationResult}
             deadline={roomState.resultsDeadline || roomState.eliminationResult?.resultsDeadline}
+            roomState={roomState}
           />
         )}
 

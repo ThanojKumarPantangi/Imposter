@@ -1061,6 +1061,9 @@ class GameEngine {
     const resultsDurationSeconds = 3;
     const resultsDeadline = Date.now() + (resultsDurationSeconds * 1000);
 
+    const livingImposters = room.players.filter(p => p.isAlive && !p.permanentlyDeparted && p.role === 'IMPOSTER');
+    const impostersRemaining = livingImposters.length;
+
     room.eliminationResult = {
       eliminatedPlayer: eliminatedPlayer
         ? {
@@ -1075,7 +1078,8 @@ class GameEngine {
       voteCounts,
       round: room.currentRound,
       resultsDeadline,
-      duration: resultsDurationSeconds
+      duration: resultsDurationSeconds,
+      impostersRemaining
     };
 
     room.status = 'RESULTS';

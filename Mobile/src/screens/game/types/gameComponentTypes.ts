@@ -98,6 +98,8 @@ export interface SpectatorVotingSectionProps {
 export interface ResultsSectionProps {
   eliminationResult: EliminationResult;
   deadline?: number | null;
+  roomState?: RoomState;
+  impostersRemaining?: number;
 }
 
 export interface FinishedSectionProps {

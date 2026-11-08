@@ -9,6 +9,8 @@ import { serverTimeSync } from '../../../utils/serverTimeSync';
 export const ResultsSection: React.FC<ResultsSectionProps> = ({
   eliminationResult,
   deadline,
+  roomState,
+  impostersRemaining,
 }) => {
   const effectiveDeadline = deadline || eliminationResult.resultsDeadline;
   const [secondsLeft, setSecondsLeft] = useState(() => {
@@ -33,42 +35,63 @@ export const ResultsSection: React.FC<ResultsSectionProps> = ({
     };
   }, [effectiveDeadline]);
 
+  const remainingCount = (() => {
+    if (typeof eliminationResult?.impostersRemaining === 'number') {
+      return eliminationResult.impostersRemaining;
+    }
+    if (typeof impostersRemaining === 'number') {
+      return impostersRemaining;
+    }
+    const initialCount = roomState?.settings?.impostersCount ?? 1;
+    const eliminatedIsImposter = eliminationResult?.eliminatedPlayer?.role === 'IMPOSTER';
+    return Math.max(0, initialCount - (eliminatedIsImposter ? 1 : 0));
+  })();
+
+  const imposterRemainText =
+    remainingCount === 1 ? '1 imposter remains' : `${remainingCount} imposters remain`;
+
   return (
-    <Card style={RoleandResultStyles.centerPhaseCard}>
-      <View style={RoleandResultStyles.skullCircle}>
-        <Skull size={32} color="#F43F5E" />
-      </View>
+    <View style={RoleandResultStyles.resultsWrapper}>
+      <Card style={RoleandResultStyles.centerPhaseCard}>
+        <View style={RoleandResultStyles.skullCircle}>
+          <Skull size={32} color="#F43F5E" />
+        </View>
 
-      <Text style={RoleandResultStyles.phaseMainTitle}>Round Elimination</Text>
+        <Text style={RoleandResultStyles.phaseMainTitle}>Round Elimination</Text>
 
-      {eliminationResult.eliminatedPlayer ? (
-        <View style={RoleandResultStyles.eliminationBox}>
-          <Text style={RoleandResultStyles.eliminatedTag}>ELIMINATED BY VOTE</Text>
-          <Text style={RoleandResultStyles.eliminatedPlayerName}>
-            {eliminationResult.eliminatedPlayer.username}
-          </Text>
-          <View style={RoleandResultStyles.eliminatedRoleBadge}>
-            <Text style={RoleandResultStyles.eliminatedRoleText}>
-              Identity: {eliminationResult.eliminatedPlayer.role}
+        {eliminationResult.eliminatedPlayer ? (
+          <View style={RoleandResultStyles.eliminationBox}>
+            <Text style={RoleandResultStyles.eliminatedTag}>ELIMINATED BY VOTE</Text>
+            <Text style={RoleandResultStyles.eliminatedPlayerName}>
+              {eliminationResult.eliminatedPlayer.username}
+            </Text>
+            <View style={RoleandResultStyles.eliminatedRoleBadge}>
+              <Text style={RoleandResultStyles.eliminatedRoleText}>
+                Identity: {eliminationResult.eliminatedPlayer.role}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={RoleandResultStyles.tieBox}>
+            <Text style={RoleandResultStyles.tieText}>
+              {eliminationResult.wasSkipped
+                ? 'The majority voted to skip!\nMoving to the next round.'
+                : 'The vote was tied!\nNo player was eliminated this round.'}
             </Text>
           </View>
-        </View>
-      ) : (
-        <View style={RoleandResultStyles.tieBox}>
-          <Text style={RoleandResultStyles.tieText}>
-            {eliminationResult.wasSkipped
-              ? 'The majority voted to skip!\nMoving to the next round.'
-              : 'The vote was tied!\nNo player was eliminated this round.'}
+        )}
+
+        <View style={[RoleandResultStyles.countdownBadge, RoleandResultStyles.countdownBadgeResults]}>
+          <Clock size={16} color="#F43F5E" />
+          <Text style={RoleandResultStyles.countdownText}>
+            Next round starting in <Text style={RoleandResultStyles.countdownNumberRose}>{secondsLeft}s</Text>...
           </Text>
         </View>
-      )}
+      </Card>
 
-      <View style={[RoleandResultStyles.countdownBadge, RoleandResultStyles.countdownBadgeResults]}>
-        <Clock size={16} color="#F43F5E" />
-        <Text style={RoleandResultStyles.countdownText}>
-          Next round starting in <Text style={RoleandResultStyles.countdownNumberRose}>{secondsLeft}s</Text>...
-        </Text>
+      <View style={RoleandResultStyles.impostersRemainPill}>
+        <Text style={RoleandResultStyles.impostersRemainText}>{imposterRemainText}</Text>
       </View>
-    </Card>
+    </View>
   );
 };

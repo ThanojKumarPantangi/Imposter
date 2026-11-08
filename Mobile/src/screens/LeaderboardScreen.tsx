@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
-import { Trophy, ArrowLeft } from 'lucide-react-native';
+import { Trophy, ArrowLeft, Crown, Award, Star } from 'lucide-react-native';
 import { apiRequest } from '../services/api/client';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { Card } from '../components/common/Card';
@@ -16,6 +17,48 @@ import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { sounds } from '../utils/sound';
 import { Player } from '../types';
+
+// Wrapper component to handle staggered entrance animations for each list item
+const AnimatedListItem: React.FC<{ index: number; children: React.ReactNode }> = ({
+  index,
+  children,
+}) => {
+  const animValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(animValue, {
+      toValue: 1,
+      delay: index * 80, // Stagger effect based on index
+      tension: 60,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  }, [animValue, index]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: animValue,
+        transform: [
+          {
+            translateY: animValue.interpolate({
+              inputRange: [0, 1],
+              outputRange: [30, 0], // Slide up from 30px
+            }),
+          },
+          {
+            scale: animValue.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.95, 1], // Subtle scale up
+            }),
+          },
+        ],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+};
 
 export const LeaderboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [leaders, setLeaders] = useState<Player[]>([]);
@@ -37,6 +80,19 @@ export const LeaderboardScreen: React.FC<{ navigation: any }> = ({ navigation })
     load();
   }, []);
 
+  const renderRankIcon = (idx: number) => {
+    switch (idx) {
+      case 0:
+        return <Crown size={18} color="#FBBF24" fill="#FBBF24" style={styles.rankIcon} />;
+      case 1:
+        return <Award size={18} color="#94A3B8" fill="#94A3B8" style={styles.rankIcon} />;
+      case 2:
+        return <Star size={18} color="#EA580C" fill="#EA580C" style={styles.rankIcon} />;
+      default:
+        return <Text style={styles.medalText}>#{idx + 1}</Text>;
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
@@ -46,6 +102,7 @@ export const LeaderboardScreen: React.FC<{ navigation: any }> = ({ navigation })
             navigation.navigate('Home');
           }}
           style={styles.backBtn}
+          activeOpacity={0.7}
         >
           <ArrowLeft size={16} color={COLORS.slate[300]} />
           <Text style={styles.backBtnText}>Home</Text>
@@ -68,17 +125,16 @@ export const LeaderboardScreen: React.FC<{ navigation: any }> = ({ navigation })
             </View>
           ) : leaders.length === 0 ? (
             <View style={styles.centerBox}>
+              <Trophy size={48} color={COLORS.slate[700]} style={{ marginBottom: 12 }} />
               <Text style={styles.emptyText}>
-                No completed matches recorded yet. Play a match to climb the leaderboard!
+                No completed matches recorded yet.{'\n'}Play a match to climb the leaderboard!
               </Text>
             </View>
           ) : (
             <View style={styles.list}>
-              {leaders.map((p, idx) => {
-                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
-                return (
+              {leaders.map((p, idx) => (
+                <AnimatedListItem key={p.id || idx} index={idx}>
                   <View
-                    key={idx}
                     style={[
                       styles.rankRow,
                       idx === 0 && styles.rankRowGold,
@@ -87,10 +143,14 @@ export const LeaderboardScreen: React.FC<{ navigation: any }> = ({ navigation })
                     ]}
                   >
                     <View style={styles.rankLeft}>
-                      <Text style={styles.medalText}>{medal}</Text>
+                      <View style={styles.rankBadgeContainer}>
+                        {renderRankIcon(idx)}
+                      </View>
                       <PlayerAvatar player={p} size="sm" showStatus={false} />
                       <View>
-                        <Text style={styles.rankUsername}>{p.username}</Text>
+                        <Text style={[styles.rankUsername, idx < 3 && styles.topRankText]}>
+                          {p.username}
+                        </Text>
                         <Text style={styles.rankMatches}>
                           {p.stats?.gamesPlayed || 0} Matches Played
                         </Text>
@@ -98,14 +158,21 @@ export const LeaderboardScreen: React.FC<{ navigation: any }> = ({ navigation })
                     </View>
 
                     <View style={styles.rankRight}>
-                      <Text style={styles.rankWinsText}>{p.stats?.wins || 0} Wins</Text>
+                      <Text style={[
+                        styles.rankWinsText,
+                        idx === 0 && { color: '#FBBF24' },
+                        idx === 1 && { color: '#CBD5E1' },
+                        idx === 2 && { color: '#F97316' },
+                      ]}>
+                        {p.stats?.wins || 0} Wins
+                      </Text>
                       <Text style={styles.rankBreakdown}>
                         Civ: {p.stats?.civilianWins || 0} • Imp: {p.stats?.imposterWins || 0}
                       </Text>
                     </View>
                   </View>
-                );
-              })}
+                </AnimatedListItem>
+              ))}
             </View>
           )}
         </Card>
@@ -127,6 +194,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(30, 41, 59, 0.7)',
+    backgroundColor: COLORS.dark[950],
   },
   backBtn: {
     flexDirection: 'row',
@@ -151,38 +219,50 @@ const styles = StyleSheet.create({
   },
   headerTitleBox: {
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   title: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '900',
     color: COLORS.white,
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.slate[400],
+    fontWeight: '500',
   },
   leaderboardCard: {
     width: '100%',
+    backgroundColor: COLORS.dark[900],
+    borderColor: COLORS.slate[800],
+    borderWidth: 1,
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
   },
   centerBox: {
-    padding: 30,
+    padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   loadingText: {
-    fontSize: 12,
+    fontSize: 14,
+    fontWeight: '600',
     color: COLORS.slate[400],
   },
   emptyText: {
-    fontSize: 13,
-    color: COLORS.slate[500],
+    fontSize: 14,
+    color: COLORS.slate[400],
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   list: {
     gap: SPACING.sm,
+    padding: SPACING.sm,
   },
   rankRow: {
     flexDirection: 'row',
@@ -195,16 +275,21 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
   },
   rankRowGold: {
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    borderColor: 'rgba(245, 158, 11, 0.3)',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    shadowColor: '#FBBF24',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
   rankRowSilver: {
     backgroundColor: 'rgba(203, 213, 225, 0.08)',
-    borderColor: 'rgba(203, 213, 225, 0.25)',
+    borderColor: 'rgba(203, 213, 225, 0.3)',
   },
   rankRowBronze: {
     backgroundColor: 'rgba(234, 88, 12, 0.08)',
-    borderColor: 'rgba(234, 88, 12, 0.25)',
+    borderColor: 'rgba(234, 88, 12, 0.3)',
   },
   rankLeft: {
     flexDirection: 'row',
@@ -212,36 +297,48 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     flex: 1,
   },
+  rankBadgeContainer: {
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankIcon: {
+    opacity: 0.9,
+  },
   medalText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-    minWidth: 26,
-    color: COLORS.slate[400],
+    color: COLORS.slate[500],
   },
   rankUsername: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: COLORS.white,
+    marginBottom: 2,
+  },
+  topRankText: {
+    fontSize: 16,
+    fontWeight: '800',
   },
   rankMatches: {
-    fontSize: 10,
-    color: COLORS.slate[400],
-    marginTop: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.slate[500],
   },
   rankRight: {
     alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   rankWinsText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '900',
     color: COLORS.civilian.default,
+    marginBottom: 2,
   },
   rankBreakdown: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
-    color: COLORS.slate[500],
+    color: COLORS.slate[400],
     textTransform: 'uppercase',
-    marginTop: 2,
   },
 });
-

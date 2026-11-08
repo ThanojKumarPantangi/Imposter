@@ -64,6 +64,9 @@ export interface EliminationResult {
   round?: number;
   resultsDeadline?: number | null;
   duration?: number;
+  voteCounts?: Record<string, number>;
+  skipVotes?: number;
+  impostersRemaining?: number;
 }
 
 export interface WinnerResult {

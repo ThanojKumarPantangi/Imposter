@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 
 export const RoleandResultStyles = StyleSheet.create({
     centerPhaseCard: {
@@ -130,5 +130,30 @@ export const RoleandResultStyles = StyleSheet.create({
     countdownNumberRose: {
         color: '#F43F5E',
         fontWeight: '900',
+    },
+
+    resultsWrapper: {
+        width: '100%',
+        alignItems: 'center',
+    },
+    impostersRemainPill: {
+        marginTop: 24,
+        paddingHorizontal: 28,
+        paddingVertical: 10,
+        borderRadius: 9999,
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+        backgroundColor: 'rgba(5, 11, 20, 0.6)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'center',
+    },
+    impostersRemainText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '500',
+        fontFamily: Platform.OS === 'android' ? 'serif' : 'Georgia',
+        textAlign: 'center',
+        letterSpacing: 0.5,
     },
 });
