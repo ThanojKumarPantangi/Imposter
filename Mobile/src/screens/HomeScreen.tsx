@@ -393,14 +393,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         </View>
 
         {/* Admin Link */}
-        <TouchableOpacity
-          onPress={() => { sounds.playClick(); navigation.navigate('AdminLogin'); }}
-          activeOpacity={0.6}
-          style={styles.adminFooterLink}
-        >
-          <Shield size={14} color={COLORS.slate[500]} />
-          <Text style={styles.adminFooterText}>Admin Portal</Text>
-        </TouchableOpacity>
+        {/* 
+          <TouchableOpacity
+            onPress={() => { sounds.playClick(); navigation.navigate('AdminLogin'); }}
+            activeOpacity={0.6}
+            style={styles.adminFooterLink}
+          >
+            <Shield size={14} color={COLORS.slate[500]} />
+            <Text style={styles.adminFooterText}>Admin Portal</Text>
+          </TouchableOpacity> 
+        */}
       </Animated.ScrollView>
 
       {/* Rules Modal */}
