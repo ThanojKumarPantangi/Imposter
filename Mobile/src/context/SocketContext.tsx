@@ -128,29 +128,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    // If socket claims to be connected, send probe to catch silent/zombie TCP disconnection
-    let probeAcknowledged = false;
-    const probeTimer = setTimeout(() => {
-      if (!probeAcknowledged) {
-        console.warn('⚠️ [Foreground] Socket heartbeat probe timed out. Forcing reconnection...');
-        socket.disconnect();
-        socket.connect();
-      }
-    }, 1500);
-
+    // Socket is already connected. Do not forcibly disconnect a healthy socket.
+    // Sync time and recover session idempotently.
     try {
-      socket.emit('sync_time', { clientSendTime: Date.now() }, (res: any) => {
-        probeAcknowledged = true;
-        clearTimeout(probeTimer);
-        serverTimeSync.syncWithSocket(socket);
-
-        // Socket is verified alive on network layer. Recover session immediately.
-        recoverActiveSession(socket);
-      });
-    } catch {
-      clearTimeout(probeTimer);
-      socket.disconnect();
-      socket.connect();
+      serverTimeSync.syncWithSocket(socket);
+      recoverActiveSession(socket);
+    } catch (err: any) {
+      console.warn('⚠️ [Foreground] Error syncing session on foreground resume:', err.message);
     }
   }, [recoverActiveSession]);
 

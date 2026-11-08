@@ -6,19 +6,20 @@ import {
   RTCIceCandidate,
   RTCSessionDescription,
   mediaDevices,
-  MediaStream,
 } from 'react-native-webrtc';
 import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
 import { CONFIG } from '../config/constants';
-import { permissionService } from '../services/audio/permissionService';
+import { permissionService, MicPermissionStatus } from '../services/audio/permissionService';
 import { audioRouteService, AudioRouteType } from '../services/audio/audioRouteService';
+import { showError } from '../components/Toast';
 
 export interface VoiceChatContextType {
   micEnabled: boolean;
   speakerEnabled: boolean;
   inVoiceRoom: boolean;
   voiceError: string | null;
+  clearVoiceError: () => void;
   currentRoute: AudioRouteType;
   availableRoutes: AudioRouteType[];
   toggleMicrophone: () => Promise<void>;
@@ -78,6 +79,12 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const isAcquiringMicRef = useRef<boolean>(false);
   const appStateRef = useRef<AppStateStatus>((AppState.currentState as AppStateStatus) || 'active');
 
+  // Lifecycle & Session Idempotency Refs
+  const activeRoomCodeRef = useRef<string | null>(null);
+  const isInitializingVoiceRef = useRef<boolean>(false);
+  const hasJoinedVoiceRef = useRef<boolean>(false);
+  const joinedSocketIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     micEnabledRef.current = micEnabled;
   }, [micEnabled]);
@@ -85,6 +92,37 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     speakerEnabledRef.current = speakerEnabled;
   }, [speakerEnabled]);
+
+  const clearVoiceError = useCallback(() => {
+    setVoiceError(null);
+  }, []);
+
+  // Centralized Permission Warning Display
+  const handlePermissionWarning = useCallback(
+    (status: MicPermissionStatus, isUserAction: boolean = false) => {
+      if (status === 'granted') {
+        setVoiceError(null);
+        return;
+      }
+      if (status === 'never_ask_again') {
+        const errorMsg = 'Microphone permission permanently disabled. Enable in Settings.';
+        setVoiceError(errorMsg);
+        // Only show settings prompt once per 'never_ask_again' state, OR when user explicitly clicks Mic
+        if (isUserAction || !permissionService.hasWarned('never_ask_again')) {
+          permissionService.setWarned('never_ask_again', true);
+          permissionService.promptSettingsRedirect();
+        }
+      } else if (status === 'denied') {
+        const errorMsg = 'Microphone permission required for voice chat.';
+        setVoiceError(errorMsg);
+        if (isUserAction || !permissionService.hasWarned('denied')) {
+          permissionService.setWarned('denied', true);
+          showError(errorMsg);
+        }
+      }
+    },
+    []
+  );
 
   // Load persisted audio preferences on startup
   useEffect(() => {
@@ -260,7 +298,7 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     delete iceCandidateQueuesRef.current[peerSocketId];
   }, []);
 
-  // Cleanup all peer connections and release local audio resources
+  // Cleanup all peer connections and release local audio resources (only on actual exit)
   const cleanupAllPeers = useCallback(() => {
     console.log('[WEBRTC] Cleaning up all voice peers and releasing audio session...');
     Object.keys(peersRef.current).forEach(cleanupPeer);
@@ -280,6 +318,10 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       localStreamRef.current = null;
     }
 
+    activeRoomCodeRef.current = null;
+    hasJoinedVoiceRef.current = false;
+    joinedSocketIdRef.current = null;
+    isInitializingVoiceRef.current = false;
     setInVoiceRoom(false);
     audioRouteService.stopVoipSession().catch(() => {});
   }, [cleanupPeer]);
@@ -368,15 +410,115 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [socket, player?.id, cleanupPeer]
   );
 
+  // Centralized Idempotent Voice Session Initializer
+  const initVoiceSession = useCallback(
+    async (forceReconnect: boolean = false) => {
+      if (!socket || !roomState?.code || !player?.id) return;
+      const targetRoomCode = roomState.code;
+
+      // Prevent concurrent initializations
+      if (isInitializingVoiceRef.current) {
+        console.log('[VOICE] Voice initialization already in progress. Skipping parallel execution.');
+        return;
+      }
+
+      // Idempotency: if already joined this room with the current socket ID and not forced, preserve session
+      if (
+        !forceReconnect &&
+        hasJoinedVoiceRef.current &&
+        activeRoomCodeRef.current === targetRoomCode &&
+        joinedSocketIdRef.current === socket.id
+      ) {
+        console.log(`[VOICE] Voice session already active for room ${targetRoomCode} (socket: ${socket.id}). Preserving session.`);
+        return;
+      }
+
+      isInitializingVoiceRef.current = true;
+      activeRoomCodeRef.current = targetRoomCode;
+
+      try {
+        console.log(`[VOICE] Initializing voice session for room ${targetRoomCode} (player ${player.id}, socket ${socket.id})...`);
+
+        // Initialize Native Android Audio Session in VoIP mode
+        try {
+          await audioRouteService.startVoipSession();
+          await audioRouteService.setSpeakerphoneOn(speakerEnabledRef.current);
+        } catch (err: any) {
+          console.warn('[AUDIO-ROUTE] Error initializing VoIP audio session:', err.message);
+        }
+
+        // Centralized microphone permission check
+        try {
+          let hasPermission = await permissionService.checkMicrophonePermission();
+          if (!hasPermission && micEnabledRef.current) {
+            // Only request if mic preference was on and permission not already permanently denied
+            if (permissionService.getStatus() !== 'never_ask_again') {
+              const status = await permissionService.requestMicrophonePermission();
+              hasPermission = status === 'granted';
+              handlePermissionWarning(status, false);
+            } else {
+              handlePermissionWarning('never_ask_again', false);
+            }
+          }
+
+          if (hasPermission) {
+            await acquireLocalStream();
+          } else if (micEnabledRef.current) {
+            console.warn('[MIC] Mic was saved as ON but permission not granted. Resetting to OFF.');
+            setMicEnabled(false);
+            micEnabledRef.current = false;
+            await AsyncStorage.setItem(STORAGE_KEY_MIC, 'false');
+          }
+        } catch (err: any) {
+          console.warn('[MIC] Could not acquire local mic stream on room join:', err.message);
+        }
+
+        // Join voice signaling room on backend
+        if (socket.connected) {
+          console.log(`[VOICE] Emitting voice_signal_join for room ${targetRoomCode}`);
+          socket.emit('voice_signal_join', { roomCode: targetRoomCode, playerId: player.id });
+          hasJoinedVoiceRef.current = true;
+          joinedSocketIdRef.current = socket.id ?? null;
+        }
+      } finally {
+        isInitializingVoiceRef.current = false;
+      }
+    },
+    [socket, roomState?.code, player?.id, acquireLocalStream, handlePermissionWarning]
+  );
+
+  // Centralized recheck of permission when app resumes (e.g. from Android Settings)
+  const recheckPermissionOnResume = useCallback(async () => {
+    try {
+      const hasPerm = await permissionService.checkMicrophonePermission();
+      if (hasPerm) {
+        console.log('[MIC] Microphone permission detected as granted upon foreground resume.');
+        setVoiceError(null);
+        permissionService.resetWarnings();
+        if (micEnabledRef.current) {
+          const stream = await acquireLocalStream();
+          const audioTrack = stream?.getAudioTracks()[0];
+          if (audioTrack) {
+            audioTrack.enabled = true;
+            await attachTrackToAllPeers(audioTrack);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('[MIC] Error rechecking permission on resume:', err.message);
+    }
+  }, [acquireLocalStream, attachTrackToAllPeers]);
+
   // Main Voice Room Lifecycle Effect
   useEffect(() => {
-    if (
+    const isOutOfRoom =
       !socket ||
       !roomState?.code ||
       !player?.id ||
       roomLifecycleState === 'INTENTIONAL_EXIT' ||
-      roomLifecycleState === 'NO_ROOM'
-    ) {
+      roomLifecycleState === 'NO_ROOM';
+
+    if (isOutOfRoom) {
       if (roomLifecycleState === 'INTENTIONAL_EXIT' || roomLifecycleState === 'NO_ROOM') {
         AsyncStorage.removeItem(STORAGE_KEY_MIC).catch(() => {});
         AsyncStorage.removeItem(STORAGE_KEY_SPEAKER).catch(() => {});
@@ -385,51 +527,34 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setSpeakerEnabled(true);
         speakerEnabledRef.current = true;
       }
-      cleanupAllPeers();
+      if (activeRoomCodeRef.current || hasJoinedVoiceRef.current) {
+        cleanupAllPeers();
+      }
       return;
     }
 
-    let isCancelled = false;
+    // Preserve peer connections during temporary network drops
+    if (roomLifecycleState === 'TEMPORARILY_DISCONNECTED') {
+      console.log('[VOICE] Room temporarily disconnected. Preserving peer connections for recovery...');
+      return;
+    }
+
+    // If room code changed to a DIFFERENT room, clean up old room first
+    if (activeRoomCodeRef.current && activeRoomCodeRef.current !== roomState.code) {
+      console.log(`[VOICE] Switching voice room from ${activeRoomCodeRef.current} to ${roomState.code}`);
+      cleanupAllPeers();
+    }
+
     setInVoiceRoom(true);
 
-    const initVoiceSession = async () => {
-      console.log(`[VOICE] Initializing voice session for room ${roomState.code} (player ${player.id})...`);
-
-      // Initialize Native Android Audio Session in VoIP mode
-      try {
-        await audioRouteService.startVoipSession();
-        await audioRouteService.setSpeakerphoneOn(speakerEnabledRef.current);
-      } catch (err: any) {
-        console.warn('[AUDIO-ROUTE] Error initializing VoIP audio session:', err.message);
-      }
-
-      // Acquire local mic stream upfront if permission is granted so peer connections attach the track immediately
-      try {
-        let hasPermission = await permissionService.checkMicrophonePermission();
-        if (!hasPermission && micEnabledRef.current) {
-          const status = await permissionService.requestMicrophonePermission();
-          hasPermission = status === 'granted';
-        }
-        if (hasPermission) {
-          await acquireLocalStream();
-        } else if (micEnabledRef.current) {
-          console.warn('[MIC] Mic was saved as ON but permission not granted. Resetting to OFF.');
-          setMicEnabled(false);
-          micEnabledRef.current = false;
-          await AsyncStorage.setItem(STORAGE_KEY_MIC, 'false');
-        }
-      } catch (err: any) {
-        console.warn('[MIC] Could not acquire local mic stream on room join:', err.message);
-      }
-
-      if (isCancelled) return;
-
-      // Join voice signaling room on backend
-      console.log(`[VOICE] Emitting voice_signal_join for room ${roomState.code}`);
-      socket.emit('voice_signal_join', { roomCode: roomState.code, playerId: player.id });
-    };
-
-    initVoiceSession();
+    // Initialize voice session only if not already joined for this room and socket
+    if (
+      !hasJoinedVoiceRef.current ||
+      activeRoomCodeRef.current !== roomState.code ||
+      joinedSocketIdRef.current !== socket.id
+    ) {
+      initVoiceSession();
+    }
 
     // 1. Authoritative Voice Participants List from Backend
     const handleVoiceParticipantsList = async ({ participants }: { participants: any[] }) => {
@@ -614,11 +739,12 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     };
 
-    // 7. Socket Reconnection -> Re-initialize Voice Peers
+    // 7. Socket Reconnection -> Re-verify Voice Peers without recreating if socket ID didn't change
     const handleSocketConnect = () => {
-      console.log(`[VOICE] Socket reconnected (${socket.id}). Re-initializing voice room peers...`);
-      cleanupAllPeers();
-      initVoiceSession();
+      console.log(`[VOICE] Socket reconnected (${socket.id}). Re-verifying voice room peers...`);
+      if (roomState?.code && player?.id) {
+        initVoiceSession(true);
+      }
     };
 
     socket.on('voice_participants_list', handleVoiceParticipantsList);
@@ -630,7 +756,6 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     socket.on('connect', handleSocketConnect);
 
     return () => {
-      isCancelled = true;
       socket.off('voice_participants_list', handleVoiceParticipantsList);
       socket.off('voice_peer_joined', handlePeerJoined);
       socket.off('voice_signal_offer', handleSignalOffer);
@@ -639,7 +764,10 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       socket.off('voice_peer_left', handlePeerLeft);
       socket.off('connect', handleSocketConnect);
 
-      cleanupAllPeers();
+      // NOTE: We do NOT call cleanupAllPeers() here.
+      // WebRTC peer connections and native VoIP session are preserved across
+      // screen transitions (e.g. Lobby <-> GameView) and component re-renders.
+      // Only actual room exits or session ends clean up peer connections.
     };
   }, [
     socket,
@@ -647,33 +775,49 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     player?.id,
     roomLifecycleState,
     getOrCreatePeerConnection,
-    acquireLocalStream,
+    initVoiceSession,
     cleanupPeer,
     cleanupAllPeers,
     flushQueuedCandidates,
   ]);
 
-  // AppState monitoring for Voice Session Recovery
+  // Provider Unmount Cleanup (App teardown)
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+    return () => {
+      cleanupAllPeers();
+    };
+  }, [cleanupAllPeers]);
+
+  // AppState monitoring for Idempotent Voice Session Recovery & Permission Recheck
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
       const prevAppState = appStateRef.current;
       appStateRef.current = nextAppState;
 
       if (nextAppState === 'active' && prevAppState.match(/inactive|background/)) {
-        console.log('[VOICE] Returned to foreground. Verifying voice chat & audio routing...');
+        console.log('[VOICE] Returned to foreground. Idempotent audio routing & permission verification...');
+
+        // 1. Recheck microphone permission in case user granted it in Android Settings
+        await recheckPermissionOnResume();
+
+        // 2. If in active room, verify audio routing idempotently without destroying peer connections
         if (roomState?.code && player?.id && socket?.connected) {
-          // Re-verify VoIP audio session and speaker routing
           audioRouteService.startVoipSession().then(() => {
             audioRouteService.setSpeakerphoneOn(speakerEnabledRef.current);
           }).catch(() => {});
 
-          // Re-synchronize mute state over Socket.IO
-          socket.emit('voice_mute_state', {
-            roomCode: roomState.code,
-            playerId: player.id,
-            isMuted: !micEnabledRef.current,
-            isDeafened: !speakerEnabledRef.current,
-          });
+          // If socket.id changed while backgrounded, re-join voice signaling idempotently
+          if (joinedSocketIdRef.current !== socket.id) {
+            initVoiceSession(true);
+          } else {
+            // Re-synchronize mute state over Socket.IO
+            socket.emit('voice_mute_state', {
+              roomCode: roomState.code,
+              playerId: player.id,
+              isMuted: !micEnabledRef.current,
+              isDeafened: !speakerEnabledRef.current,
+            });
+          }
         }
       }
     });
@@ -681,7 +825,7 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       subscription.remove();
     };
-  }, [roomState?.code, player?.id, socket]);
+  }, [roomState?.code, player?.id, socket, recheckPermissionOnResume, initVoiceSession]);
 
   // Toggle Microphone (Default OFF -> ON)
   const toggleMicrophone = async () => {
@@ -692,16 +836,13 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         // Turning Mic ON
         console.log('[MIC] User requested microphone UNMUTE');
 
-        // Check runtime permission
+        // Check runtime permission centrally
         let hasPermission = await permissionService.checkMicrophonePermission();
         if (!hasPermission) {
           const status = await permissionService.requestMicrophonePermission();
-          if (status === 'never_ask_again') {
-            setVoiceError('Microphone permission permanently disabled. Enable in Settings.');
-            permissionService.promptSettingsRedirect();
-            return;
-          } else if (status !== 'granted') {
-            setVoiceError('Microphone permission required for voice chat.');
+          if (status !== 'granted') {
+            // User explicitly requested unmute, show settings prompt or error
+            handlePermissionWarning(status, true);
             return;
           }
           hasPermission = true;
@@ -782,7 +923,9 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     } catch (err: any) {
       console.error('[MIC] Error toggling microphone:', err);
-      setVoiceError(err.message || 'Microphone error');
+      const msg = err.message || 'Microphone error';
+      setVoiceError(msg);
+      showError(msg);
       setMicEnabled(false);
       micEnabledRef.current = false;
     }
@@ -844,6 +987,7 @@ export const VoiceChatProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         speakerEnabled,
         inVoiceRoom,
         voiceError,
+        clearVoiceError,
         currentRoute,
         availableRoutes,
         toggleMicrophone,

@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react-native';
 import { useVoiceChat } from '../context/VoiceChatContext';
-import { showError } from './Toast';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 import { sounds } from '../utils/sound';
@@ -17,19 +16,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({ compact = false })
     speakerEnabled,
     toggleMicrophone,
     toggleSpeaker,
-    voiceError,
   } = useVoiceChat();
-
-  const lastReportedErrorRef = React.useRef<string | null>(null);
-
-  useEffect(() => {
-    if (voiceError && voiceError !== lastReportedErrorRef.current) {
-      lastReportedErrorRef.current = voiceError;
-      showError(voiceError);
-    } else if (!voiceError) {
-      lastReportedErrorRef.current = null;
-    }
-  }, [voiceError]);
 
   const handleToggleMic = () => {
     sounds.playClick();
@@ -150,4 +137,3 @@ const styles = StyleSheet.create({
     color: COLORS.imposter.default,
   },
 });
-
