@@ -142,10 +142,10 @@ export async function getAdminAppConfig(req, res) {
   }
 }
 
-// Admin API: PUT /api/v1/admin/app-config
-export async function updateAdminAppConfig(req, res) {
+// Admin API: PUT /api/v1/admin/server-status
+export async function updateServerStatus(req, res) {
   try {
-    const { server, appUpdate, version } = req.body;
+    const { server, version } = req.body;
 
     const current = (await getActiveConfigFromDB()) || {
       server: { enabled: true, message: '' },
@@ -162,10 +162,70 @@ export async function updateAdminAppConfig(req, res) {
     };
 
     const updatedData = {
+      ...current, // Keep existing appUpdate data intact
       server: {
         enabled: server?.enabled !== undefined ? Boolean(server.enabled) : current.server.enabled,
         message: server?.message !== undefined ? String(server.message) : current.server.message
       },
+      version: version !== undefined ? Number(version) : current.version
+    };
+
+    const doc = await AppConfig.findOneAndUpdate(
+      { key: 'GLOBAL_APP_CONFIG' },
+      { $set: updatedData },
+      { new: true, upsert: true }
+    );
+
+    cachedConfig = {
+      server: doc.server,
+      appUpdate: doc.appUpdate,
+      version: doc.version
+    };
+
+    // Log to AuditLog
+    await AuditLog.create({
+      action: 'UPDATE_SERVER_STATUS',
+      adminEmail: req.user?.email || 'admin@imposter.game',
+      target: 'AppConfig',
+      details: { server: updatedData.server },
+      ip: req.ip || req.headers['x-forwarded-for'] || null
+    }).catch(e => console.warn('[AuditLog] Failed to record server status change:', e.message));
+
+    return res.status(200).json({
+      success: true,
+      message: 'Server status updated successfully',
+      data: cachedConfig
+    });
+  } catch (error) {
+    console.error('[AppConfig] Error updating server status:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update server status'
+    });
+  }
+}
+
+// Admin API: PUT /api/v1/admin/app-update
+export async function updateAppUpdateStatus(req, res) {
+  try {
+    const { appUpdate, version } = req.body;
+
+    const current = (await getActiveConfigFromDB()) || {
+      server: { enabled: true, message: '' },
+      appUpdate: {
+        enabled: false,
+        latestVersionCode: 1,
+        isUpdateRequired: false,
+        isBlocked: false,
+        updateUrl: '',
+        title: '',
+        message: ''
+      },
+      version: 1
+    };
+
+    const updatedData = {
+      ...current, // Keep existing server data intact
       appUpdate: {
         enabled: appUpdate?.enabled !== undefined ? Boolean(appUpdate.enabled) : current.appUpdate.enabled,
         latestVersionCode: appUpdate?.latestVersionCode !== undefined ? Number(appUpdate.latestVersionCode) : current.appUpdate.latestVersionCode,
@@ -200,23 +260,23 @@ export async function updateAdminAppConfig(req, res) {
 
     // Log to AuditLog
     await AuditLog.create({
-      action: 'UPDATE_APP_CONFIG',
+      action: 'UPDATE_APP_UPDATE_STATUS',
       adminEmail: req.user?.email || 'admin@imposter.game',
       target: 'AppConfig',
-      details: updatedData,
+      details: { appUpdate: updatedData.appUpdate },
       ip: req.ip || req.headers['x-forwarded-for'] || null
-    }).catch(e => console.warn('[AuditLog] Failed to record app config change:', e.message));
+    }).catch(e => console.warn('[AuditLog] Failed to record app update status change:', e.message));
 
     return res.status(200).json({
       success: true,
-      message: 'App configuration updated successfully',
+      message: 'App update settings updated successfully',
       data: cachedConfig
     });
   } catch (error) {
-    console.error('[AppConfig] Error updating app config:', error);
+    console.error('[AppConfig] Error updating app update status:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to update application configuration'
+      error: 'Failed to update app update settings'
     });
   }
 }

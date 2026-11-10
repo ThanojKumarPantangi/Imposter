@@ -14,7 +14,8 @@ import {
 } from '../controllers/adminController.js';
 import {
   getAdminAppConfig,
-  updateAdminAppConfig
+  updateServerStatus, 
+  updateAppUpdateStatus
 } from '../controllers/appConfigController.js';
 import { requireAdmin } from '../middlewares/authMiddleware.js';
 
@@ -38,6 +39,7 @@ router.post('/seed', triggerSeed);
 
 // App Startup Config & Maintenance Control
 router.get('/app-config', getAdminAppConfig);
-router.put('/app-config', updateAdminAppConfig);
+router.put('/server-status', updateServerStatus);
+router.put('/app-update', updateAppUpdateStatus);
 
 export default router;

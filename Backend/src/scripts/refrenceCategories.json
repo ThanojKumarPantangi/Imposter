@@ -23,12 +23,6 @@
                 "word": "Apple",
                 "normalizedWord": "apple",
                 "hint": "Newton",
-                "hints": {
-                    "level1": "Red fruit",
-                    "level2": "Orchard",
-                    "level3": "Newton",
-                    "level4": "Gravity"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -36,12 +30,6 @@
                 "word": "Banana",
                 "normalizedWord": "banana",
                 "hint": "Peel",
-                "hints": {
-                    "level1": "Yellow fruit",
-                    "level2": "Peel",
-                    "level3": "Minions",
-                    "level4": "Potassium"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -49,12 +37,6 @@
                 "word": "Mango",
                 "normalizedWord": "mango",
                 "hint": "Alphonso",
-                "hints": {
-                    "level1": "Yellow fruit",
-                    "level2": "King fruit",
-                    "level3": "Pit",
-                    "level4": "Alphonso"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -62,12 +44,6 @@
                 "word": "Watermelon",
                 "normalizedWord": "watermelon",
                 "hint": "Summer",
-                "hints": {
-                    "level1": "Green melon",
-                    "level2": "Picnic",
-                    "level3": "Spit seeds",
-                    "level4": "Summer"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -75,12 +51,6 @@
                 "word": "Grape",
                 "normalizedWord": "grape",
                 "hint": "Wine",
-                "hints": {
-                    "level1": "Purple bunch",
-                    "level2": "Vineyard",
-                    "level3": "Raisin",
-                    "level4": "Wine"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -88,12 +58,6 @@
                 "word": "Pineapple",
                 "normalizedWord": "pineapple",
                 "hint": "SpongeBob",
-                "hints": {
-                    "level1": "Spiky fruit",
-                    "level2": "Tropical",
-                    "level3": "Hawaii",
-                    "level4": "SpongeBob"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -101,12 +65,6 @@
                 "word": "Pomegranate",
                 "normalizedWord": "pomegranate",
                 "hint": "Red fruit",
-                "hints": {
-                    "level1": "Red fruit",
-                    "level2": "Many seeds",
-                    "level3": "Ruby arils",
-                    "level4": "Persephone"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -114,12 +72,6 @@
                 "word": "Lemon",
                 "normalizedWord": "lemon",
                 "hint": "Citrus",
-                "hints": {
-                    "level1": "Yellow sour",
-                    "level2": "Zest",
-                    "level3": "Citrus",
-                    "level4": "Lemonade"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -127,12 +79,6 @@
                 "word": "Guava",
                 "normalizedWord": "guava",
                 "hint": "Chilli salt",
-                "hints": {
-                    "level1": "Tropical fruit",
-                    "level2": "Pink flesh",
-                    "level3": "Seeds",
-                    "level4": "Chilli salt"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -140,12 +86,6 @@
                 "word": "Custard apple",
                 "normalizedWord": "custard apple",
                 "hint": "Seeds",
-                "hints": {
-                    "level1": "Green bumpy",
-                    "level2": "Sweet pulp",
-                    "level3": "Seeds",
-                    "level4": "Custard apple"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -153,12 +93,6 @@
                 "word": "Sapota",
                 "normalizedWord": "sapota",
                 "hint": "Milkshake",
-                "hints": {
-                    "level1": "Brown fruit",
-                    "level2": "Sweet",
-                    "level3": "Milkshake",
-                    "level4": "Chikoo"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -166,12 +100,6 @@
                 "word": "Papaya",
                 "normalizedWord": "papaya",
                 "hint": "Black seeds",
-                "hints": {
-                    "level1": "Tropical fruit",
-                    "level2": "Orange flesh",
-                    "level3": "Black seeds",
-                    "level4": "Enzyme"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -179,12 +107,6 @@
                 "word": "Strawberry",
                 "normalizedWord": "strawberry",
                 "hint": "Red berry",
-                "hints": {
-                    "level1": "Red berry",
-                    "level2": "Seeds outside",
-                    "level3": "Shortcake",
-                    "level4": "Wimbledon"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -192,12 +114,6 @@
                 "word": "Orange",
                 "normalizedWord": "orange",
                 "hint": "Vitamin C",
-                "hints": {
-                    "level1": "Citrus fruit",
-                    "level2": "Juice",
-                    "level3": "Vitamin C",
-                    "level4": "Florida"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             }
@@ -228,12 +144,6 @@
                 "word": "Carrot",
                 "normalizedWord": "carrot",
                 "hint": "Orange root",
-                "hints": {
-                    "level1": "Orange root",
-                    "level2": "Crunchy",
-                    "level3": "Bugs Bunny",
-                    "level4": "Vision"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -241,12 +151,6 @@
                 "word": "Potato",
                 "normalizedWord": "potato",
                 "hint": "French fries",
-                "hints": {
-                    "level1": "Brown root",
-                    "level2": "Starch",
-                    "level3": "French fries",
-                    "level4": "Mashed"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -254,12 +158,6 @@
                 "word": "Tomato",
                 "normalizedWord": "tomato",
                 "hint": "Ketchup",
-                "hints": {
-                    "level1": "Red produce",
-                    "level2": "Juicy",
-                    "level3": "Ketchup",
-                    "level4": "Botanical fruit"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -267,12 +165,6 @@
                 "word": "Onion",
                 "normalizedWord": "onion",
                 "hint": "Tears",
-                "hints": {
-                    "level1": "Pungent bulb",
-                    "level2": "Layers",
-                    "level3": "Tears",
-                    "level4": "Breath"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -280,12 +172,6 @@
                 "word": "Garlic",
                 "normalizedWord": "garlic",
                 "hint": "Cloves",
-                "hints": {
-                    "level1": "White bulb",
-                    "level2": "Cloves",
-                    "level3": "Vampires",
-                    "level4": "Strong breath"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -293,12 +179,6 @@
                 "word": "Spinach",
                 "normalizedWord": "spinach",
                 "hint": "Palak",
-                "hints": {
-                    "level1": "Green leaves",
-                    "level2": "Iron",
-                    "level3": "Popeye",
-                    "level4": "Palak"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -306,12 +186,6 @@
                 "word": "Brinjal",
                 "normalizedWord": "brinjal",
                 "hint": "Egg Plant",
-                "hints": {
-                    "level1": "Purple produce",
-                    "level2": "Spongy",
-                    "level3": "Purple skin",
-                    "level4": "Brinjal"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -319,12 +193,6 @@
                 "word": "Okra",
                 "normalizedWord": "okra",
                 "hint": "Lady finger",
-                "hints": {
-                    "level1": "Green pod",
-                    "level2": "Seeds",
-                    "level3": "Slime",
-                    "level4": "Lady finger"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -332,12 +200,6 @@
                 "word": "Mushroom",
                 "normalizedWord": "mushroom",
                 "hint": "Umbrella",
-                "hints": {
-                    "level1": "Earthy food",
-                    "level2": "Umbrella",
-                    "level3": "Fungi",
-                    "level4": "Toadstool"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -345,12 +207,6 @@
                 "word": "Cauliflower",
                 "normalizedWord": "cauliflower",
                 "hint": "Gobi",
-                "hints": {
-                    "level1": "White head",
-                    "level2": "Brain shape",
-                    "level3": "White florets",
-                    "level4": "Gobi"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -358,12 +214,6 @@
                 "word": "Cabbage",
                 "normalizedWord": "cabbage",
                 "hint": "Coleslaw",
-                "hints": {
-                    "level1": "Leafy head",
-                    "level2": "Dense",
-                    "level3": "Coleslaw",
-                    "level4": "Sauerkraut"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -371,12 +221,6 @@
                 "word": "Cucumber",
                 "normalizedWord": "cucumber",
                 "hint": "Eye spa",
-                "hints": {
-                    "level1": "Green cylinder",
-                    "level2": "Watery",
-                    "level3": "Pickle",
-                    "level4": "Eye spa"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -384,12 +228,6 @@
                 "word": "Ginger",
                 "normalizedWord": "ginger",
                 "hint": "Tea spice",
-                "hints": {
-                    "level1": "Spicy root",
-                    "level2": "Knobby",
-                    "level3": "Tea spice",
-                    "level4": "Adrak"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -397,12 +235,6 @@
                 "word": "Radish",
                 "normalizedWord": "radish",
                 "hint": "White root",
-                "hints": {
-                    "level1": "White root",
-                    "level2": "Crunchy",
-                    "level3": "Peppery",
-                    "level4": "Mooli"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -410,12 +242,6 @@
                 "word": "Bell Pepper",
                 "normalizedWord": "bell pepper",
                 "hint": "Capsicum",
-                "hints": {
-                    "level1": "Colorful produce",
-                    "level2": "Crunchy",
-                    "level3": "Hollow",
-                    "level4": "Capsicum"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             }
@@ -446,12 +272,6 @@
                 "word": "Samosa",
                 "normalizedWord": "samosa",
                 "hint": "Triangle shape",
-                "hints": {
-                    "level1": "Indian snack",
-                    "level2": "Stuffed pastry",
-                    "level3": "Triangle shape",
-                    "level4": "Mint chutney"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -459,12 +279,6 @@
                 "word": "Pani Puri",
                 "normalizedWord": "pani puri",
                 "hint": "Tangy water",
-                "hints": {
-                    "level1": "Chaat snack",
-                    "level2": "Crispy sphere",
-                    "level3": "Tangy water",
-                    "level4": "Golgappa"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -472,12 +286,6 @@
                 "word": "Mirchi Bajji",
                 "normalizedWord": "mirchi bajji",
                 "hint": "Indian street",
-                "hints": {
-                    "level1": "Indian street",
-                    "level2": "Fried chili",
-                    "level3": "Gram flour",
-                    "level4": "Stuffed spice"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -485,12 +293,6 @@
                 "word": "Punugulu",
                 "normalizedWord": "punugulu",
                 "hint": "Dosa batter",
-                "hints": {
-                    "level1": "Telugu snack",
-                    "level2": "Fried dough",
-                    "level3": "Dosa batter",
-                    "level4": "Peanut chutney"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -498,12 +300,6 @@
                 "word": "French Fries",
                 "normalizedWord": "french fries",
                 "hint": "Deep fried",
-                "hints": {
-                    "level1": "Fast food",
-                    "level2": "Salted potato",
-                    "level3": "Deep fried",
-                    "level4": "Ketchup dip"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -511,12 +307,6 @@
                 "word": "Popcorn",
                 "normalizedWord": "popcorn",
                 "hint": "Movie snack",
-                "hints": {
-                    "level1": "Movie snack",
-                    "level2": "Puffed kernels",
-                    "level3": "Buttered",
-                    "level4": "Cinema bucket"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -524,12 +314,6 @@
                 "word": "Nachos",
                 "normalizedWord": "nachos",
                 "hint": "Melted cheese",
-                "hints": {
-                    "level1": "Tex-Mex",
-                    "level2": "Tortilla chips",
-                    "level3": "Melted cheese",
-                    "level4": "Jalapeno topped"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -537,12 +321,6 @@
                 "word": "Hot Dog",
                 "normalizedWord": "hot dog",
                 "hint": "Meat sausage",
-                "hints": {
-                    "level1": "Fast food",
-                    "level2": "Meat sausage",
-                    "level3": "Grilled frank",
-                    "level4": "Mustard bun"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -550,12 +328,6 @@
                 "word": "Potato Chips",
                 "normalizedWord": "potato chips",
                 "hint": "Crispy fried",
-                "hints": {
-                    "level1": "Salty snack",
-                    "level2": "Thin slices",
-                    "level3": "Crispy fried",
-                    "level4": "Bagged crunch"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -563,12 +335,6 @@
                 "word": "Momos",
                 "normalizedWord": "momos",
                 "hint": "Steamed pocket",
-                "hints": {
-                    "level1": "Asian side",
-                    "level2": "Dough wrapper",
-                    "level3": "Steamed pocket",
-                    "level4": "Dumpling"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -576,12 +342,6 @@
                 "word": "Spring Roll",
                 "normalizedWord": "spring roll",
                 "hint": "Fried cylinder",
-                "hints": {
-                    "level1": "Asian appetizer",
-                    "level2": "Crispy wrapper",
-                    "level3": "Fried cylinder",
-                    "level4": "Sweet chili"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -589,12 +349,6 @@
                 "word": "Onion Rings",
                 "normalizedWord": "onion rings",
                 "hint": "Battered circles",
-                "hints": {
-                    "level1": "Fried side",
-                    "level2": "Battered circles",
-                    "level3": "Breaded hoops",
-                    "level4": "Tear jerker"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -602,12 +356,6 @@
                 "word": "Chicken Wings",
                 "normalizedWord": "chicken wings",
                 "hint": "Tandoori",
-                "hints": {
-                    "level1": "Meat appetizer",
-                    "level2": "Bone-in chicken",
-                    "level3": "Fried flats",
-                    "level4": "Tandoori"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -615,12 +363,6 @@
                 "word": "Shawarma",
                 "normalizedWord": "shawarma",
                 "hint": "Spit roasted",
-                "hints": {
-                    "level1": "Arab wrap",
-                    "level2": "Shaved meat",
-                    "level3": "Spit roasted",
-                    "level4": "Garlic sauce"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             }
@@ -651,12 +393,6 @@
                 "word": "Biryani",
                 "normalizedWord": "biryani",
                 "hint": "Dum cooked",
-                "hints": {
-                    "level1": "Hot meal",
-                    "level2": "Rice dish",
-                    "level3": "Dum cooked",
-                    "level4": "Handi"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -664,12 +400,6 @@
                 "word": "Dosa",
                 "normalizedWord": "dosa",
                 "hint": "Tawa roast",
-                "hints": {
-                    "level1": "Breakfast",
-                    "level2": "Flat crepe",
-                    "level3": "Tawa roast",
-                    "level4": "Urad dal"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -677,12 +407,6 @@
                 "word": "Idli",
                 "normalizedWord": "idli",
                 "hint": "White sponge",
-                "hints": {
-                    "level1": "Breakfast",
-                    "level2": "Steamed cake",
-                    "level3": "White sponge",
-                    "level4": "Sambar pair"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -690,12 +414,6 @@
                 "word": "Pizza",
                 "normalizedWord": "pizza",
                 "hint": "Triangular slice",
-                "hints": {
-                    "level1": "Italian dish",
-                    "level2": "Baked dough",
-                    "level3": "Triangular slice",
-                    "level4": "Margherita"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -703,12 +421,6 @@
                 "word": "Sushi",
                 "normalizedWord": "sushi",
                 "hint": "Wasabi",
-                "hints": {
-                    "level1": "Japanese dish",
-                    "level2": "Raw fish",
-                    "level3": "Seaweed roll",
-                    "level4": "Wasabi"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -716,12 +428,6 @@
                 "word": "Pasta",
                 "normalizedWord": "pasta",
                 "hint": "Boiled noodles",
-                "hints": {
-                    "level1": "Italian meal",
-                    "level2": "Wheat dough",
-                    "level3": "Boiled noodles",
-                    "level4": "Macaroni"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -729,12 +435,6 @@
                 "word": "Burger",
                 "normalizedWord": "burger",
                 "hint": "Two buns",
-                "hints": {
-                    "level1": "Fast food",
-                    "level2": "Two buns",
-                    "level3": "Meat patty",
-                    "level4": "Cheeseburger"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -742,12 +442,6 @@
                 "word": "Noodles",
                 "normalizedWord": "noodles",
                 "hint": "Long strings",
-                "hints": {
-                    "level1": "Asian dish",
-                    "level2": "Slurped",
-                    "level3": "Long strings",
-                    "level4": "Chopsticks"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -755,12 +449,6 @@
                 "word": "Fried Rice",
                 "normalizedWord": "fried rice",
                 "hint": "Wok tossed",
-                "hints": {
-                    "level1": "Asian meal",
-                    "level2": "Mixed grains",
-                    "level3": "Wok tossed",
-                    "level4": "Soy sauce"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -768,12 +456,6 @@
                 "word": "Kebab",
                 "normalizedWord": "kebab",
                 "hint": "Grilled meat",
-                "hints": {
-                    "level1": "Grilled dish",
-                    "level2": "Roasted",
-                    "level3": "Skewered meat",
-                    "level4": "Seekh"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -781,12 +463,6 @@
                 "word": "Curry",
                 "normalizedWord": "curry",
                 "hint": "Spicy gravy",
-                "hints": {
-                    "level1": "Indian meal",
-                    "level2": "Liquid base",
-                    "level3": "Spicy gravy",
-                    "level4": "Masala"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -794,12 +470,6 @@
                 "word": "Soup",
                 "normalizedWord": "soup",
                 "hint": "Hot appetizer",
-                "hints": {
-                    "level1": "Hot appetizer",
-                    "level2": "Liquid broth",
-                    "level3": "Spoon eaten",
-                    "level4": "Tomato bowl"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -807,12 +477,6 @@
                 "word": "Steak",
                 "normalizedWord": "steak",
                 "hint": "Beef slice",
-                "hints": {
-                    "level1": "Dinner dish",
-                    "level2": "Beef slice",
-                    "level3": "Thick cut",
-                    "level4": "Medium rare"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             }
@@ -843,12 +507,6 @@
                 "word": "Saree",
                 "normalizedWord": "saree",
                 "hint": "Silk drape",
-                "hints": {
-                    "level1": "Clothing",
-                    "level2": "Women's wear",
-                    "level3": "Silk drape",
-                    "level4": "Pallu"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -856,12 +514,6 @@
                 "word": "Kurta",
                 "normalizedWord": "kurta",
                 "hint": "Traditional wear",
-                "hints": {
-                    "level1": "Clothing",
-                    "level2": "Long shirt",
-                    "level3": "Traditional wear",
-                    "level4": "Pyjama pair"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -869,12 +521,6 @@
                 "word": "Lungi",
                 "normalizedWord": "lungi",
                 "hint": "South Indian",
-                "hints": {
-                    "level1": "Clothing",
-                    "level2": "Waist cloth",
-                    "level3": "Folded up",
-                    "level4": "South Indian"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -882,12 +528,6 @@
                 "word": "T-Shirt",
                 "normalizedWord": "t-shirt",
                 "hint": "Short sleeves",
-                "hints": {
-                    "level1": "Upper garment",
-                    "level2": "Cotton",
-                    "level3": "Short sleeves",
-                    "level4": "Graphic print"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -895,12 +535,6 @@
                 "word": "Jeans",
                 "normalizedWord": "jeans",
                 "hint": "Blue denim",
-                "hints": {
-                    "level1": "Lower garment",
-                    "level2": "Pants",
-                    "level3": "Blue denim",
-                    "level4": "Levi's"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -908,12 +542,6 @@
                 "word": "Jacket",
                 "normalizedWord": "jacket",
                 "hint": "Leather",
-                "hints": {
-                    "level1": "Outerwear",
-                    "level2": "Warm layer",
-                    "level3": "Front zipper",
-                    "level4": "Leather"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -921,12 +549,6 @@
                 "word": "Dress",
                 "normalizedWord": "dress",
                 "hint": "One piece",
-                "hints": {
-                    "level1": "Women's wear",
-                    "level2": "Flowy",
-                    "level3": "One piece",
-                    "level4": "Gown"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -934,12 +556,6 @@
                 "word": "Skirt",
                 "normalizedWord": "skirt",
                 "hint": "No legs",
-                "hints": {
-                    "level1": "Lower garment",
-                    "level2": "Waist down",
-                    "level3": "No legs",
-                    "level4": "Pleated"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -947,12 +563,6 @@
                 "word": "Sweater",
                 "normalizedWord": "sweater",
                 "hint": "Knitted yarn",
-                "hints": {
-                    "level1": "Winter wear",
-                    "level2": "Pullover",
-                    "level3": "Knitted yarn",
-                    "level4": "Ugly Christmas"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -960,12 +570,6 @@
                 "word": "Socks",
                 "normalizedWord": "socks",
                 "hint": "Foot cover",
-                "hints": {
-                    "level1": "Footwear",
-                    "level2": "Fabric tubes",
-                    "level3": "Foot cover",
-                    "level4": "Ankle high"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -973,12 +577,6 @@
                 "word": "Shoes",
                 "normalizedWord": "shoes",
                 "hint": "Laces tied",
-                "hints": {
-                    "level1": "Footwear",
-                    "level2": "Walking gear",
-                    "level3": "Laces tied",
-                    "level4": "Sneakers"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -986,12 +584,6 @@
                 "word": "Hat",
                 "normalizedWord": "hat",
                 "hint": "Sun shade",
-                "hints": {
-                    "level1": "Headwear",
-                    "level2": "Top cover",
-                    "level3": "Sun shade",
-                    "level4": "Fedora"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -999,12 +591,6 @@
                 "word": "Gloves",
                 "normalizedWord": "gloves",
                 "hint": "Five fingers",
-                "hints": {
-                    "level1": "Winter accessory",
-                    "level2": "Hand warmers",
-                    "level3": "Five fingers",
-                    "level4": "Mittens"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1012,12 +598,6 @@
                 "word": "Scarf",
                 "normalizedWord": "scarf",
                 "hint": "Neck wrap",
-                "hints": {
-                    "level1": "Winter accessory",
-                    "level2": "Long fabric",
-                    "level3": "Neck wrap",
-                    "level4": "Muffler"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1025,12 +605,6 @@
                 "word": "Belt",
                 "normalizedWord": "belt",
                 "hint": "Leather strap",
-                "hints": {
-                    "level1": "Accessory",
-                    "level2": "Waist holder",
-                    "level3": "Buckle strap",
-                    "level4": "Leather loop"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             }
@@ -1061,12 +635,6 @@
                 "word": "Lion",
                 "normalizedWord": "lion",
                 "hint": "Big mane",
-                "hints": {
-                    "level1": "Wild cat",
-                    "level2": "Roars loud",
-                    "level3": "Big mane",
-                    "level4": "Jungle King"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1074,12 +642,6 @@
                 "word": "Elephant",
                 "normalizedWord": "elephant",
                 "hint": "Long trunk",
-                "hints": {
-                    "level1": "Large animal",
-                    "level2": "Grey skin",
-                    "level3": "Long trunk",
-                    "level4": "Ivory tusks"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1087,12 +649,6 @@
                 "word": "Tiger",
                 "normalizedWord": "tiger",
                 "hint": "Black stripes",
-                "hints": {
-                    "level1": "Wild cat",
-                    "level2": "Orange coat",
-                    "level3": "Black stripes",
-                    "level4": "Bengal"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1100,12 +656,6 @@
                 "word": "Giraffe",
                 "normalizedWord": "giraffe",
                 "hint": "Long neck",
-                "hints": {
-                    "level1": "Tall animal",
-                    "level2": "Spots",
-                    "level3": "Long neck",
-                    "level4": "Blue tongue"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1113,12 +663,6 @@
                 "word": "Bear",
                 "normalizedWord": "bear",
                 "hint": "Winter sleep",
-                "hints": {
-                    "level1": "Forest animal",
-                    "level2": "Furry giant",
-                    "level3": "Winter sleep",
-                    "level4": "Grizzly"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1126,12 +670,6 @@
                 "word": "Dog",
                 "normalizedWord": "dog",
                 "hint": "Wags tail",
-                "hints": {
-                    "level1": "Common pet",
-                    "level2": "Barks",
-                    "level3": "Wags tail",
-                    "level4": "Man's best"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1139,12 +677,6 @@
                 "word": "Cat",
                 "normalizedWord": "cat",
                 "hint": "Nine lives",
-                "hints": {
-                    "level1": "Common pet",
-                    "level2": "Meows",
-                    "level3": "Purrs loudly",
-                    "level4": "Nine lives"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1152,12 +684,6 @@
                 "word": "Monkey",
                 "normalizedWord": "monkey",
                 "hint": "Banana",
-                "hints": {
-                    "level1": "Jungle animal",
-                    "level2": "Climber",
-                    "level3": "Swings trees",
-                    "level4": "Banana lover"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1165,12 +691,6 @@
                 "word": "Horse",
                 "normalizedWord": "horse",
                 "hint": "Saddle",
-                "hints": {
-                    "level1": "Farm animal",
-                    "level2": "Gallops",
-                    "level3": "Saddle",
-                    "level4": "Equestrian"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1178,12 +698,6 @@
                 "word": "Cow",
                 "normalizedWord": "cow",
                 "hint": "Dairy",
-                "hints": {
-                    "level1": "Farm animal",
-                    "level2": "Moos",
-                    "level3": "Gives milk",
-                    "level4": "Dairy"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1191,12 +705,6 @@
                 "word": "Pig",
                 "normalizedWord": "pig",
                 "hint": "Curly tail",
-                "hints": {
-                    "level1": "Farm animal",
-                    "level2": "Pink skin",
-                    "level3": "Curly tail",
-                    "level4": "Oinks mud"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1204,12 +712,6 @@
                 "word": "Sheep",
                 "normalizedWord": "sheep",
                 "hint": "Wool coat",
-                "hints": {
-                    "level1": "Farm animal",
-                    "level2": "Baas",
-                    "level3": "Wool coat",
-                    "level4": "Sheared"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1217,12 +719,6 @@
                 "word": "Goat",
                 "normalizedWord": "goat",
                 "hint": "Chews anything",
-                "hints": {
-                    "level1": "Farm animal",
-                    "level2": "Horns",
-                    "level3": "Chews anything",
-                    "level4": "Bleats"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1230,12 +726,6 @@
                 "word": "Camel",
                 "normalizedWord": "camel",
                 "hint": "Stores water",
-                "hints": {
-                    "level1": "Desert animal",
-                    "level2": "Stores water",
-                    "level3": "Back humps",
-                    "level4": "Dromedary"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1243,12 +733,6 @@
                 "word": "Rabbit",
                 "normalizedWord": "rabbit",
                 "hint": "Long ears",
-                "hints": {
-                    "level1": "Small animal",
-                    "level2": "Hops",
-                    "level3": "Long ears",
-                    "level4": "Bugs Bunny"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             }
@@ -1279,12 +763,6 @@
                 "word": "Doctor",
                 "normalizedWord": "doctor",
                 "hint": "Stethoscope",
-                "hints": {
-                    "level1": "Hospital worker",
-                    "level2": "Heals sick",
-                    "level3": "Stethoscope",
-                    "level4": "Surgeon"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1292,12 +770,6 @@
                 "word": "Teacher",
                 "normalizedWord": "teacher",
                 "hint": "Chalkboard",
-                "hints": {
-                    "level1": "School worker",
-                    "level2": "Educates",
-                    "level3": "Chalkboard",
-                    "level4": "Principal"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1305,12 +777,6 @@
                 "word": "Police",
                 "normalizedWord": "police",
                 "hint": "Handcuffs",
-                "hints": {
-                    "level1": "City worker",
-                    "level2": "Catches thieves",
-                    "level3": "Handcuffs",
-                    "level4": "Badge"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1318,12 +784,6 @@
                 "word": "Chef",
                 "normalizedWord": "chef",
                 "hint": "White hat",
-                "hints": {
-                    "level1": "Restaurant worker",
-                    "level2": "Cooks food",
-                    "level3": "White hat",
-                    "level4": "Culinary"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1331,12 +791,6 @@
                 "word": "Pilot",
                 "normalizedWord": "pilot",
                 "hint": "Cockpit",
-                "hints": {
-                    "level1": "Travel worker",
-                    "level2": "Flies planes",
-                    "level3": "Cockpit",
-                    "level4": "Aviation"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1344,12 +798,6 @@
                 "word": "Farmer",
                 "normalizedWord": "farmer",
                 "hint": "Tractor",
-                "hints": {
-                    "level1": "Outdoor worker",
-                    "level2": "Grows crops",
-                    "level3": "Tractor",
-                    "level4": "Agriculture"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1357,12 +805,6 @@
                 "word": "Lawyer",
                 "normalizedWord": "lawyer",
                 "hint": "Courtroom",
-                "hints": {
-                    "level1": "Office worker",
-                    "level2": "Argues cases",
-                    "level3": "Courtroom",
-                    "level4": "Attorney"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1370,12 +812,6 @@
                 "word": "Engineer",
                 "normalizedWord": "engineer",
                 "hint": "Blueprints",
-                "hints": {
-                    "level1": "Tech worker",
-                    "level2": "Builds things",
-                    "level3": "Blueprints",
-                    "level4": "Civil"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1383,12 +819,6 @@
                 "word": "Nurse",
                 "normalizedWord": "nurse",
                 "hint": "Syringe",
-                "hints": {
-                    "level1": "Hospital worker",
-                    "level2": "Helps doctor",
-                    "level3": "Syringe",
-                    "level4": "IV drip"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1396,12 +826,6 @@
                 "word": "Driver",
                 "normalizedWord": "driver",
                 "hint": "Steering wheel",
-                "hints": {
-                    "level1": "Transport worker",
-                    "level2": "Steers vehicle",
-                    "level3": "Steering wheel",
-                    "level4": "Chauffeur"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1409,12 +833,6 @@
                 "word": "Actor",
                 "normalizedWord": "actor",
                 "hint": "Movie script",
-                "hints": {
-                    "level1": "Entertainment worker",
-                    "level2": "Plays roles",
-                    "level3": "Movie script",
-                    "level4": "Hollywood"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1422,12 +840,6 @@
                 "word": "Singer",
                 "normalizedWord": "singer",
                 "hint": "Microphone",
-                "hints": {
-                    "level1": "Music worker",
-                    "level2": "Vocalist",
-                    "level3": "Microphone",
-                    "level4": "Concert stage"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1435,12 +847,6 @@
                 "word": "Barber",
                 "normalizedWord": "barber",
                 "hint": "Scissors",
-                "hints": {
-                    "level1": "Salon worker",
-                    "level2": "Cuts hair",
-                    "level3": "Hair clippers",
-                    "level4": "Scissors"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1448,12 +854,6 @@
                 "word": "Tailor",
                 "normalizedWord": "tailor",
                 "hint": "Sewing machine",
-                "hints": {
-                    "level1": "Cloth worker",
-                    "level2": "Stitches clothes",
-                    "level3": "Sewing machine",
-                    "level4": "Measuring tape"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1461,12 +861,6 @@
                 "word": "Soldier",
                 "normalizedWord": "soldier",
                 "hint": "Camouflage",
-                "hints": {
-                    "level1": "Military worker",
-                    "level2": "Fights wars",
-                    "level3": "Camouflage",
-                    "level4": "Army uniform"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             }
@@ -1497,12 +891,6 @@
                 "word": "Car",
                 "normalizedWord": "car",
                 "hint": "Four doors",
-                "hints": {
-                    "level1": "Road vehicle",
-                    "level2": "Four wheels",
-                    "level3": "Four doors",
-                    "level4": "Automobile"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1510,12 +898,6 @@
                 "word": "Bus",
                 "normalizedWord": "bus",
                 "hint": "Many seats",
-                "hints": {
-                    "level1": "Road vehicle",
-                    "level2": "Public transport",
-                    "level3": "Many seats",
-                    "level4": "School yellow"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1523,12 +905,6 @@
                 "word": "Train",
                 "normalizedWord": "train",
                 "hint": "Locomotive",
-                "hints": {
-                    "level1": "Rail vehicle",
-                    "level2": "Long coaches",
-                    "level3": "Metal tracks",
-                    "level4": "Locomotive"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1536,12 +912,6 @@
                 "word": "Airplane",
                 "normalizedWord": "airplane",
                 "hint": "Runway",
-                "hints": {
-                    "level1": "Air vehicle",
-                    "level2": "Has wings",
-                    "level3": "Takes off",
-                    "level4": "Runway"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1549,12 +919,6 @@
                 "word": "Bicycle",
                 "normalizedWord": "bicycle",
                 "hint": "Two wheels",
-                "hints": {
-                    "level1": "Road vehicle",
-                    "level2": "Two wheels",
-                    "level3": "Foot pedals",
-                    "level4": "Handlebars"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1562,12 +926,6 @@
                 "word": "Motorcycle",
                 "normalizedWord": "motorcycle",
                 "hint": "Engine roar",
-                "hints": {
-                    "level1": "Road vehicle",
-                    "level2": "Fast two-wheeler",
-                    "level3": "Engine roar",
-                    "level4": "Helmet required"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1575,12 +933,6 @@
                 "word": "Boat",
                 "normalizedWord": "boat",
                 "hint": "Floats",
-                "hints": {
-                    "level1": "Water vehicle",
-                    "level2": "Floats",
-                    "level3": "Rowing oars",
-                    "level4": "Hull"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1588,12 +940,6 @@
                 "word": "Ship",
                 "normalizedWord": "ship",
                 "hint": "Ocean King",
-                "hints": {
-                    "level1": "Water vehicle",
-                    "level2": "Huge boat",
-                    "level3": "Ocean King",
-                    "level4": "Cruise liner"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1601,12 +947,6 @@
                 "word": "Helicopter",
                 "normalizedWord": "helicopter",
                 "hint": "Top blades",
-                "hints": {
-                    "level1": "Air vehicle",
-                    "level2": "Hovering",
-                    "level3": "Top blades",
-                    "level4": "Chopper"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1614,12 +954,6 @@
                 "word": "Scooter",
                 "normalizedWord": "scooter",
                 "hint": "Vespa",
-                "hints": {
-                    "level1": "Road vehicle",
-                    "level2": "Small wheels",
-                    "level3": "Stand up",
-                    "level4": "Vespa"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1627,12 +961,6 @@
                 "word": "Truck",
                 "normalizedWord": "truck",
                 "hint": "Cargo bed",
-                "hints": {
-                    "level1": "Road vehicle",
-                    "level2": "Hauls loads",
-                    "level3": "Cargo bed",
-                    "level4": "Eighteen wheeler"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1640,12 +968,6 @@
                 "word": "Tractor",
                 "normalizedWord": "tractor",
                 "hint": "Plowing fields",
-                "hints": {
-                    "level1": "Farm vehicle",
-                    "level2": "Huge tires",
-                    "level3": "Plowing fields",
-                    "level4": "Agriculture"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1653,12 +975,6 @@
                 "word": "Ambulance",
                 "normalizedWord": "ambulance",
                 "hint": "Siren blaring",
-                "hints": {
-                    "level1": "Emergency vehicle",
-                    "level2": "Medical rescue",
-                    "level3": "Siren blaring",
-                    "level4": "Paramedics"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1666,12 +982,6 @@
                 "word": "Fire Engine",
                 "normalizedWord": "fire engine",
                 "hint": "Water hose",
-                "hints": {
-                    "level1": "Emergency vehicle",
-                    "level2": "Red truck",
-                    "level3": "Water hose",
-                    "level4": "Long ladder"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1679,12 +989,6 @@
                 "word": "Auto Rickshaw",
                 "normalizedWord": "auto rickshaw",
                 "hint": "Three wheels",
-                "hints": {
-                    "level1": "City vehicle",
-                    "level2": "Yellow black",
-                    "level3": "Three wheels",
-                    "level4": "Tuk tuk"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             }
@@ -1715,12 +1019,6 @@
                 "word": "Diwali",
                 "normalizedWord": "diwali",
                 "hint": "Oil lamps",
-                "hints": {
-                    "level1": "Indian festival",
-                    "level2": "Lights",
-                    "level3": "Oil lamps",
-                    "level4": "Deepavali"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1728,12 +1026,6 @@
                 "word": "Holi",
                 "normalizedWord": "holi",
                 "hint": "Color powder",
-                "hints": {
-                    "level1": "Indian festival",
-                    "level2": "Spring",
-                    "level3": "Color powder",
-                    "level4": "Water balloons"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1741,12 +1033,6 @@
                 "word": "Christmas",
                 "normalizedWord": "christmas",
                 "hint": "Santa Claus",
-                "hints": {
-                    "level1": "Winter holiday",
-                    "level2": "Gifts",
-                    "level3": "Pine tree",
-                    "level4": "Santa Claus"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1754,12 +1040,6 @@
                 "word": "Eid",
                 "normalizedWord": "eid",
                 "hint": "Fasting end",
-                "hints": {
-                    "level1": "Muslim holiday",
-                    "level2": "Feast",
-                    "level3": "Fasting end",
-                    "level4": "Crescent moon"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1767,12 +1047,6 @@
                 "word": "Sankranti",
                 "normalizedWord": "sankranti",
                 "hint": "Kites",
-                "hints": {
-                    "level1": "Harvest festival",
-                    "level2": "January",
-                    "level3": "Kites",
-                    "level4": "Bhogi"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1780,12 +1054,6 @@
                 "word": "Dussehra",
                 "normalizedWord": "dussehra",
                 "hint": "Ravana",
-                "hints": {
-                    "level1": "Indian festival",
-                    "level2": "Ten days",
-                    "level3": "Effigy burning",
-                    "level4": "Ravana"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1793,12 +1061,6 @@
                 "word": "Ganesh Utsav",
                 "normalizedWord": "ganesh utsav",
                 "hint": "Elephant idol",
-                "hints": {
-                    "level1": "Indian festival",
-                    "level2": "Immersion",
-                    "level3": "Elephant idol",
-                    "level4": "Modak"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1806,12 +1068,6 @@
                 "word": "Bonalu",
                 "normalizedWord": "bonalu",
                 "hint": "Potharaju",
-                "hints": {
-                    "level1": "Telugu festival",
-                    "level2": "Goddess worship",
-                    "level3": "Pot offering",
-                    "level4": "Potharaju"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1819,12 +1075,6 @@
                 "word": "Bathukamma",
                 "normalizedWord": "bathukamma",
                 "hint": "Saddula",
-                "hints": {
-                    "level1": "Telugu festival",
-                    "level2": "Women's dance",
-                    "level3": "Floral stack",
-                    "level4": "Saddula"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1832,12 +1082,6 @@
                 "word": "Navratri",
                 "normalizedWord": "navratri",
                 "hint": "Nine nights",
-                "hints": {
-                    "level1": "Indian festival",
-                    "level2": "Nine nights",
-                    "level3": "Garba dance",
-                    "level4": "Dandiya"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1845,12 +1089,6 @@
                 "word": "Pongal",
                 "normalizedWord": "pongal",
                 "hint": "Boiling milk",
-                "hints": {
-                    "level1": "South Indian",
-                    "level2": "Harvest",
-                    "level3": "Boiling milk",
-                    "level4": "Sugarcane"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1858,12 +1096,6 @@
                 "word": "Onam",
                 "normalizedWord": "onam",
                 "hint": "Kerala festival",
-                "hints": {
-                    "level1": "Kerala festival",
-                    "level2": "Flower carpet",
-                    "level3": "Boat race",
-                    "level4": "Sadya"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1871,12 +1103,6 @@
                 "word": "Rakhi",
                 "normalizedWord": "rakhi",
                 "hint": "Siblings",
-                "hints": {
-                    "level1": "Indian festival",
-                    "level2": "Siblings",
-                    "level3": "Wrist thread",
-                    "level4": "Rakhi"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1884,12 +1110,6 @@
                 "word": "Halloween",
                 "normalizedWord": "halloween",
                 "hint": "Pumpkin",
-                "hints": {
-                    "level1": "Autumn holiday",
-                    "level2": "Costumes",
-                    "level3": "Trick treat",
-                    "level4": "Pumpkin"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1897,12 +1117,6 @@
                 "word": "New Year",
                 "normalizedWord": "new year",
                 "hint": "Midnight countdown",
-                "hints": {
-                    "level1": "Global holiday",
-                    "level2": "January first",
-                    "level3": "Midnight countdown",
-                    "level4": "Fireworks"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             }
@@ -1933,12 +1147,6 @@
                 "word": "India",
                 "normalizedWord": "india",
                 "hint": "Taj Mahal",
-                "hints": {
-                    "level1": "Asian nation",
-                    "level2": "Huge population",
-                    "level3": "Taj Mahal",
-                    "level4": "New Delhi"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1946,12 +1154,6 @@
                 "word": "USA",
                 "normalizedWord": "usa",
                 "hint": "Statue Liberty",
-                "hints": {
-                    "level1": "Western nation",
-                    "level2": "Fifty states",
-                    "level3": "Statue Liberty",
-                    "level4": "Washington"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1959,12 +1161,6 @@
                 "word": "China",
                 "normalizedWord": "china",
                 "hint": "Great Wall",
-                "hints": {
-                    "level1": "Asian nation",
-                    "level2": "Red flag",
-                    "level3": "Great Wall",
-                    "level4": "Beijing"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -1972,12 +1168,6 @@
                 "word": "Japan",
                 "normalizedWord": "japan",
                 "hint": "Anime origin",
-                "hints": {
-                    "level1": "Asian nation",
-                    "level2": "Island country",
-                    "level3": "Anime origin",
-                    "level4": "Tokyo"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -1985,12 +1175,6 @@
                 "word": "UK",
                 "normalizedWord": "uk",
                 "hint": "London",
-                "hints": {
-                    "level1": "European nation",
-                    "level2": "Royal family",
-                    "level3": "Big Ben",
-                    "level4": "London"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -1998,12 +1182,6 @@
                 "word": "Australia",
                 "normalizedWord": "australia",
                 "hint": "Kangaroo home",
-                "hints": {
-                    "level1": "Southern nation",
-                    "level2": "Huge island",
-                    "level3": "Kangaroo home",
-                    "level4": "Sydney Opera"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -2011,12 +1189,6 @@
                 "word": "Canada",
                 "normalizedWord": "canada",
                 "hint": "Toronto",
-                "hints": {
-                    "level1": "Western nation",
-                    "level2": "Cold weather",
-                    "level3": "Maple leaf",
-                    "level4": "Toronto"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -2024,12 +1196,6 @@
                 "word": "Brazil",
                 "normalizedWord": "brazil",
                 "hint": "Amazon forest",
-                "hints": {
-                    "level1": "Southern nation",
-                    "level2": "South America",
-                    "level3": "Amazon forest",
-                    "level4": "Rio Carnival"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -2037,12 +1203,6 @@
                 "word": "Russia",
                 "normalizedWord": "russia",
                 "hint": "Largest landmass",
-                "hints": {
-                    "level1": "Northern nation",
-                    "level2": "Cold winters",
-                    "level3": "Largest landmass",
-                    "level4": "Moscow"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -2050,12 +1210,6 @@
                 "word": "France",
                 "normalizedWord": "france",
                 "hint": "Eiffel Tower",
-                "hints": {
-                    "level1": "European nation",
-                    "level2": "Famous food",
-                    "level3": "Eiffel Tower",
-                    "level4": "Paris"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -2063,12 +1217,6 @@
                 "word": "Germany",
                 "normalizedWord": "germany",
                 "hint": "Berlin Wall",
-                "hints": {
-                    "level1": "European nation",
-                    "level2": "Car makers",
-                    "level3": "Berlin Wall",
-                    "level4": "Oktoberfest"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -2076,12 +1224,6 @@
                 "word": "Nepal",
                 "normalizedWord": "nepal",
                 "hint": "Mount Everest",
-                "hints": {
-                    "level1": "Asian nation",
-                    "level2": "Mountainous",
-                    "level3": "Mount Everest",
-                    "level4": "Kathmandu"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             },
@@ -2089,12 +1231,6 @@
                 "word": "Sri Lanka",
                 "normalizedWord": "sri lanka",
                 "hint": "Colombo",
-                "hints": {
-                    "level1": "Asian nation",
-                    "level2": "South island",
-                    "level3": "Teardrop island",
-                    "level4": "Colombo"
-                },
                 "difficulty": "EASY",
                 "enabled": true
             },
@@ -2102,12 +1238,6 @@
                 "word": "UAE",
                 "normalizedWord": "uae",
                 "hint": "Burj Khalifa",
-                "hints": {
-                    "level1": "Middle East",
-                    "level2": "Desert nation",
-                    "level3": "Burj Khalifa",
-                    "level4": "Dubai"
-                },
                 "difficulty": "MEDIUM",
                 "enabled": true
             },
@@ -2115,12 +1245,6 @@
                 "word": "Singapore",
                 "normalizedWord": "singapore",
                 "hint": "Changi Airport",
-                "hints": {
-                    "level1": "Asian nation",
-                    "level2": "City state",
-                    "level3": "Merlion statue",
-                    "level4": "Clean streets"
-                },
                 "difficulty": "HARD",
                 "enabled": true
             }
