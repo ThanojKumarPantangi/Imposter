@@ -6,14 +6,23 @@ import { getRedisClient, createRedisClient, isRedisConfigured, isUsingUpstash } 
 import { registerGameSocket } from './sockets/gameSocket.js';
 
 const PORT = process.env.PORT || 5000;
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const rawClientUrls = process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:5174';
+const clientUrls = rawClientUrls.split(',').map(url => url.trim()).filter(Boolean);
+if (!clientUrls.includes('http://localhost:5173')) clientUrls.push('http://localhost:5173');
+if (!clientUrls.includes('http://localhost:5174')) clientUrls.push('http://localhost:5174');
 
 const server = http.createServer(app);
 
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: [clientUrl],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (clientUrls.includes(origin) || process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
     methods: ['GET', 'POST']
   },

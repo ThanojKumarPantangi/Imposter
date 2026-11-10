@@ -4,10 +4,19 @@ import apiRoutes from './routes/index.js';
 
 const app = express();
 
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const rawClientUrls = process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:5174';
+const clientUrls = rawClientUrls.split(',').map(url => url.trim()).filter(Boolean);
+if (!clientUrls.includes('http://localhost:5173')) clientUrls.push('http://localhost:5173');
+if (!clientUrls.includes('http://localhost:5174')) clientUrls.push('http://localhost:5174');
 
 app.use(cors({
-  origin: clientUrl,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (clientUrls.includes(origin) || process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

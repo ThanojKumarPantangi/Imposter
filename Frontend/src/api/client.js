@@ -1,7 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
 export async function apiRequest(endpoint, options = {}) {
-  const token = localStorage.getItem('imposter_auth_token') || localStorage.getItem('imposter_admin_token');
+  const token = localStorage.getItem('imposter_auth_token');
 
   const headers = {
     'Content-Type': 'application/json',

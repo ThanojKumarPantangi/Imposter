@@ -97,6 +97,6 @@ export function restoreSessionScreen(
     return;
   }
 
-  // Fallback if user was in another screen (e.g. Leaderboard, AdminLogin)
+  // Fallback if user was in another screen (e.g. Leaderboard)
   navigationRef.navigate(targetScreen, { roomCode });
 }

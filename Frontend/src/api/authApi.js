@@ -20,13 +20,5 @@ export const authApi = {
   // Fetch persistent player profile
   getProfile: (deviceId) => {
     return apiRequest(`/auth/profile?deviceId=${encodeURIComponent(deviceId)}`);
-  },
-
-  // Admin Login
-  adminLogin: (email, password) => {
-    return apiRequest('/auth/admin/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password })
-    });
   }
 };

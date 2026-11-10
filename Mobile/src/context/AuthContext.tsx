@@ -9,22 +9,17 @@ import {
   setCachedAvatar,
 } from '../utils/device';
 import { authApi } from '../services/api/authApi';
-import { Player, AdminUser } from '../types';
+import { Player } from '../types';
 import { STORAGE_KEYS } from '../config/constants';
 
 interface AuthContextType {
   deviceId: string;
   player: Player | null;
   token: string | null;
-  adminUser: AdminUser | null;
-  adminToken: string | null;
   loading: boolean;
   error: string | null;
   updateUsername: (newUsername: string) => Promise<{ success: boolean }>;
   updateAvatar: (newAvatar: string) => void;
-  adminLogin: (email: string, password: string) => Promise<any>;
-  adminLogout: () => void;
-  isAdminAuthenticated: boolean;
   refreshAuthSession: () => Promise<string | null>;
 }
 
@@ -34,8 +29,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [deviceId, setDeviceId] = useState<string>('');
   const [player, setPlayer] = useState<Player | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
-  const [adminToken, setAdminToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,11 +39,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setDeviceId(id);
         const cachedName = await getCachedUsername();
         const cachedAv = await getCachedAvatar();
-
-        const storedAdminToken = await SecureStore.getItemAsync(STORAGE_KEYS.ADMIN_TOKEN).catch(() => null);
-        if (storedAdminToken) {
-          setAdminToken(storedAdminToken);
-        }
 
         const storedAuthToken = await SecureStore.getItemAsync(STORAGE_KEYS.AUTH_TOKEN).catch(() => null);
         if (storedAuthToken) {
@@ -109,24 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await setCachedAvatar(newAvatar);
   };
 
-  const adminLogin = async (email: string, password: string): Promise<any> => {
-    setError(null);
-    const res = await authApi.adminLogin(email, password);
-    if (res.success && res.token) {
-      setAdminUser(res.admin);
-      setAdminToken(res.token);
-      await SecureStore.setItemAsync(STORAGE_KEYS.ADMIN_TOKEN, res.token).catch(() => {});
-      return res;
-    }
-    throw new Error('Admin login failed');
-  };
-
-  const adminLogout = async () => {
-    setAdminUser(null);
-    setAdminToken(null);
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.ADMIN_TOKEN).catch(() => {});
-  };
-
   const refreshAuthSession = async (): Promise<string | null> => {
     try {
       const id = deviceId || (await getOrCreateDeviceId());
@@ -151,15 +121,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deviceId,
         player,
         token,
-        adminUser,
-        adminToken,
         loading,
         error,
         updateUsername,
         updateAvatar,
-        adminLogin,
-        adminLogout,
-        isAdminAuthenticated: !!adminToken,
         refreshAuthSession,
       }}
     >

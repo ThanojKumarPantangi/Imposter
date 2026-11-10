@@ -10,50 +10,44 @@ The codebase strictly follows the architectural file structures:
 
 ```text
 Game/
-├── Backend/
+├── Backend/                 # Express, Socket.IO, Redis Cloud, MongoDB
 │   ├── src/
-│   │   ├── config/          # Cloud MongoDB & Redis connection managers
 │   │   ├── controllers/     # Auth, Room, Admin, Stats controllers
-│   │   ├── cron/            # Stale room cleanup cron
-│   │   ├── emailTemplates/  # Notification templates
-│   │   ├── middlewares/     # JWT Auth & Admin permission guards
-│   │   ├── models/          # Guest, Category, GameHistory, AdminUser, AuditLog
-│   │   ├── queues/          # Job queue abstractions
-│   │   ├── redis/           # Pure Redis active state & roomRepository
 │   │   ├── routes/          # REST endpoints (/api/v1)
-│   │   ├── scripts/         # seedCategories.js & word packs
-│   │   ├── services/        # AuthService & Authoritative GameEngine
-│   │   ├── sockets/         # Socket.IO game handlers & WebRTC voice signaling
-│   │   ├── templates/       # Result formatters
-│   │   ├── utils/           # Logger utilities
-│   │   ├── workers/         # Background cleanup workers
-│   │   ├── app.js           # Express app & middleware configuration
-│   │   ├── clearRedis.js    # Utility script to flush game Redis keys
-│   │   └── server.js        # HTTP server + Socket.IO server
-│   ├── .env                 # Environment credentials (MongoDB & Redis Cloud)
+│   │   ├── services/        # GameEngine & AuthService
+│   │   ├── sockets/         # Real-time game events & WebRTC voice signaling
+│   │   ├── app.js
+│   │   └── server.js
 │   └── package.json
 │
-└── Frontend/
-    ├── public/              # Manifest.json & PWA icons
+├── Frontend/                # Player Web Application (Vite + React + Tailwind)
+│   ├── src/
+│   │   ├── pages/           # Home, Lobby, GameView, PassAndPlay, Leaderboard
+│   │   ├── components/      # UI components, modals, voice controls
+│   │   ├── context/         # AuthContext (Player identity), SocketContext, VoiceContext
+│   │   └── App.jsx
+│   └── vite.config.js       # Port 5173
+│
+├── Frontend Admin/          # Dedicated Admin Web Portal (Vite + React + Tailwind)
+│   ├── src/
+│   │   ├── pages/           # AdminLogin, AdminDashboard (Category & Word Pack CRUD, Audit)
+│   │   ├── context/         # Dedicated Admin AuthContext
+│   │   └── App.jsx
+│   └── vite.config.js       # Port 5174
+│
+├── Mobile/                  # Player Mobile Application (React Native + Expo)
+│   ├── src/
+│   │   ├── screens/         # HomeScreen, LobbyScreen, GameViewScreen, PassAndPlay, Leaderboard
+│   │   ├── context/         # Player AuthContext, SocketContext, VoiceChatContext
+│   │   └── navigation/      # RootNavigator
+│   └── app.json             # Imposter Mobile Game
+│
+└── Mobile Admin/            # Dedicated Admin Mobile Application (React Native + Expo)
     ├── src/
-    │   ├── api/             # Client API wrappers (Auth, Room, Admin)
-    │   ├── app/             # App configs
-    │   ├── components/      # Avatar, Countdown, VoiceControls, Modals, Banners
-    │   ├── context/         # AuthContext, SocketContext, VoiceChatContext
-    │   ├── features/        # Game helpers
-    │   ├── hooks/           # useSound, useDeviceIdentity
-    │   ├── layouts/         # MainLayout, AdminLayout
-    │   ├── pages/           # Home, Lobby, GameView, PassAndPlay, Leaderboard, AdminLogin, AdminDashboard
-    │   ├── routes/          # AppRoutes
-    │   ├── utils/           # Device UUID persistence & Web Audio sounds
-    │   ├── App.jsx
-    │   ├── index.css        # Tailwind & Glassmorphism design tokens
-    │   ├── main.jsx
-    │   ├── Root.jsx
-    │   └── sw.js            # PWA service worker
-    ├── .env
-    ├── index.html
-    └── vite.config.js
+    │   ├── screens/         # AdminLoginScreen, AdminDashboardScreen
+    │   ├── context/         # Dedicated Admin AuthContext
+    │   └── navigation/      # Admin RootNavigator
+    └── app.json             # Imposter Admin Console
 ```
 
 ---
@@ -95,12 +89,35 @@ npm run dev
 ```
 Backend runs on **http://localhost:5000** with REST API at `/api/v1` and Socket.IO at `/game`.
 
-### 4. Start Frontend PWA
+### 4. Running the Client Applications
+
+#### A. Player Web Client (`Frontend`)
 ```bash
 cd Frontend
 npm run dev
 ```
-Open **http://localhost:5173** in your browser. Install as a PWA on any device!
+Runs at **http://localhost:5173**.
+
+#### B. Dedicated Admin Web Portal (`Frontend Admin`)
+```bash
+cd "Frontend Admin"
+npm run dev
+```
+Runs at **http://localhost:5174**. Manage categories, words, history, audit trail, and database seeding in isolation.
+
+#### C. Player Mobile App (`Mobile`)
+```bash
+cd Mobile
+npx expo start
+```
+Runs the player app on Android, iOS, or web.
+
+#### D. Dedicated Admin Mobile App (`Mobile Admin`)
+```bash
+cd "Mobile Admin"
+npx expo start
+```
+Runs the standalone mobile administrative app with full category CRUD, stats, and audit logs.
 
 ---
 

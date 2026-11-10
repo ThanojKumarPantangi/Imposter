@@ -3,11 +3,10 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { ShieldCheck, Mail, Lock, ArrowRight, ArrowLeft } from 'lucide-react-native';
+import { ShieldCheck, Mail, Lock, ArrowRight } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/common/Card';
 import { GradientButton } from '../components/common/GradientButton';
@@ -26,7 +25,7 @@ export const AdminLoginScreen: React.FC<{ navigation: any }> = ({ navigation }) 
     if (isAdminAuthenticated) {
       navigation.replace('AdminDashboard');
     }
-  }, [isAdminAuthenticated]);
+  }, [isAdminAuthenticated, navigation]);
 
   const handleLogin = async () => {
     try {
@@ -44,19 +43,6 @@ export const AdminLoginScreen: React.FC<{ navigation: any }> = ({ navigation }) 
 
   return (
     <View style={styles.container}>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => {
-            sounds.playClick();
-            navigation.navigate('Home');
-          }}
-          style={styles.backBtn}
-        >
-          <ArrowLeft size={16} color={COLORS.slate[300]} />
-          <Text style={styles.backBtnText}>Return to Game</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Card variant="imposter" style={styles.loginCard}>
           <View style={styles.shieldCircle}>
@@ -126,28 +112,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.dark[950],
   },
-  topBar: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.dark[900],
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 6,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.slate[800],
-    alignSelf: 'flex-start',
-  },
-  backBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.slate[300],
-  },
   scrollContent: {
+    flexGrow: 1,
     padding: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',

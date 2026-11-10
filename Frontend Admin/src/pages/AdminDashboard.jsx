@@ -37,7 +37,7 @@ export function AdminDashboard() {
 
   useEffect(() => {
     if (!isAdminAuthenticated) {
-      navigate('/admin');
+      navigate('/login', { replace: true });
       return;
     }
     loadData();
@@ -185,7 +185,7 @@ export function AdminDashboard() {
           <button
             onClick={() => {
               adminLogout();
-              navigate('/admin');
+              navigate('/login', { replace: true });
             }}
             className="btn-secondary text-xs flex items-center gap-2 py-2.5 px-4"
           >

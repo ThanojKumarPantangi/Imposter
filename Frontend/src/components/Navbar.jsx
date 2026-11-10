@@ -8,7 +8,7 @@ import { VoiceControls } from './VoiceControls';
 import { EditUsernameModal } from './EditUsernameModal';
 
 export function Navbar() {
-  const { player, isAdminAuthenticated } = useAuth();
+  const { player } = useAuth();
   const { roomState, leaveRoom } = useSocket();
   const [showEditName, setShowEditName] = useState(false);
   const location = useLocation();
@@ -75,17 +75,6 @@ export function Navbar() {
               }`}
             >
               Leaderboard
-            </Link>
-            <Link
-              to="/admin"
-              onClick={(e) => handleNavClick(e, '/admin')}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                location.pathname.startsWith('/admin')
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              Admin Portal
             </Link>
           </nav>
 

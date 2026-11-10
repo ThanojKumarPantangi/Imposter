@@ -17,8 +17,6 @@ export async function getApiBaseUrl(): Promise<string> {
 
 export async function getAuthToken(): Promise<string | null> {
   try {
-    const secureToken = await SecureStore.getItemAsync(STORAGE_KEYS.ADMIN_TOKEN);
-    if (secureToken) return secureToken;
     const authT = await SecureStore.getItemAsync(STORAGE_KEYS.AUTH_TOKEN);
     if (authT) return authT;
     return await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);

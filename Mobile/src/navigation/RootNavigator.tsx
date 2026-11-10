@@ -12,8 +12,6 @@ import { LobbyScreen } from '../screens/LobbyScreen';
 import { GameViewScreen } from '../screens/game/GameViewScreen';
 import { PassAndPlayScreen } from '../screens/PassAndPlayScreen';
 import { LeaderboardScreen } from '../screens/LeaderboardScreen';
-import { AdminLoginScreen } from '../screens/AdminLoginScreen';
-import { AdminDashboardScreen } from '../screens/AdminDashboardScreen';
 
 import { useSocket } from '../context/SocketContext';
 import { GradientButton } from '../components/common/GradientButton';
@@ -64,8 +62,6 @@ export const RootNavigator: React.FC = () => {
           <Stack.Screen name="GameView" component={GameViewScreen} />
           <Stack.Screen name="PassAndPlay" component={PassAndPlayScreen} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
-          <Stack.Screen name="AdminLogin" component={AdminLoginScreen} />
-          <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
         </Stack.Navigator>
       </NavigationContainer>
 

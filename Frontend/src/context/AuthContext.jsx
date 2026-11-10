@@ -8,8 +8,6 @@ export function AuthProvider({ children }) {
   const [deviceId, setDeviceId] = useState('');
   const [player, setPlayer] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('imposter_auth_token') || null);
-  const [adminUser, setAdminUser] = useState(null);
-  const [adminToken, setAdminToken] = useState(localStorage.getItem('imposter_admin_token') || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -77,40 +75,16 @@ export function AuthProvider({ children }) {
     setCachedAvatar(newAvatar);
   };
 
-  // Admin login
-  const adminLogin = async (email, password) => {
-    setError(null);
-    const res = await authApi.adminLogin(email, password);
-    if (res.success && res.token) {
-      setAdminUser(res.admin);
-      setAdminToken(res.token);
-      localStorage.setItem('imposter_admin_token', res.token);
-      return res;
-    }
-    throw new Error('Admin login failed');
-  };
-
-  const adminLogout = () => {
-    setAdminUser(null);
-    setAdminToken(null);
-    localStorage.removeItem('imposter_admin_token');
-  };
-
   return (
     <AuthContext.Provider
       value={{
         deviceId,
         player,
         token,
-        adminUser,
-        adminToken,
         loading,
         error,
         updateUsername,
-        updateAvatar,
-        adminLogin,
-        adminLogout,
-        isAdminAuthenticated: !!adminToken
+        updateAvatar
       }}
     >
       {children}

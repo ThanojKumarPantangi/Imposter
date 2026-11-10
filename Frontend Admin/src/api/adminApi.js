@@ -13,3 +13,4 @@ export const adminApi = {
   getAuditLogs: () => apiRequest('/admin/audit-logs'),
   triggerSeed: () => apiRequest('/admin/seed', { method: 'POST' })
 };
+

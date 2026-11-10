@@ -4,7 +4,5 @@ export type RootStackParamList = {
   GameView: { roomCode: string };
   PassAndPlay: undefined;
   Leaderboard: undefined;
-  AdminLogin: undefined;
-  AdminDashboard: undefined;
 };
 

@@ -391,18 +391,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
             <ChevronRight size={16} color={COLORS.slate[600]} />
           </AnimatedPressableCard>
         </View>
-
-        {/* Admin Link */}
-        {/* 
-          <TouchableOpacity
-            onPress={() => { sounds.playClick(); navigation.navigate('AdminLogin'); }}
-            activeOpacity={0.6}
-            style={styles.adminFooterLink}
-          >
-            <Shield size={14} color={COLORS.slate[500]} />
-            <Text style={styles.adminFooterText}>Admin Portal</Text>
-          </TouchableOpacity> 
-        */}
       </Animated.ScrollView>
 
       {/* Rules Modal */}
@@ -691,22 +679,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.slate[400],
     marginTop: 2,
-  },
-  adminFooterLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    backgroundColor: COLORS.dark[900],
-    borderRadius: RADIUS.round,
-    borderWidth: 1,
-    borderColor: COLORS.slate[800],
-  },
-  adminFooterText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.slate[400],
   },
   rulesBackdrop: {
     flex: 1,
