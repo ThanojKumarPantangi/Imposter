@@ -52,7 +52,7 @@ app.set('io', io);
 // Start server
 async function startServer() {
   console.log('🚀 Starting Imposter Game Backend Server (ESM Mode)...');
-  
+
   // 1. Connect MongoDB
   await connectDB();
 
@@ -68,7 +68,7 @@ async function startServer() {
     console.log(`🎮 Imposter Multiplayer Server is RUNNING on port ${PORT}`);
     console.log(`🌐 REST API:    http://localhost:${PORT}/api/v1`);
     console.log(`⚡ Socket.IO:   ws://localhost:${PORT} and /game`);
-    console.log(`🖥️ Frontend URL: ${clientUrl}`);
+    console.log(`🖥️ Frontend URL: ${rawClientUrls}`);
     console.log(`======================================================\n`);
   });
 }
