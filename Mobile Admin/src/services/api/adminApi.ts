@@ -63,8 +63,28 @@ export const adminApi = {
   getAppConfig: (): Promise<{ success: boolean; data: any }> =>
     apiRequest('/admin/app-config'),
 
-  updateAppConfig: (data: any): Promise<{ success: boolean; data: any; message?: string }> =>
-    apiRequest('/admin/app-config', {
+  updateServerStatus: (data: {
+    server: { enabled: boolean; message: string };
+    version?: number;
+  }): Promise<{ success: boolean; data: any; message?: string }> =>
+    apiRequest('/admin/server-status', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  updateAppUpdateStatus: (data: {
+    appUpdate: {
+      enabled: boolean;
+      latestVersionCode: number;
+      isUpdateRequired: boolean;
+      isBlocked: boolean;
+      updateUrl: string;
+      title: string;
+      message: string;
+    };
+    version?: number;
+  }): Promise<{ success: boolean; data: any; message?: string }> =>
+    apiRequest('/admin/app-update', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),

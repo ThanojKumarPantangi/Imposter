@@ -52,7 +52,8 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
 
   // App Startup Configuration & Maintenance State
   const [configLoading, setConfigLoading] = useState<boolean>(false);
-  const [configSaving, setConfigSaving] = useState<boolean>(false);
+  const [serverSaving, setServerSaving] = useState<boolean>(false);
+  const [updateSaving, setUpdateSaving] = useState<boolean>(false);
   const [serverEnabled, setServerEnabled] = useState<boolean>(true);
   const [serverMessage, setServerMessage] = useState<string>("We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!");
   const [updateEnabled, setUpdateEnabled] = useState<boolean>(true);
@@ -148,16 +149,36 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
     }
   }
 
-  const handleSaveAppConfig = async () => {
+  const handleSaveServerStatus = async () => {
     try {
-      setConfigSaving(true);
+      setServerSaving(true);
       setFeedbackMsg('');
       sounds.playClick();
-      const res = await adminApi.updateAppConfig({
+      const res = await adminApi.updateServerStatus({
         server: {
           enabled: serverEnabled,
           message: serverMessage,
         },
+        version: Number(configVersion),
+      });
+      if (res.success) {
+        setFeedbackMsg('✅ Server operational status updated successfully!');
+        Alert.alert('Server Status Saved', 'Server operational status has been updated on the backend.');
+      }
+    } catch (err: any) {
+      setFeedbackMsg(`❌ Failed to update server status: ${err.message}`);
+      Alert.alert('Error', err.message || 'Failed to save server status');
+    } finally {
+      setServerSaving(false);
+    }
+  };
+
+  const handleSaveAppUpdate = async () => {
+    try {
+      setUpdateSaving(true);
+      setFeedbackMsg('');
+      sounds.playClick();
+      const res = await adminApi.updateAppUpdateStatus({
         appUpdate: {
           enabled: updateEnabled,
           latestVersionCode: Number(latestVersionCode),
@@ -170,14 +191,14 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         version: Number(configVersion),
       });
       if (res.success) {
-        setFeedbackMsg('✅ App Startup Configuration & Server settings updated successfully!');
-        Alert.alert('Configuration Saved', 'Application configuration has been updated on the backend.');
+        setFeedbackMsg('✅ App update settings updated successfully!');
+        Alert.alert('Update Policy Saved', 'Android app update settings have been updated on the backend.');
       }
     } catch (err: any) {
-      setFeedbackMsg(`❌ Failed to update configuration: ${err.message}`);
-      Alert.alert('Error', err.message || 'Failed to save configuration');
+      setFeedbackMsg(`❌ Failed to update app update settings: ${err.message}`);
+      Alert.alert('Error', err.message || 'Failed to save app update settings');
     } finally {
-      setConfigSaving(false);
+      setUpdateSaving(false);
     }
   };
 
@@ -589,6 +610,14 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
                 numberOfLines={2}
                 style={[styles.modalInput, { minHeight: 60, textAlignVertical: 'top' }]}
               />
+
+              <GradientButton
+                title={serverSaving ? 'Saving Server Status...' : 'Save Server Status'}
+                onPress={handleSaveServerStatus}
+                loading={serverSaving}
+                variant="primary"
+                style={{ marginTop: SPACING.md }}
+              />
             </Card>
 
             {/* App Update Configuration */}
@@ -671,15 +700,15 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
                 multiline
                 style={[styles.modalInput, { minHeight: 50 }]}
               />
-            </Card>
 
-            <GradientButton
-              title={configSaving ? 'Saving...' : 'Save Configuration Changes'}
-              onPress={handleSaveAppConfig}
-              loading={configSaving}
-              variant="primary"
-              style={{ marginTop: SPACING.md, marginBottom: SPACING.xxl }}
-            />
+              <GradientButton
+                title={updateSaving ? 'Saving App Update Policy...' : 'Save App Update Settings'}
+                onPress={handleSaveAppUpdate}
+                loading={updateSaving}
+                variant="primary"
+                style={{ marginTop: SPACING.md }}
+              />
+            </Card>
           </View>
         )}
       </ScrollView>

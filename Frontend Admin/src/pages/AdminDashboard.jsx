@@ -38,7 +38,8 @@ export function AdminDashboard() {
 
   // App Startup Configuration & Maintenance State
   const [configLoading, setConfigLoading] = useState(false);
-  const [configSaving, setConfigSaving] = useState(false);
+  const [serverSaving, setServerSaving] = useState(false);
+  const [updateSaving, setUpdateSaving] = useState(false);
   const [serverEnabled, setServerEnabled] = useState(true);
   const [serverMessage, setServerMessage] = useState("We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!");
   const [updateEnabled, setUpdateEnabled] = useState(true);
@@ -123,16 +124,34 @@ export function AdminDashboard() {
     }
   }
 
-  const handleSaveAppConfig = async (e) => {
+  const handleSaveServerStatus = async (e) => {
     e?.preventDefault();
     try {
-      setConfigSaving(true);
+      setServerSaving(true);
       setFeedbackMsg('');
-      const res = await adminApi.updateAppConfig({
+      const res = await adminApi.updateServerStatus({
         server: {
           enabled: serverEnabled,
           message: serverMessage
         },
+        version: Number(configVersion)
+      });
+      if (res.success) {
+        setFeedbackMsg('✅ Server operational status updated successfully!');
+      }
+    } catch (err) {
+      setFeedbackMsg(`❌ Failed to update server status: ${err.message}`);
+    } finally {
+      setServerSaving(false);
+    }
+  };
+
+  const handleSaveAppUpdate = async (e) => {
+    e?.preventDefault();
+    try {
+      setUpdateSaving(true);
+      setFeedbackMsg('');
+      const res = await adminApi.updateAppUpdateStatus({
         appUpdate: {
           enabled: updateEnabled,
           latestVersionCode: Number(latestVersionCode),
@@ -145,12 +164,12 @@ export function AdminDashboard() {
         version: Number(configVersion)
       });
       if (res.success) {
-        setFeedbackMsg('✅ App Startup Configuration & Server settings updated successfully!');
+        setFeedbackMsg('✅ App update settings updated successfully!');
       }
     } catch (err) {
-      setFeedbackMsg(`❌ Failed to update configuration: ${err.message}`);
+      setFeedbackMsg(`❌ Failed to update app update settings: ${err.message}`);
     } finally {
-      setConfigSaving(false);
+      setUpdateSaving(false);
     }
   };
 
@@ -523,10 +542,10 @@ export function AdminDashboard() {
             </button>
           </div>
 
-          <form onSubmit={handleSaveAppConfig} className="space-y-8">
+          <div className="space-y-8">
             {/* 1. Server Status Section */}
-            <div className="p-5 rounded-2xl bg-dark-950 border border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
+            <form onSubmit={handleSaveServerStatus} className="p-5 rounded-2xl bg-dark-950 border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <span className="text-sm font-bold text-white flex items-center gap-2">
                     <Power className="w-4 h-4 text-rose-400" />
@@ -560,10 +579,30 @@ export function AdminDashboard() {
                   className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
                 />
               </div>
-            </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={serverSaving}
+                  className="btn-primary px-6 py-2.5 text-xs flex items-center gap-2 font-bold"
+                >
+                  {serverSaving ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Status...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Server Status</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
 
             {/* 2. App Update Configuration */}
-            <div className="p-5 rounded-2xl bg-dark-950 border border-slate-800 space-y-5">
+            <form onSubmit={handleSaveAppUpdate} className="p-5 rounded-2xl bg-dark-950 border border-slate-800 space-y-5">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-sm font-bold text-white flex items-center gap-2">
@@ -693,28 +732,28 @@ export function AdminDashboard() {
                   />
                 </div>
               </div>
-            </div>
 
-            <div className="flex justify-end pt-2">
-              <button
-                type="submit"
-                disabled={configSaving}
-                className="btn-primary px-8 py-3 text-sm flex items-center gap-2 font-bold"
-              >
-                {configSaving ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Saving Settings...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Save Configuration Changes</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={updateSaving}
+                  className="btn-primary px-6 py-2.5 text-xs flex items-center gap-2 font-bold"
+                >
+                  {updateSaving ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Settings...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save App Update Settings</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

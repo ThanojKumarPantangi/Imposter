@@ -13,6 +13,7 @@ export const adminApi = {
   getAuditLogs: () => apiRequest('/admin/audit-logs'),
   triggerSeed: () => apiRequest('/admin/seed', { method: 'POST' }),
   getAppConfig: () => apiRequest('/admin/app-config'),
-  updateAppConfig: (data) => apiRequest('/admin/app-config', { method: 'PUT', body: JSON.stringify(data) })
+  updateServerStatus: (data) => apiRequest('/admin/server-status', { method: 'PUT', body: JSON.stringify(data) }),
+  updateAppUpdateStatus: (data) => apiRequest('/admin/app-update', { method: 'PUT', body: JSON.stringify(data) })
 };
 
