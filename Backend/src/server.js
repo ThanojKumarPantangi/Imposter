@@ -4,6 +4,7 @@ import app from './app.js';
 import connectDB from './config/db.js';
 import { getRedisClient, createRedisClient, isRedisConfigured, isUsingUpstash } from './config/redis.js';
 import { registerGameSocket } from './sockets/gameSocket.js';
+import { getActiveConfigFromDB } from './controllers/appConfigController.js';
 
 const PORT = process.env.PORT || 5000;
 const rawClientUrls = process.env.CLIENT_URL || 'http://localhost:5173,http://localhost:5174';
@@ -54,6 +55,9 @@ async function startServer() {
   
   // 1. Connect MongoDB
   await connectDB();
+
+  // 1.1 Preload App Configuration & Maintenance Status
+  await getActiveConfigFromDB();
 
   // 2. Init Redis Client (Upstash HTTPS or ioredis)
   getRedisClient();

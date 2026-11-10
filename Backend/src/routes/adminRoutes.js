@@ -12,6 +12,10 @@ import {
   getAuditLogs,
   triggerSeed
 } from '../controllers/adminController.js';
+import {
+  getAdminAppConfig,
+  updateAdminAppConfig
+} from '../controllers/appConfigController.js';
 import { requireAdmin } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -31,5 +35,9 @@ router.delete('/categories/:id/words/:wordText', deleteWord);
 router.get('/history', getGameHistory);
 router.get('/audit-logs', getAuditLogs);
 router.post('/seed', triggerSeed);
+
+// App Startup Config & Maintenance Control
+router.get('/app-config', getAdminAppConfig);
+router.put('/app-config', updateAdminAppConfig);
 
 export default router;

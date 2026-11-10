@@ -3,9 +3,11 @@ import authRoutes from './authRoutes.js';
 import roomRoutes from './roomRoutes.js';
 import adminRoutes from './adminRoutes.js';
 import statsRoutes from './statsRoutes.js';
+import appRoutes from './appRoutes.js';
 
 const router = express.Router();
 
+router.use('/app', appRoutes);
 router.use('/auth', authRoutes);
 router.use('/rooms', roomRoutes);
 router.use('/admin', adminRoutes);
