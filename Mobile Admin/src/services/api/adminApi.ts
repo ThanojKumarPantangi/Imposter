@@ -59,5 +59,14 @@ export const adminApi = {
 
   triggerSeed: (): Promise<{ success: boolean; message: string }> =>
     apiRequest('/admin/seed', { method: 'POST' }),
+
+  getAppConfig: (): Promise<{ success: boolean; data: any }> =>
+    apiRequest('/admin/app-config'),
+
+  updateAppConfig: (data: any): Promise<{ success: boolean; data: any; message?: string }> =>
+    apiRequest('/admin/app-config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
 

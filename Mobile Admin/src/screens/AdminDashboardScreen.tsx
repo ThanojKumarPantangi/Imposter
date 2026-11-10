@@ -9,6 +9,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Switch,
 } from 'react-native';
 import {
   Layers,
@@ -21,6 +22,10 @@ import {
   X,
   Check,
   Search,
+  Sliders,
+  Smartphone,
+  Power,
+  RefreshCw,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { adminApi } from '../services/api/adminApi';
@@ -34,7 +39,7 @@ import { Category, MatchHistoryEntry, AuditLogEntry } from '../types';
 export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { adminLogout, isAdminAuthenticated } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'CATEGORIES' | 'HISTORY' | 'AUDIT' | 'STATS'>('CATEGORIES');
+  const [activeTab, setActiveTab] = useState<'CATEGORIES' | 'HISTORY' | 'AUDIT' | 'STATS' | 'CONFIG'>('CATEGORIES');
   const [stats, setStats] = useState<any>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -44,6 +49,20 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
   const [loading, setLoading] = useState<boolean>(true);
   const [seedLoading, setSeedLoading] = useState<boolean>(false);
   const [feedbackMsg, setFeedbackMsg] = useState<string>('');
+
+  // App Startup Configuration & Maintenance State
+  const [configLoading, setConfigLoading] = useState<boolean>(false);
+  const [configSaving, setConfigSaving] = useState<boolean>(false);
+  const [serverEnabled, setServerEnabled] = useState<boolean>(true);
+  const [serverMessage, setServerMessage] = useState<string>("We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!");
+  const [updateEnabled, setUpdateEnabled] = useState<boolean>(true);
+  const [latestVersionCode, setLatestVersionCode] = useState<number>(1);
+  const [isUpdateRequired, setIsUpdateRequired] = useState<boolean>(true);
+  const [isBlocked, setIsBlocked] = useState<boolean>(true);
+  const [updateUrl, setUpdateUrl] = useState<string>('');
+  const [updateTitle, setUpdateTitle] = useState<string>('Update Available');
+  const [updateMessage, setUpdateMessage] = useState<string>('A newer version of Imposter is available.');
+  const [configVersion, setConfigVersion] = useState<number>(1);
 
   // Add Word Modal
   const [showAddWordModal, setShowAddWordModal] = useState<boolean>(false);
@@ -104,11 +123,70 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
     }
   }
 
-  const handleTabChange = (tab: 'CATEGORIES' | 'HISTORY' | 'AUDIT' | 'STATS') => {
+  async function loadAppConfig() {
+    try {
+      setConfigLoading(true);
+      const res = await adminApi.getAppConfig();
+      if (res.success && res.data) {
+        const d = res.data;
+        setServerEnabled(d.server?.enabled ?? true);
+        setServerMessage(d.server?.message || '');
+        setUpdateEnabled(d.appUpdate?.enabled ?? true);
+        setLatestVersionCode(d.appUpdate?.latestVersionCode ?? 4);
+        setIsUpdateRequired(d.appUpdate?.isUpdateRequired ?? true);
+        setIsBlocked(d.appUpdate?.isBlocked ?? true);
+        setUpdateUrl(d.appUpdate?.updateUrl || '');
+        setUpdateTitle(d.appUpdate?.title || '');
+        setUpdateMessage(d.appUpdate?.message || '');
+        setConfigVersion(d.version ?? 40);
+      }
+    } catch (e: any) {
+      console.error(e);
+      setFeedbackMsg('❌ Failed to fetch application configuration');
+    } finally {
+      setConfigLoading(false);
+    }
+  }
+
+  const handleSaveAppConfig = async () => {
+    try {
+      setConfigSaving(true);
+      setFeedbackMsg('');
+      sounds.playClick();
+      const res = await adminApi.updateAppConfig({
+        server: {
+          enabled: serverEnabled,
+          message: serverMessage,
+        },
+        appUpdate: {
+          enabled: updateEnabled,
+          latestVersionCode: Number(latestVersionCode),
+          isUpdateRequired,
+          isBlocked,
+          updateUrl,
+          title: updateTitle,
+          message: updateMessage,
+        },
+        version: Number(configVersion),
+      });
+      if (res.success) {
+        setFeedbackMsg('✅ App Startup Configuration & Server settings updated successfully!');
+        Alert.alert('Configuration Saved', 'Application configuration has been updated on the backend.');
+      }
+    } catch (err: any) {
+      setFeedbackMsg(`❌ Failed to update configuration: ${err.message}`);
+      Alert.alert('Error', err.message || 'Failed to save configuration');
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
+  const handleTabChange = (tab: 'CATEGORIES' | 'HISTORY' | 'AUDIT' | 'STATS' | 'CONFIG') => {
     sounds.playClick();
     setActiveTab(tab);
     if (tab === 'HISTORY') loadHistory();
     if (tab === 'AUDIT') loadAudit();
+    if (tab === 'CONFIG') loadAppConfig();
   };
 
   const handleSeedDatabase = () => {
@@ -268,6 +346,16 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
           <Database size={14} color={activeTab === 'STATS' ? COLORS.white : COLORS.slate[400]} />
           <Text style={[styles.tabText, activeTab === 'STATS' && styles.tabTextActive]}>
             Stats
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => handleTabChange('CONFIG')}
+          style={[styles.tabBtn, activeTab === 'CONFIG' && styles.tabBtnActive]}
+        >
+          <Sliders size={14} color={activeTab === 'CONFIG' ? COLORS.white : COLORS.slate[400]} />
+          <Text style={[styles.tabText, activeTab === 'CONFIG' && styles.tabTextActive]}>
+            Config
           </Text>
         </TouchableOpacity>
       </View>
@@ -458,6 +546,140 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
                 <Text style={styles.statLabel}>Categories</Text>
               </Card>
             </View>
+          </View>
+        )}
+
+        {/* ========================================================== */}
+        {/* TAB 5: APP CONFIG & MAINTENANCE */}
+        {/* ========================================================== */}
+        {activeTab === 'CONFIG' && (
+          <View style={styles.tabContent}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md }}>
+              <Text style={styles.sectionHeading}>Startup App Config</Text>
+              <TouchableOpacity onPress={loadAppConfig} disabled={configLoading} style={styles.refreshBtn}>
+                <RefreshCw size={14} color={COLORS.slate[300]} />
+                <Text style={styles.refreshBtnText}>Reload</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Server Operational Switch */}
+            <Card style={styles.configCard}>
+              <View style={styles.configRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.configLabel}>Server Status</Text>
+                  <Text style={[styles.configSub, { color: serverEnabled ? COLORS.accent.emerald : COLORS.imposter.default }]}>
+                    {serverEnabled ? '🟢 Operational (Online)' : '🔴 Maintenance Active (Offline)'}
+                  </Text>
+                </View>
+                <Switch
+                  value={serverEnabled}
+                  onValueChange={setServerEnabled}
+                  trackColor={{ false: COLORS.imposter.default, true: COLORS.accent.emerald }}
+                  thumbColor={COLORS.white}
+                />
+              </View>
+
+              <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>Maintenance Notice</Text>
+              <TextInput
+                value={serverMessage}
+                onChangeText={setServerMessage}
+                placeholder="Scheduled maintenance message..."
+                placeholderTextColor={COLORS.slate[600]}
+                multiline
+                numberOfLines={2}
+                style={[styles.modalInput, { minHeight: 60, textAlignVertical: 'top' }]}
+              />
+            </Card>
+
+            {/* App Update Configuration */}
+            <Card style={styles.configCard}>
+              <Text style={styles.configHeaderTitle}>Android App Update Policy</Text>
+
+              <View style={styles.configRow}>
+                <Text style={styles.configLabel}>Enforcement Active (enabled)</Text>
+                <Switch
+                  value={updateEnabled}
+                  onValueChange={setUpdateEnabled}
+                  trackColor={{ false: COLORS.slate[700], true: COLORS.imposter.default }}
+                />
+              </View>
+
+              <View style={styles.configRow}>
+                <Text style={styles.configLabel}>Update Required (isUpdateRequired)</Text>
+                <Switch
+                  value={isUpdateRequired}
+                  onValueChange={setIsUpdateRequired}
+                  trackColor={{ false: COLORS.slate[700], true: COLORS.imposter.default }}
+                />
+              </View>
+
+              <View style={styles.configRow}>
+                <Text style={styles.configLabel}>Mandatory Hard Block (isBlocked)</Text>
+                <Switch
+                  value={isBlocked}
+                  onValueChange={setIsBlocked}
+                  trackColor={{ false: COLORS.slate[700], true: COLORS.imposter.default }}
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.md }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Latest Version Code</Text>
+                  <TextInput
+                    value={String(latestVersionCode)}
+                    onChangeText={(v) => setLatestVersionCode(parseInt(v, 10) || 0)}
+                    keyboardType="numeric"
+                    style={styles.modalInput}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Config Version</Text>
+                  <TextInput
+                    value={String(configVersion)}
+                    onChangeText={(v) => setConfigVersion(parseInt(v, 10) || 0)}
+                    keyboardType="numeric"
+                    style={styles.modalInput}
+                  />
+                </View>
+              </View>
+
+              <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>APK Download URL (HTTPS)</Text>
+              <TextInput
+                value={updateUrl}
+                onChangeText={setUpdateUrl}
+                placeholder="https://..."
+                placeholderTextColor={COLORS.slate[600]}
+                autoCapitalize="none"
+                style={styles.modalInput}
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>Update Screen Title</Text>
+              <TextInput
+                value={updateTitle}
+                onChangeText={setUpdateTitle}
+                placeholder="Update Available"
+                placeholderTextColor={COLORS.slate[600]}
+                style={styles.modalInput}
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>Update Screen Message</Text>
+              <TextInput
+                value={updateMessage}
+                onChangeText={setUpdateMessage}
+                placeholder="A newer version is available."
+                placeholderTextColor={COLORS.slate[600]}
+                multiline
+                style={[styles.modalInput, { minHeight: 50 }]}
+              />
+            </Card>
+
+            <GradientButton
+              title={configSaving ? 'Saving...' : 'Save Configuration Changes'}
+              onPress={handleSaveAppConfig}
+              loading={configSaving}
+              variant="primary"
+              style={{ marginTop: SPACING.md, marginBottom: SPACING.xxl }}
+            />
           </View>
         )}
       </ScrollView>
@@ -868,6 +1090,56 @@ const styles = StyleSheet.create({
   },
   fullWidth: {
     width: '100%',
+  },
+  refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.dark[900],
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.slate[800],
+  },
+  refreshBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.slate[300],
+  },
+  configCard: {
+    width: '100%',
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  configHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.white,
+    marginBottom: SPACING.sm,
+  },
+  configRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  configLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.slate[200],
+  },
+  configSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.slate[400],
+    textTransform: 'uppercase',
   },
 });
 
