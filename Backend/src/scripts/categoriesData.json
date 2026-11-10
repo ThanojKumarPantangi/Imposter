@@ -1792,7 +1792,7 @@
       {
         "word": "Christmas",
         "normalizedWord": "christmas",
-        "hint": "Pine tree",
+        "hint": "Santa Claus",
         "hints": {
           "level1": "Winter holiday",
           "level2": "Gifts",
@@ -1831,7 +1831,7 @@
       {
         "word": "Dussehra",
         "normalizedWord": "dussehra",
-        "hint": "Effigy burning",
+        "hint": "Ravana",
         "hints": {
           "level1": "Indian festival",
           "level2": "Ten days",
@@ -1857,7 +1857,7 @@
       {
         "word": "Bonalu",
         "normalizedWord": "bonalu",
-        "hint": "Pot offering",
+        "hint": "Potharaju",
         "hints": {
           "level1": "Telugu festival",
           "level2": "Goddess worship",
@@ -1870,7 +1870,7 @@
       {
         "word": "Bathukamma",
         "normalizedWord": "bathukamma",
-        "hint": "Floral stack",
+        "hint": "Saddula",
         "hints": {
           "level1": "Telugu festival",
           "level2": "Women's dance",
@@ -1883,7 +1883,7 @@
       {
         "word": "Navratri",
         "normalizedWord": "navratri",
-        "hint": "Garba dance",
+        "hint": "Nine nights",
         "hints": {
           "level1": "Indian festival",
           "level2": "Nine nights",
@@ -1909,7 +1909,7 @@
       {
         "word": "Onam",
         "normalizedWord": "onam",
-        "hint": "Boat race",
+        "hint": "Kerala festival",
         "hints": {
           "level1": "Kerala festival",
           "level2": "Flower carpet",
@@ -1920,9 +1920,9 @@
         "enabled": true
       },
       {
-        "word": "Raksha Bandhan",
-        "normalizedWord": "raksha bandhan",
-        "hint": "Wrist thread",
+        "word": "Rakhi",
+        "normalizedWord": "rakhi",
+        "hint": "Siblings",
         "hints": {
           "level1": "Indian festival",
           "level2": "Siblings",
@@ -1935,7 +1935,7 @@
       {
         "word": "Halloween",
         "normalizedWord": "halloween",
-        "hint": "Trick treat",
+        "hint": "Pumpkin",
         "hints": {
           "level1": "Autumn holiday",
           "level2": "Costumes",
