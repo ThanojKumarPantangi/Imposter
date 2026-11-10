@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "com.imposter.game",
+      "versionCode": 1,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "backgroundColor": "#0d1117",

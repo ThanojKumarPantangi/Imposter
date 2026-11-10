@@ -59,6 +59,10 @@ class MainApplication : Application(), ReactApplication {
         }
         applicationContext.startActivity(intent)
 
+        try {
+          Thread.sleep(500)
+        } catch (_: InterruptedException) {}
+
         android.os.Process.killProcess(android.os.Process.myPid())
         System.exit(10)
       } catch (e: Exception) {

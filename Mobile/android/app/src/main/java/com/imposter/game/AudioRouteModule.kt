@@ -32,6 +32,25 @@ class AudioRouteModule(private val reactContext: ReactApplicationContext) :
 
     override fun getName(): String = "AudioRouteModule"
 
+    override fun getConstants(): Map<String, Any> {
+        val constants = HashMap<String, Any>()
+        try {
+            val pInfo = reactContext.packageManager.getPackageInfo(reactContext.packageName, 0)
+            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pInfo.longVersionCode.toInt()
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo.versionCode
+            }
+            constants["versionCode"] = versionCode
+            constants["versionName"] = pInfo.versionName ?: "1.0.0"
+        } catch (e: Exception) {
+            constants["versionCode"] = 1
+            constants["versionName"] = "1.0.0"
+        }
+        return constants
+    }
+
     private fun sendEvent(eventName: String, params: WritableMap?) {
         if (reactContext.hasActiveReactInstance()) {
             reactContext

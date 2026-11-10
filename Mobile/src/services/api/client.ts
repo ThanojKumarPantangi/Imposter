@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { CONFIG, STORAGE_KEYS } from '../../config/constants';
+import { startupGate } from '../startup/startupGate';
 
 export async function getApiBaseUrl(): Promise<string> {
   try {
@@ -29,6 +30,16 @@ export async function apiRequest<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
+  // Prevent any non-config API requests when application is in a blocked startup state
+  if (startupGate.isBlocked() && !endpoint.startsWith('/app/config')) {
+    const error: any = new Error(
+      `[StartupGate] Request to "${endpoint}" blocked: Application is in ${startupGate.getState()} state`
+    );
+    error.status = 503;
+    error.blockedByStartup = true;
+    throw error;
+  }
+
   const [baseUrl, token] = await Promise.all([getApiBaseUrl(), getAuthToken()]);
 
   const headers: Record<string, string> = {

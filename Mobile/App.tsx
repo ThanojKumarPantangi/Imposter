@@ -7,6 +7,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { SocketProvider } from './src/context/SocketContext';
 import { VoiceChatProvider } from './src/context/VoiceChatContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { AppStartupGuard } from './src/services/startup/AppStartupGuard';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -116,13 +117,15 @@ export default function App() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider initialMetrics={initialWindowMetrics}>
           <StatusBar barStyle="light-content" />
-          <AuthProvider>
-            <SocketProvider>
-              <VoiceChatProvider>
-                <RootNavigator />
-              </VoiceChatProvider>
-            </SocketProvider>
-          </AuthProvider>
+          <AppStartupGuard>
+            <AuthProvider>
+              <SocketProvider>
+                <VoiceChatProvider>
+                  <RootNavigator />
+                </VoiceChatProvider>
+              </SocketProvider>
+            </AuthProvider>
+          </AppStartupGuard>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </RootErrorBoundary>

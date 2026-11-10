@@ -1,6 +1,6 @@
 package com.imposter.game
 
-import android.app.Activity
+import androidx.appcompat.app.AppCompatActivity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -16,7 +16,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
-class CrashActivity : Activity() {
+class CrashActivity : AppCompatActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
