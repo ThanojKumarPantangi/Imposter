@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import {
-  Shield, Send, Clock, Vote, Trophy, Skull,LogOut ,
+  Shield, Send, Clock, Vote, Trophy, Skull, LogOut, FastForward,
   AlertCircle, Sparkles, Volume2, ArrowRight, RotateCcw, Home as HomeIcon, ArrowLeft, Eye
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -879,45 +879,159 @@ export function GameView() {
       {/* ========================================================== */}
       {/* PHASE 4: RESULTS & ELIMINATION */}
       {/* ========================================================== */}
-      {roomState.status === 'RESULTS' && roomState.eliminationResult && (
-        <div className="glass-card p-8 sm:p-12 text-center animate-fade-in max-w-xl mx-auto">
-          <div className="w-16 h-16 rounded-3xl bg-rose-500/20 text-rose-500 flex items-center justify-center mx-auto mb-4 border border-rose-500/30">
-            <Skull className="w-8 h-8" />
-          </div>
+      {roomState.status === 'RESULTS' && roomState.eliminationResult && (() => {
+        const eliminationResult = roomState.eliminationResult;
+        const voteCounts = {
+          ...(eliminationResult?.voteCounts || {}),
+        };
+        let skipVotes =
+          typeof eliminationResult?.skipVotes === 'number' ? eliminationResult.skipVotes : 0;
 
-          <h2 className="font-display font-black text-3xl text-white mb-2">Round Elimination</h2>
+        if (Object.keys(voteCounts).length === 0 && skipVotes === 0 && roomState?.votes) {
+          for (const targetId of Object.values(roomState.votes)) {
+            if (targetId === 'SKIP') {
+              skipVotes++;
+            } else if (targetId) {
+              voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+            }
+          }
+        }
 
-          {roomState.eliminationResult.eliminatedPlayer ? (
-            <div className="my-6 p-6 rounded-2xl bg-dark-950 border border-slate-800">
-              <div className="text-xs uppercase font-bold text-slate-400 mb-1">Eliminated by Vote</div>
-              <div className="font-display font-black text-2xl text-rose-400 mb-2">
-                {roomState.eliminationResult.eliminatedPlayer.username}
+        const playerVoteEntries = Object.entries(voteCounts)
+          .filter(([_, count]) => typeof count === 'number' && count >= 1)
+          .sort((a, b) => b[1] - a[1]);
+
+        const hasSkipVotes = skipVotes >= 1;
+        const hasVotes = playerVoteEntries.length > 0 || hasSkipVotes;
+        const playersMap = new Map((roomState?.players || []).map((p) => [p.id, p]));
+
+        const remainingCount = (() => {
+          if (typeof eliminationResult?.impostersRemaining === 'number') {
+            return eliminationResult.impostersRemaining;
+          }
+          const initialCount = roomState?.settings?.impostersCount ?? 1;
+          const eliminatedIsImposter = eliminationResult?.eliminatedPlayer?.role === 'IMPOSTER';
+          return Math.max(0, initialCount - (eliminatedIsImposter ? 1 : 0));
+        })();
+
+        const imposterRemainText =
+          remainingCount === 1 ? '1 imposter remains' : `${remainingCount} imposters remain`;
+
+        return (
+          <div className="flex flex-col items-center w-full max-w-xl mx-auto animate-fade-in">
+            <div className="glass-card p-8 sm:p-12 text-center w-full">
+              <div className="w-16 h-16 rounded-3xl bg-rose-500/20 text-rose-500 flex items-center justify-center mx-auto mb-4 border border-rose-500/30">
+                <Skull className="w-8 h-8" />
               </div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-200">
-                Identity: {roomState.eliminationResult.eliminatedPlayer.role}
+
+              <h2 className="font-display font-black text-3xl text-white mb-2">Round Elimination</h2>
+
+              {eliminationResult.eliminatedPlayer ? (
+                <div className="my-6 p-6 rounded-2xl bg-dark-950 border border-slate-800">
+                  <div className="text-xs uppercase font-bold text-slate-400 mb-1">Eliminated by Vote</div>
+                  <div className="font-display font-black text-2xl text-rose-400 mb-2">
+                    {eliminationResult.eliminatedPlayer.username}
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-200">
+                    Identity: {eliminationResult.eliminatedPlayer.role}
+                  </div>
+                </div>
+              ) : (
+                <div className="my-6 p-6 rounded-2xl bg-dark-950 border border-slate-800 text-amber-400 font-bold">
+                  {eliminationResult.wasSkipped
+                    ? 'The majority voted to skip! Moving to the next round.'
+                    : 'The vote was tied! No player was eliminated this round.'}
+                </div>
+              )}
+
+              {/* Vote tally breakdown (only showing targets with votes >= 1) */}
+              {hasVotes && (
+                <div className="my-5 p-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-left">
+                  <div className="flex items-center gap-2 mb-3 px-1">
+                    <Vote className="w-4 h-4 text-slate-400" />
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+                      Votes Cast
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {/* Skip Votes */}
+                    {hasSkipVotes && (
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-black/30 border border-white/5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-400">
+                            <FastForward className="w-4 h-4" />
+                          </div>
+                          <span className="text-sm font-bold text-white">Skip Vote</span>
+                        </div>
+                        <div className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-bold text-slate-200">
+                          {skipVotes} {skipVotes === 1 ? 'vote' : 'votes'}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Player Votes (votes >= 1) */}
+                    {playerVoteEntries.map(([playerId, count]) => {
+                      const p = playersMap.get(playerId);
+                      const username =
+                        p?.username ||
+                        (eliminationResult.eliminatedPlayer?.id === playerId
+                          ? eliminationResult.eliminatedPlayer.username
+                          : 'Unknown Player');
+                      const isEliminated = eliminationResult.eliminatedPlayer?.id === playerId;
+
+                      return (
+                        <div
+                          key={playerId}
+                          className="flex items-center justify-between p-3 rounded-xl bg-black/30 border border-white/5"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <PlayerAvatar player={p} size="sm" showStatus={false} />
+                            <span className="text-sm font-bold text-white truncate max-w-[150px] sm:max-w-[200px]">
+                              {username}
+                            </span>
+                            {isEliminated && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                                ELIMINATED
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                              isEliminated
+                                ? 'bg-rose-500/15 border-rose-500/35 text-rose-400'
+                                : 'bg-white/10 border-white/15 text-slate-200'
+                            }`}
+                          >
+                            {count} {count === 1 ? 'vote' : 'votes'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 flex flex-col items-center gap-2">
+                <PhaseCountdownBadge
+                  deadline={roomState.resultsDeadline || eliminationResult?.resultsDeadline}
+                  label="Next round starting in"
+                  defaultSeconds={3}
+                  color="rose"
+                />
+                <p className="text-xs text-slate-500">
+                  Checking victory conditions and preparing for the next round...
+                </p>
               </div>
             </div>
-          ) : (
-            <div className="my-6 p-6 rounded-2xl bg-dark-950 border border-slate-800 text-amber-400 font-bold">
-              {roomState.eliminationResult.wasSkipped
-                ? 'The majority voted to skip! Moving to the next round.'
-                : 'The vote was tied! No player was eliminated this round.'}
-            </div>
-          )}
 
-          <div className="mt-4 flex flex-col items-center gap-2">
-            <PhaseCountdownBadge
-              deadline={roomState.resultsDeadline || roomState.eliminationResult?.resultsDeadline}
-              label="Next round starting in"
-              defaultSeconds={3}
-              color="rose"
-            />
-            <p className="text-xs text-slate-500">
-              Checking victory conditions and preparing for the next round...
-            </p>
+            {/* Imposters remaining pill */}
+            <div className="mt-6 px-7 py-2.5 rounded-full border-2 border-white/80 bg-slate-950/60 text-white font-medium text-sm sm:text-base tracking-wide shadow-lg">
+              {imposterRemainText}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ========================================================== */}
       {/* PHASE 5: FINISHED / WINNER ANNOUNCEMENT */}
