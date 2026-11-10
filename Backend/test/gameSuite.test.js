@@ -825,4 +825,97 @@ describe('🎮 Authoritative Imposter Multiplayer Test Suite', () => {
       assert.ok(approvedStatus.room.players.some(p => p.id === kickedP.id));
     });
   });
+
+  describe('11. Category Rotation & Word Repetition Across Matches', () => {
+    test('95-98. Rotates through selected categories in round-robin order across matches while allowing word repetition and preserving imposter history', async () => {
+      const host = { id: 'rot_host', username: 'RotHost' };
+      const p2 = { id: 'rot_p2', username: 'RotP2' };
+      const p3 = { id: 'rot_p3', username: 'RotP3' };
+      const p4 = { id: 'rot_p4', username: 'RotP4' };
+
+      const room = await gameEngine.createRoom(host);
+      await gameEngine.joinRoom(room.code, p2);
+      await gameEngine.joinRoom(room.code, p3);
+      await gameEngine.joinRoom(room.code, p4);
+
+      // Select 3 categories
+      await gameEngine.updateRoomCategories(
+        room.code,
+        host.id,
+        ['fruits', 'animals', 'movies'],
+        ['Fruits', 'Animals & Pets', 'Movies & Cinema']
+      );
+
+      // --- MATCH 1: Should use category index 0 ('fruits') ---
+      const match1 = await gameEngine.startGame(room.code, host.id);
+      assert.equal(match1.activeCategorySlug, 'fruits');
+      assert.equal(match1.settings.categoryName, 'Fruits');
+      assert.ok(match1.secretWord, 'Match 1 has secret word');
+      const imposter1 = match1.players.find(p => p.role === 'IMPOSTER');
+      assert.ok(imposter1);
+
+      // Finish match 1 and return to lobby
+      await gameEngine.endGameWithWinner(match1, 'CIVILIANS', 'ALL_IMPOSTERS_ELIMINATED');
+      await gameEngine.returnToLobby(room.code, host.id);
+
+      // --- MATCH 2: Should rotate to category index 1 ('animals') ---
+      const match2 = await gameEngine.startGame(room.code, host.id);
+      assert.equal(match2.activeCategorySlug, 'animals');
+      assert.equal(match2.settings.categoryName, 'Animals & Pets');
+      assert.ok(match2.secretWord, 'Match 2 has secret word');
+      // Imposter history avoided repeating match 1 imposter
+      assert.notEqual(match2.lastImposters[0], imposter1.id);
+      const imposter2 = match2.players.find(p => p.role === 'IMPOSTER');
+      assert.ok(imposter2);
+      assert.notEqual(imposter2.id, imposter1.id);
+
+      // Finish match 2 and return to lobby
+      await gameEngine.endGameWithWinner(match2, 'CIVILIANS', 'ALL_IMPOSTERS_ELIMINATED');
+      await gameEngine.returnToLobby(room.code, host.id);
+
+      // --- MATCH 3: Should rotate to category index 2 ('movies') ---
+      const match3 = await gameEngine.startGame(room.code, host.id);
+      assert.equal(match3.activeCategorySlug, 'movies');
+      assert.equal(match3.settings.categoryName, 'Movies & Cinema');
+      assert.ok(match3.secretWord, 'Match 3 has secret word');
+
+      // Finish match 3 and return to lobby
+      await gameEngine.endGameWithWinner(match3, 'CIVILIANS', 'ALL_IMPOSTERS_ELIMINATED');
+      await gameEngine.returnToLobby(room.code, host.id);
+
+      // --- MATCH 4: Should wrap around back to category index 0 ('fruits') ---
+      const match4 = await gameEngine.startGame(room.code, host.id);
+      assert.equal(match4.activeCategorySlug, 'fruits');
+      assert.equal(match4.settings.categoryName, 'Fruits');
+      assert.ok(match4.secretWord, 'Match 4 has secret word');
+    });
+
+    test('99-101. Prevents word repetition across consecutive rounds and tracks used words', async () => {
+      const host = { id: 'word_rep_host', username: 'WordHost' };
+      const p2 = { id: 'word_rep_p2', username: 'WordP2' };
+      const p3 = { id: 'word_rep_p3', username: 'WordP3' };
+
+      const room = await gameEngine.createRoom(host);
+      await gameEngine.joinRoom(room.code, p2);
+      await gameEngine.joinRoom(room.code, p3);
+
+      await gameEngine.updateRoomCategories(room.code, host.id, ['fruits'], ['Fruits']);
+
+      // Round 1
+      const round1 = await gameEngine.startGame(room.code, host.id);
+      const word1 = round1.secretWord;
+      assert.ok(word1);
+      assert.ok(round1.usedWords.includes(word1));
+
+      await gameEngine.endGameWithWinner(round1, 'CIVILIANS', 'ALL_IMPOSTERS_ELIMINATED');
+      await gameEngine.returnToLobby(room.code, host.id);
+
+      // Round 2
+      const round2 = await gameEngine.startGame(room.code, host.id);
+      const word2 = round2.secretWord;
+      assert.ok(word2);
+      assert.notEqual(word2, word1, 'Second round word must not repeat first round word');
+      assert.ok(round2.usedWords.includes(word2));
+    });
+  });
 });

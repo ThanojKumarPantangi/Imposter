@@ -87,6 +87,8 @@ class GameEngine {
       eliminationResult: null,
       winnerResult: null,
       lastImposters: [],
+      categoryRotationIndex: 0,
+      usedWords: [],
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -626,12 +628,46 @@ class GameEngine {
     const chosenImposterIndices = new Set(eligibleIndices.slice(0, imposterTarget));
     const newImposterIds = [];
 
-    // Word selection: Draw word and hint from the SHARED room categories!
+    // Category Rotation: When players select multiple categories, rotate automatically
+    // across rounds so all selected categories get a fair chance to appear.
     const roomSlugs = (room.settings && (room.settings.categorySlugs || room.settings.selectedCategories)) || ['fruits'];
+    const cleanSlugs = Array.isArray(roomSlugs) && roomSlugs.length > 0 ? roomSlugs : ['fruits'];
+
+    const rotationIndex = typeof room.categoryRotationIndex === 'number' ? room.categoryRotationIndex : 0;
+    const selectedCategoryIndex = rotationIndex % cleanSlugs.length;
+    const targetSlug = cleanSlugs[selectedCategoryIndex];
+
+    // Advance rotation index for the next game round
+    room.categoryRotationIndex = (selectedCategoryIndex + 1) % cleanSlugs.length;
+
+    // Word selection with Prevent Word Repetition:
+    // Track previously used words so players get a fresh word in subsequent rounds.
     const difficulty = (room.settings && room.settings.difficulty) || 'ALL';
-    const eligibleWords = await this.getWordsForCategories(roomSlugs, difficulty);
-    const chosenWordIndex = crypto.randomInt(0, eligibleWords.length);
-    const chosenWordEntry = eligibleWords[chosenWordIndex];
+    let eligibleWords = await this.getWordsForCategories([targetSlug], difficulty);
+
+    // Fallback if target category has no words with selected difficulty
+    if (!eligibleWords || eligibleWords.length === 0) {
+      eligibleWords = await this.getWordsForCategories(cleanSlugs, difficulty);
+    }
+
+    // Filter out previously used words to prevent repetition across rounds
+    const usedWordsSet = new Set((room.usedWords || []).map(w => String(w).trim().toLowerCase()));
+    let availableWords = eligibleWords.filter(w => !usedWordsSet.has(String(w.word).trim().toLowerCase()));
+
+    // If all words in the candidate pool have been used up, reset history so words cycle fresh
+    if (availableWords.length === 0) {
+      availableWords = eligibleWords;
+      room.usedWords = [];
+    }
+
+    const chosenWordIndex = crypto.randomInt(0, availableWords.length);
+    const chosenWordEntry = availableWords[chosenWordIndex];
+
+    // Record chosen word in usedWords history
+    if (!Array.isArray(room.usedWords)) {
+      room.usedWords = [];
+    }
+    room.usedWords.push(chosenWordEntry.word);
 
     for (let idx = 0; idx < room.players.length; idx++) {
       const player = room.players[idx];
@@ -661,7 +697,10 @@ class GameEngine {
     room.secretWord = chosenWordEntry.word;
     room.hint = chosenWordEntry.hint;
     room.wordDifficulty = chosenWordEntry.difficulty || 'EASY';
+    room.activeCategorySlug = targetSlug;
+    room.activeCategoryName = chosenWordEntry.categoryName;
     room.settings.categoryName = chosenWordEntry.categoryName;
+    room.settings.categorySlug = targetSlug;
 
     room.lastImposters = newImposterIds;
     room.status = 'ROLE_REVEAL';
@@ -1295,6 +1334,14 @@ class GameEngine {
     room.resultsDeadline = null;
     room.eliminationResult = null;
     room.winnerResult = null;
+
+    // Restore shared category display in lobby
+    if (room.settings && Array.isArray(room.settings.categoryNames) && room.settings.categoryNames.length > 0) {
+      room.settings.categoryName = room.settings.categoryNames.join(', ');
+      if (Array.isArray(room.settings.categorySlugs) && room.settings.categorySlugs.length > 0) {
+        room.settings.categorySlug = room.settings.categorySlugs[0];
+      }
+    }
 
     await roomRepository.clearTurnTimer(normalizedCode);
     await roomRepository.clearVotingTimer(normalizedCode);
