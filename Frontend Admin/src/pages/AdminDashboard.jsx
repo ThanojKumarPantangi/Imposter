@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Layers, Plus, Trash2, Edit2, Database, History, FileText,
-  LogOut, Check, X, Search, Sparkles, BookOpen, AlertCircle
+  LogOut, Check, X, Search, Sparkles, BookOpen, AlertCircle,
+  Sliders, Smartphone, ShieldCheck, Power, RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { adminApi } from '../api/adminApi';
@@ -34,6 +35,20 @@ export function AdminDashboard() {
   const [newCatSlug, setNewCatSlug] = useState('');
   const [newCatGroup, setNewCatGroup] = useState('FOOD_DRINK');
   const [newCatDesc, setNewCatDesc] = useState('');
+
+  // App Startup Configuration & Maintenance State
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [serverEnabled, setServerEnabled] = useState(true);
+  const [serverMessage, setServerMessage] = useState("We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!");
+  const [updateEnabled, setUpdateEnabled] = useState(true);
+  const [latestVersionCode, setLatestVersionCode] = useState(1);
+  const [isUpdateRequired, setIsUpdateRequired] = useState(true);
+  const [isBlocked, setIsBlocked] = useState(true);
+  const [updateUrl, setUpdateUrl] = useState('');
+  const [updateTitle, setUpdateTitle] = useState('Update Available');
+  const [updateMessage, setUpdateMessage] = useState('A newer version of Imposter is available.');
+  const [configVersion, setConfigVersion] = useState(1);
 
   useEffect(() => {
     if (!isAdminAuthenticated) {
@@ -82,6 +97,62 @@ export function AdminDashboard() {
       console.error(e);
     }
   }
+
+  async function loadAppConfig() {
+    try {
+      setConfigLoading(true);
+      const res = await adminApi.getAppConfig();
+      if (res.success && res.data) {
+        const d = res.data;
+        setServerEnabled(d.server?.enabled ?? true);
+        setServerMessage(d.server?.message || '');
+        setUpdateEnabled(d.appUpdate?.enabled ?? true);
+        setLatestVersionCode(d.appUpdate?.latestVersionCode ?? 4);
+        setIsUpdateRequired(d.appUpdate?.isUpdateRequired ?? true);
+        setIsBlocked(d.appUpdate?.isBlocked ?? true);
+        setUpdateUrl(d.appUpdate?.updateUrl || '');
+        setUpdateTitle(d.appUpdate?.title || '');
+        setUpdateMessage(d.appUpdate?.message || '');
+        setConfigVersion(d.version ?? 40);
+      }
+    } catch (e) {
+      console.error(e);
+      setFeedbackMsg('❌ Failed to fetch application configuration');
+    } finally {
+      setConfigLoading(false);
+    }
+  }
+
+  const handleSaveAppConfig = async (e) => {
+    e?.preventDefault();
+    try {
+      setConfigSaving(true);
+      setFeedbackMsg('');
+      const res = await adminApi.updateAppConfig({
+        server: {
+          enabled: serverEnabled,
+          message: serverMessage
+        },
+        appUpdate: {
+          enabled: updateEnabled,
+          latestVersionCode: Number(latestVersionCode),
+          isUpdateRequired,
+          isBlocked,
+          updateUrl,
+          title: updateTitle,
+          message: updateMessage
+        },
+        version: Number(configVersion)
+      });
+      if (res.success) {
+        setFeedbackMsg('✅ App Startup Configuration & Server settings updated successfully!');
+      }
+    } catch (err) {
+      setFeedbackMsg(`❌ Failed to update configuration: ${err.message}`);
+    } finally {
+      setConfigSaving(false);
+    }
+  };
 
   const handleSeedDatabase = async () => {
     if (!window.confirm('Seed database with all configured word packs and categories into MongoDB?')) return;
@@ -229,11 +300,10 @@ export function AdminDashboard() {
       <div className="flex items-center gap-2 border-b border-slate-800 mb-6">
         <button
           onClick={() => setActiveTab('CATEGORIES')}
-          className={`px-4 py-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-all ${
-            activeTab === 'CATEGORIES'
-              ? 'border-rose-500 text-rose-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
+          className={`px-4 py-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-all ${activeTab === 'CATEGORIES'
+            ? 'border-rose-500 text-rose-400'
+            : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
         >
           <Layers className="w-4 h-4" />
           <span>Word Packs & Categories</span>
@@ -244,11 +314,10 @@ export function AdminDashboard() {
             setActiveTab('HISTORY');
             loadHistory();
           }}
-          className={`px-4 py-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-all ${
-            activeTab === 'HISTORY'
-              ? 'border-rose-500 text-rose-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
+          className={`px-4 py-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-all ${activeTab === 'HISTORY'
+            ? 'border-rose-500 text-rose-400'
+            : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
         >
           <History className="w-4 h-4" />
           <span>Game Match History</span>
@@ -259,14 +328,27 @@ export function AdminDashboard() {
             setActiveTab('AUDIT');
             loadAudit();
           }}
-          className={`px-4 py-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-all ${
-            activeTab === 'AUDIT'
-              ? 'border-rose-500 text-rose-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
+          className={`px-4 py-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-all ${activeTab === 'AUDIT'
+            ? 'border-rose-500 text-rose-400'
+            : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
         >
           <FileText className="w-4 h-4" />
           <span>Audit Logs</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('CONFIG');
+            loadAppConfig();
+          }}
+          className={`px-4 py-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-all ${activeTab === 'CONFIG'
+            ? 'border-rose-500 text-rose-400'
+            : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>App Config & Maintenance</span>
         </button>
       </div>
 
@@ -291,11 +373,10 @@ export function AdminDashboard() {
                 <button
                   key={c.id || c.slug}
                   onClick={() => setSelectedCategory(c)}
-                  className={`w-full text-left p-3 rounded-xl border text-sm font-semibold transition-all flex items-center justify-between ${
-                    selectedCategory?.id === c.id
-                      ? 'bg-rose-950/40 border-rose-500/80 text-white shadow-md'
-                      : 'bg-dark-950 border-slate-800 text-slate-300 hover:bg-slate-800/60'
-                  }`}
+                  className={`w-full text-left p-3 rounded-xl border text-sm font-semibold transition-all flex items-center justify-between ${selectedCategory?.id === c.id
+                    ? 'bg-rose-950/40 border-rose-500/80 text-white shadow-md'
+                    : 'bg-dark-950 border-slate-800 text-slate-300 hover:bg-slate-800/60'
+                    }`}
                 >
                   <span className="truncate">{c.name}</span>
                   <span className="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded">
@@ -416,6 +497,224 @@ export function AdminDashboard() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* TAB 4: APP STARTUP CONFIG & MAINTENANCE */}
+      {activeTab === 'CONFIG' && (
+        <div className="glass-card p-6 max-w-4xl">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800 flex-wrap gap-3">
+            <div>
+              <h3 className="font-display font-bold text-xl text-white flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-rose-500" />
+                <span>Startup App Config & Maintenance Control</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Centrally control server availability, dynamic maintenance notices, and mandatory Android APK updates.
+              </p>
+            </div>
+            <button
+              onClick={loadAppConfig}
+              disabled={configLoading}
+              className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${configLoading ? 'animate-spin' : ''}`} />
+              <span>Reload Config</span>
+            </button>
+          </div>
+
+          <form onSubmit={handleSaveAppConfig} className="space-y-8">
+            {/* 1. Server Status Section */}
+            <div className="p-5 rounded-2xl bg-dark-950 border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-bold text-white flex items-center gap-2">
+                    <Power className="w-4 h-4 text-rose-400" />
+                    Server Operational Status
+                  </span>
+                  <span className="text-xs text-slate-400 block mt-0.5">
+                    When disabled, players will be held at the maintenance screen. Admin APIs always remain accessible.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setServerEnabled(!serverEnabled)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${serverEnabled
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                    }`}
+                >
+                  {serverEnabled ? '🟢 OPERATIONAL (Online)' : '🔴 MAINTENANCE ACTIVE (Offline)'}
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1.5">
+                  Maintenance Announcement Message
+                </label>
+                <textarea
+                  value={serverMessage}
+                  onChange={(e) => setServerMessage(e.target.value)}
+                  rows={2}
+                  placeholder="We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!"
+                  className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
+                />
+              </div>
+            </div>
+
+            {/* 2. App Update Configuration */}
+            <div className="p-5 rounded-2xl bg-dark-950 border border-slate-800 space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-bold text-white flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-cyan-400" />
+                    Android App Update Policy
+                  </span>
+                  <span className="text-xs text-slate-400 block mt-0.5">
+                    Controls mandatory version enforcement exclusively for the Android mobile application.
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                <div className="p-3 rounded-xl bg-dark-900 border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-300 block">Enforcement Active</span>
+                    <span className="text-[10px] text-slate-500">appUpdate.enabled</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={updateEnabled}
+                    onChange={(e) => setUpdateEnabled(e.target.checked)}
+                    className="w-4 h-4 accent-rose-500 rounded"
+                  />
+                </div>
+
+                <div className="p-3 rounded-xl bg-dark-900 border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-300 block">Update Required</span>
+                    <span className="text-[10px] text-slate-500">isUpdateRequired</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isUpdateRequired}
+                    onChange={(e) => setIsUpdateRequired(e.target.checked)}
+                    className="w-4 h-4 accent-rose-500 rounded"
+                  />
+                </div>
+
+                <div className="p-3 rounded-xl bg-dark-900 border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-300 block">Mandatory Block</span>
+                    <span className="text-[10px] text-slate-500">isBlocked</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isBlocked}
+                    onChange={(e) => setIsBlocked(e.target.checked)}
+                    className="w-4 h-4 accent-rose-500 rounded"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                    Latest Android Version Code
+                  </label>
+                  <input
+                    type="number"
+                    value={latestVersionCode}
+                    onChange={(e) => setLatestVersionCode(parseInt(e.target.value, 10) || 0)}
+                    min="1"
+                    required
+                    className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Clients with installed versionCode &lt; this will be blocked if isBlocked is true.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                    Config Version (Internal schema)
+                  </label>
+                  <input
+                    type="number"
+                    value={configVersion}
+                    onChange={(e) => setConfigVersion(parseInt(e.target.value, 10) || 0)}
+                    required
+                    className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Payload config sequence version number.
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                  APK Download URL (Direct HTTPS download link)
+                </label>
+                <input
+                  type="url"
+                  value={updateUrl}
+                  onChange={(e) => setUpdateUrl(e.target.value)}
+                  placeholder="https://..."
+                  required
+                  className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                    Update Screen Heading
+                  </label>
+                  <input
+                    type="text"
+                    value={updateTitle}
+                    onChange={(e) => setUpdateTitle(e.target.value)}
+                    placeholder="Update Available"
+                    className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
+                    Update Screen Description
+                  </label>
+                  <input
+                    type="text"
+                    value={updateMessage}
+                    onChange={(e) => setUpdateMessage(e.target.value)}
+                    placeholder="A newer version of Imposter is available."
+                    className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={configSaving}
+                className="btn-primary px-8 py-3 text-sm flex items-center gap-2 font-bold"
+              >
+                {configSaving ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Saving Settings...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Save Configuration Changes</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

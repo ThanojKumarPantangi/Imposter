@@ -11,6 +11,8 @@ export const adminApi = {
   deleteWord: (categoryId, wordText) => apiRequest(`/admin/categories/${encodeURIComponent(categoryId)}/words/${encodeURIComponent(wordText)}`, { method: 'DELETE' }),
   getHistory: (page = 1, limit = 20) => apiRequest(`/admin/history?page=${page}&limit=${limit}`),
   getAuditLogs: () => apiRequest('/admin/audit-logs'),
-  triggerSeed: () => apiRequest('/admin/seed', { method: 'POST' })
+  triggerSeed: () => apiRequest('/admin/seed', { method: 'POST' }),
+  getAppConfig: () => apiRequest('/admin/app-config'),
+  updateAppConfig: (data) => apiRequest('/admin/app-config', { method: 'PUT', body: JSON.stringify(data) })
 };
 
