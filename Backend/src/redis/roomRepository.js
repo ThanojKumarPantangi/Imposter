@@ -53,10 +53,11 @@ class RoomRepository {
       }
     }
 
-    // Delete timer keys
+    // Delete timer and chat keys
     await this.clearTurnTimer(normalizedCode);
     await this.clearVotingTimer(normalizedCode);
     await this.clearVoiceParticipants(normalizedCode);
+    await this.clearRoomChat(normalizedCode);
 
     // Delete room state and room code from active index
     await redis.del(`room:${normalizedCode}`);
@@ -328,6 +329,90 @@ class RoomRepository {
     if (!roomCode) return;
     const redis = getRedisClient();
     await redis.del(`voice:participants:${roomCode.toUpperCase()}`);
+  }
+
+  /**
+   * Save a chat message to the channel's message list in Redis
+   * @param {string} roomCode 
+   * @param {string} channel 'LOBBY_GLOBAL' | 'GAME_GLOBAL' | 'GAME_IMPOSTER' | 'GAME_CIVILIAN'
+   * @param {Object} message 
+   * @param {number} [maxHistory=100]
+   */
+  async saveChatMessage(roomCode, channel, message, maxHistory = 100) {
+    if (!roomCode || !channel || !message) return;
+    const redis = getRedisClient();
+    const key = `chat:${roomCode.toUpperCase()}:${channel}`;
+    const raw = await redis.get(key);
+    let messages = [];
+    if (raw) {
+      try {
+        messages = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!Array.isArray(messages)) messages = [];
+      } catch (e) {
+        messages = [];
+      }
+    }
+    messages.push(message);
+    if (messages.length > maxHistory) {
+      messages = messages.slice(-maxHistory);
+    }
+    await redis.set(key, JSON.stringify(messages), 'EX', REDIS_TTL.ROOM);
+  }
+
+  /**
+   * Fetch chat history for a channel
+   * @param {string} roomCode 
+   * @param {string} channel 
+   * @returns {Promise<Array>}
+   */
+  async getChatHistory(roomCode, channel) {
+    if (!roomCode || !channel) return [];
+    const redis = getRedisClient();
+    const key = `chat:${roomCode.toUpperCase()}:${channel}`;
+    const raw = await redis.get(key);
+    if (!raw) return [];
+    try {
+      const messages = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Array.isArray(messages) ? messages : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /**
+   * Clear only the active game chat channels (GAME_GLOBAL, GAME_IMPOSTER, GAME_CIVILIAN),
+   * preserving the Lobby Global Chat.
+   * @param {string} roomCode 
+   */
+  async clearGameChats(roomCode) {
+    if (!roomCode) return;
+    const redis = getRedisClient();
+    const normalized = roomCode.toUpperCase();
+    const gameChannels = ['GAME_GLOBAL', 'GAME_IMPOSTER', 'GAME_CIVILIAN'];
+    for (const ch of gameChannels) {
+      await redis.del(`chat:${normalized}:${ch}`);
+    }
+    // Also delete any session-scoped chat keys
+    try {
+      const lingeringChatKeys = await redis.keys(`chat:${normalized}:game_*`);
+      if (lingeringChatKeys && lingeringChatKeys.length > 0) {
+        await redis.del(...lingeringChatKeys);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Clear all chat channels for a room
+   * @param {string} roomCode 
+   */
+  async clearRoomChat(roomCode) {
+    if (!roomCode) return;
+    const redis = getRedisClient();
+    const normalized = roomCode.toUpperCase();
+    await this.clearGameChats(normalized);
+    await redis.del(`chat:${normalized}:LOBBY_GLOBAL`);
   }
 }
 

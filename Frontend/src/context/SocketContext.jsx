@@ -448,8 +448,8 @@ export function SocketProvider({ children }) {
     }
   }, [player?.id]);
 
-  const showToast = (message) => {
-    setGameToast(message);
+  const showToast = (message, onPress) => {
+    setGameToast(onPress ? { message, onPress } : message);
     setTimeout(() => setGameToast(null), 4000);
   };
 

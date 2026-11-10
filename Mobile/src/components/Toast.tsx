@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { RADIUS, SPACING } from '../theme/spacing';
 
 export interface ToastItem {
   message: string;
   isError?: boolean;
+  onPress?: () => void;
 }
 
 type ToastListener = (toast: ToastItem | null) => void;
@@ -21,7 +22,7 @@ function normalizeMessage(msg: string): string {
   return msg.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-export const showToast = (message: string) => {
+export const showToast = (message: string, onPress?: () => void) => {
   if (!message || typeof message !== 'string') return;
   const cleanMessage = message.trim();
   if (!cleanMessage) return;
@@ -49,7 +50,7 @@ export const showToast = (message: string) => {
     clearTimeout(currentToastTimeout);
   }
 
-  listeners.forEach((listener) => listener({ message: cleanMessage }));
+  listeners.forEach((listener) => listener({ message: cleanMessage, onPress }));
 
   currentToastTimeout = setTimeout(() => {
     currentVisibleKey = null;
@@ -112,12 +113,22 @@ export const Toast: React.FC = () => {
   if (!toast) return null;
 
   return (
-    <View style={styles.toastContainer} pointerEvents="none">
-      <View style={[styles.toastCard, toast.isError && styles.toastCardError]}>
+    <View style={styles.toastContainer} pointerEvents={toast.onPress ? 'box-none' : 'none'}>
+      <TouchableOpacity
+        activeOpacity={toast.onPress ? 0.8 : 1}
+        onPress={() => {
+          if (toast.onPress) {
+            toast.onPress();
+            setToast(null);
+          }
+        }}
+        disabled={!toast.onPress}
+        style={[styles.toastCard, toast.isError && styles.toastCardError]}
+      >
         <Text style={[styles.toastText, toast.isError && styles.toastTextError]}>
           {toast.message}
         </Text>
-      </View>
+      </TouchableOpacity>
     </View>
   );
 };

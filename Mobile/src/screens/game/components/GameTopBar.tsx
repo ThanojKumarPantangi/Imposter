@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { LogOut } from 'lucide-react-native';
 import { VoiceControls } from '../../../components/VoiceControls';
+import { ChatButton } from '../../../components/ChatButton';
 import { COLORS } from '../../../theme/colors';
 import { gameStyles } from '../styles/gameStyles';
 import { GameTopBarProps } from '../types/gameComponentTypes';
@@ -36,6 +37,7 @@ export const GameTopBar: React.FC<Props> = ({
 
         <View style={gameStyles.topBarRight}>
           <VoiceControls compact />
+          <ChatButton compact />
         </View>
       </View>
 

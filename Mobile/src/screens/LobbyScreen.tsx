@@ -36,6 +36,7 @@ import { DisconnectedBanner } from '../components/DisconnectedBanner';
 import { RejoinApprovalModal } from '../components/RejoinApprovalModal';
 import { EditUsernameModal } from '../components/EditUsernameModal';
 import { VoiceControls } from '../components/VoiceControls';
+import { ChatButton } from '../components/ChatButton';
 import { Card } from '../components/common/Card';
 import { GradientButton } from '../components/common/GradientButton';
 import { COLORS } from '../theme/colors';
@@ -263,7 +264,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
           </TouchableOpacity>
         </View>
 
-        <VoiceControls compact />
+        <View style={styles.topBarRight}>
+          <VoiceControls compact />
+          <ChatButton compact />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -681,6 +685,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   leaveBtn: {
     padding: 10,

@@ -45,8 +45,17 @@ export function MainLayout() {
 
       {/* Floating Game Toast */}
       {gameToast && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-dark-900 border border-slate-700 shadow-2xl px-4 py-3 rounded-2xl text-sm font-bold text-white flex items-center gap-2 animate-bounce">
-          <span>{gameToast}</span>
+        <div
+          onClick={() => {
+            if (typeof gameToast === 'object' && gameToast?.onPress) {
+              gameToast.onPress();
+            }
+          }}
+          className={`fixed bottom-6 right-6 z-50 max-w-md bg-dark-900 border border-slate-700 shadow-2xl px-4 py-3 rounded-2xl text-sm font-bold text-white flex items-center gap-2 animate-bounce ${
+            typeof gameToast === 'object' && gameToast?.onPress ? 'cursor-pointer hover:border-cyan-500' : ''
+          }`}
+        >
+          <span>{typeof gameToast === 'object' ? gameToast.message : gameToast}</span>
         </div>
       )}
 

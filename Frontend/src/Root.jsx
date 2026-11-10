@@ -3,6 +3,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { VoiceChatProvider } from './context/VoiceChatContext';
+import { ChatProvider } from './context/ChatContext';
+import { ChatModal } from './components/ChatModal';
 import App from './App';
 
 export default function Root() {
@@ -11,7 +13,10 @@ export default function Root() {
       <AuthProvider>
         <SocketProvider>
           <VoiceChatProvider>
-            <App />
+            <ChatProvider>
+              <App />
+              <ChatModal />
+            </ChatProvider>
           </VoiceChatProvider>
         </SocketProvider>
       </AuthProvider>

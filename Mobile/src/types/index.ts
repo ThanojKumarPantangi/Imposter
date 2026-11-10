@@ -104,6 +104,22 @@ export interface RoomState {
   myHint?: string;
   eliminationResult?: EliminationResult;
   winnerResult?: WinnerResult;
+  totalImposters?: number;
+  isImposterChatEnabled?: boolean;
+  gameSessionId?: string | null;
+}
+
+export type ChatChannel = 'LOBBY_GLOBAL' | 'GAME_GLOBAL' | 'GAME_IMPOSTER' | 'GAME_CIVILIAN';
+
+export interface ChatMessage {
+  id: string;
+  roomCode: string;
+  channel: ChatChannel;
+  text: string;
+  createdAt: number;
+  senderId?: string;
+  senderUsername?: string;
+  gameSessionId?: string | null;
 }
 
 export interface WordItem {

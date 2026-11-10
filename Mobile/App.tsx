@@ -6,6 +6,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from './src/context/AuthContext';
 import { SocketProvider } from './src/context/SocketContext';
 import { VoiceChatProvider } from './src/context/VoiceChatContext';
+import { ChatProvider } from './src/context/ChatContext';
+import { ChatModal } from './src/components/ChatModal';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { AppStartupGuard } from './src/services/startup/AppStartupGuard';
 
@@ -121,7 +123,10 @@ export default function App() {
             <AuthProvider>
               <SocketProvider>
                 <VoiceChatProvider>
-                  <RootNavigator />
+                  <ChatProvider>
+                    <RootNavigator />
+                    <ChatModal />
+                  </ChatProvider>
                 </VoiceChatProvider>
               </SocketProvider>
             </AuthProvider>

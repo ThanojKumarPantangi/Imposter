@@ -89,6 +89,7 @@ class GameEngine {
       lastImposters: [],
       categoryRotationIndex: 0,
       usedWords: [],
+      gameSessionId: null,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -703,6 +704,7 @@ class GameEngine {
     room.settings.categorySlug = targetSlug;
 
     room.lastImposters = newImposterIds;
+    room.gameSessionId = `game_${Date.now()}_${crypto.randomInt(1000, 9999)}`;
     room.status = 'ROLE_REVEAL';
     room.roleRevealDeadline = Date.now() + 5000;
     room.resultsDeadline = null;
@@ -711,6 +713,9 @@ class GameEngine {
     room.votes = {};
     room.eliminationResult = null;
     room.winnerResult = null;
+
+    // Clear previous game chats to guarantee clean session isolation
+    await roomRepository.clearGameChats(roomCode);
 
     await roomRepository.saveRoom(roomCode, room);
     return room;
@@ -1320,6 +1325,7 @@ class GameEngine {
 
     // Reset match fields to WAITING
     room.status = 'WAITING';
+    room.gameSessionId = null;
     room.currentRound = 1;
     room.turnOrder = [];
     room.activeTurnIndex = 0;
@@ -1345,6 +1351,7 @@ class GameEngine {
 
     await roomRepository.clearTurnTimer(normalizedCode);
     await roomRepository.clearVotingTimer(normalizedCode);
+    await roomRepository.clearGameChats(normalizedCode);
     await roomRepository.saveRoom(normalizedCode, room);
 
     return room;
@@ -1372,8 +1379,10 @@ class GameEngine {
     room.votingDeadline = null;
     room.roleRevealDeadline = null;
     room.resultsDeadline = null;
+    room.gameSessionId = null;
     await roomRepository.clearTurnTimer(room.code);
     await roomRepository.clearVotingTimer(room.code);
+    await roomRepository.clearGameChats(room.code);
     await roomRepository.saveRoom(room.code, room);
 
     if (mongoose.connection && mongoose.connection.readyState === 1) {
@@ -1465,6 +1474,14 @@ class GameEngine {
     } else if (isFinished) {
       cloned.secretWord = room.secretWord;
     }
+
+    // Total imposters (alive + dead) authoritative count and Imposter Chat availability
+    const totalImposters = Array.isArray(room.players)
+      ? room.players.filter(p => p.role === 'IMPOSTER').length
+      : (room.settings?.impostersCount || 1);
+    cloned.totalImposters = totalImposters;
+    cloned.isImposterChatEnabled = totalImposters >= 2;
+    cloned.gameSessionId = room.gameSessionId || null;
 
     // Authoritative shared room categories
     if (cloned.settings) {

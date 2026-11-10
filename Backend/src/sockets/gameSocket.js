@@ -7,6 +7,7 @@ const activeTurnTimers = new Map();
 const activeVotingTimers = new Map();
 const activeNextRoundTimers = new Map();
 const activeRoleRevealTimers = new Map();
+const lastChatTimestamps = new Map();
 
 // Configurable phase durations
 const ROLE_REVEAL_DURATION_SECONDS = 5;
@@ -33,6 +34,14 @@ export function clearRoomPhaseTimers(roomCode) {
     clearTimeout(activeRoleRevealTimers.get(normalized));
     activeRoleRevealTimers.delete(normalized);
   }
+}
+
+export function emitGameFinished(nsp, roomCode, winnerResult) {
+  if (!roomCode) return;
+  const normalized = roomCode.toUpperCase();
+  clearRoomPhaseTimers(normalized);
+  nsp.to(`room:${normalized}`).emit('game_finished', winnerResult);
+  nsp.to(`room:${normalized}`).emit('game_chats_cleared', { roomCode: normalized });
 }
 
 /**
@@ -354,8 +363,7 @@ function setupNamespace(nsp) {
           });
 
           if (result.gameOver) {
-            clearRoomPhaseTimers(normalizedCode);
-            nsp.to(`room:${normalizedCode}`).emit('game_finished', result.winnerResult);
+            emitGameFinished(nsp, normalizedCode, result.winnerResult);
           }
 
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
@@ -507,7 +515,7 @@ function setupNamespace(nsp) {
         });
 
         if (result.gameOver) {
-          nsp.to(`room:${normalizedCode}`).emit('game_finished', result.winnerResult);
+          emitGameFinished(nsp, normalizedCode, result.winnerResult);
         }
 
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
@@ -632,7 +640,8 @@ function setupNamespace(nsp) {
           roleRevealDeadline: room.roleRevealDeadline,
           turnDurationSeconds: room.settings.turnDurationSeconds,
           votingDurationSeconds: room.settings.votingDurationSeconds,
-          settings: room.settings
+          settings: room.settings,
+          gameSessionId: room.gameSessionId
         };
         nsp.to(`room:${normalizedCode}`).emit('game_started', gameStartedPayload);
 
@@ -673,9 +682,8 @@ function setupNamespace(nsp) {
         const result = await gameEngine.submitClueOrGuess(normalizedCode, playerId, clue);
 
         if (result.gameOver) {
-          clearRoomPhaseTimers(normalizedCode);
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
-          nsp.to(`room:${normalizedCode}`).emit('game_finished', result.winnerResult);
+          emitGameFinished(nsp, normalizedCode, result.winnerResult);
           return;
         }
 
@@ -720,10 +728,9 @@ function setupNamespace(nsp) {
         const result = await gameEngine.submitVote(normalizedCode, voterId, targetPlayerId);
 
         if (result.finishedVoting) {
-          clearRoomPhaseTimers(normalizedCode);
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
           if (result.gameOver) {
-            nsp.to(`room:${normalizedCode}`).emit('game_finished', result.winnerResult);
+            emitGameFinished(nsp, normalizedCode, result.winnerResult);
           } else {
             nsp.to(`room:${normalizedCode}`).emit('round_results', result.room.eliminationResult);
             scheduleNextRound(nsp, normalizedCode);
@@ -747,15 +754,10 @@ function setupNamespace(nsp) {
         );
 
         if (result.finishedVoting) {
-          clearRoomPhaseTimers(normalizedCode);
-
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
 
           if (result.gameOver) {
-            nsp.to(`room:${normalizedCode}`).emit(
-              'game_finished',
-              result.winnerResult
-            );
+            emitGameFinished(nsp, normalizedCode, result.winnerResult);
           } else {
             nsp.to(`room:${normalizedCode}`).emit(
               'round_results',
@@ -781,6 +783,7 @@ function setupNamespace(nsp) {
         const room = await gameEngine.returnToLobby(normalizedCode, playerId);
 
         nsp.to(`room:${normalizedCode}`).emit('room_returned_to_lobby', { roomCode: normalizedCode });
+        nsp.to(`room:${normalizedCode}`).emit('game_chats_cleared', { roomCode: normalizedCode });
         await broadcastPersonalizedRoomState(nsp, normalizedCode);
       } catch (err) {
         socket.emit('error', { message: err.message });
@@ -870,6 +873,237 @@ function setupNamespace(nsp) {
         isMuted,
         isDeafened
       });
+    });
+
+    // 14. Real-time Chat Messaging
+    socket.on('send_chat_message', async (data, callback) => {
+      const ack = (res) => {
+        if (typeof callback === 'function') callback(res);
+      };
+
+      try {
+        const { roomCode, playerId, channel, text } = data || {};
+
+        if (!roomCode || typeof roomCode !== 'string') {
+          return ack({ success: false, error: 'Room code is required' });
+        }
+        if (!playerId || typeof playerId !== 'string') {
+          return ack({ success: false, error: 'Player ID is required' });
+        }
+        if (!channel || typeof channel !== 'string') {
+          return ack({ success: false, error: 'Channel is required' });
+        }
+        if (!text || typeof text !== 'string') {
+          return ack({ success: false, error: 'Message cannot be empty' });
+        }
+
+        const trimmed = text.trim();
+        if (trimmed.length === 0) {
+          return ack({ success: false, error: 'Message cannot be empty' });
+        }
+        if (trimmed.length > 500) {
+          return ack({ success: false, error: 'Message exceeds maximum length of 500 characters' });
+        }
+
+        // Spam rate limiting (max 1 message per 300ms)
+        const now = Date.now();
+        const lastTime = lastChatTimestamps.get(playerId) || 0;
+        if (now - lastTime < 300) {
+          return ack({ success: false, error: 'Rate limit exceeded. Please wait a moment.' });
+        }
+        lastChatTimestamps.set(playerId, now);
+
+        const normalizedCode = roomCode.toUpperCase();
+        const room = await roomRepository.getRoom(normalizedCode);
+        if (!room) {
+          return ack({ success: false, error: 'Room not found' });
+        }
+
+        const sender = room.players.find(p => p.id === playerId);
+        if (!sender) {
+          return ack({ success: false, error: 'Unauthorized: You are not a member of this room' });
+        }
+        if (sender.permanentlyDeparted) {
+          return ack({ success: false, error: 'Unauthorized: You have departed this room' });
+        }
+
+        const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+        if (room.status === 'FINISHED') {
+          return ack({ success: false, error: 'The game has ended. In-game chat is disabled.' });
+        }
+
+        // Channel Authorization & Dispatch
+        switch (channel) {
+          case 'LOBBY_GLOBAL': {
+            if (room.status !== 'WAITING') {
+              return ack({ success: false, error: 'Lobby chat is only available in the lobby' });
+            }
+            const message = {
+              id: messageId,
+              roomCode: normalizedCode,
+              channel: 'LOBBY_GLOBAL',
+              senderId: sender.id,
+              senderUsername: sender.username,
+              text: trimmed,
+              createdAt: now
+            };
+            await roomRepository.saveChatMessage(normalizedCode, 'LOBBY_GLOBAL', message);
+            nsp.to(`room:${normalizedCode}`).emit('chat_message', message);
+            return ack({ success: true, message });
+          }
+
+          case 'GAME_GLOBAL': {
+            if (room.status === 'WAITING') {
+              return ack({ success: false, error: 'Game chat is only available during an active game' });
+            }
+            const message = {
+              id: messageId,
+              roomCode: normalizedCode,
+              gameSessionId: room.gameSessionId || null,
+              channel: 'GAME_GLOBAL',
+              senderId: sender.id,
+              senderUsername: sender.username,
+              text: trimmed,
+              createdAt: now
+            };
+            await roomRepository.saveChatMessage(normalizedCode, 'GAME_GLOBAL', message);
+            nsp.to(`room:${normalizedCode}`).emit('chat_message', message);
+            return ack({ success: true, message });
+          }
+
+          case 'GAME_IMPOSTER': {
+            if (room.status === 'WAITING') {
+              return ack({ success: false, error: 'Game chat is only available during an active game' });
+            }
+            if (sender.role !== 'IMPOSTER') {
+              return ack({ success: false, error: 'Unauthorized: Only imposters can access Imposter Chat' });
+            }
+            const totalImposters = room.players.filter(p => p.role === 'IMPOSTER').length;
+            if (totalImposters < 2) {
+              return ack({ success: false, error: 'Imposter Chat is disabled when there is only 1 imposter in the game' });
+            }
+
+            const message = {
+              id: messageId,
+              roomCode: normalizedCode,
+              gameSessionId: room.gameSessionId || null,
+              channel: 'GAME_IMPOSTER',
+              senderId: sender.id,
+              senderUsername: sender.username,
+              text: trimmed,
+              createdAt: now
+            };
+            await roomRepository.saveChatMessage(normalizedCode, 'GAME_IMPOSTER', message);
+
+            // Deliver ONLY to authorized imposters
+            const imposters = room.players.filter(p => p.role === 'IMPOSTER');
+            for (const imp of imposters) {
+              nsp.to(`user:${imp.id}`).emit('chat_message', message);
+            }
+            return ack({ success: true, message });
+          }
+
+          case 'GAME_CIVILIAN': {
+            if (room.status === 'WAITING') {
+              return ack({ success: false, error: 'Game chat is only available during an active game' });
+            }
+            if (sender.role !== 'CIVILIAN') {
+              return ack({ success: false, error: 'Unauthorized: Only civilians can access Civilian Chat' });
+            }
+
+            // Strictly anonymous message: NO senderId, NO senderUsername in client payload
+            const clientMessage = {
+              id: messageId,
+              roomCode: normalizedCode,
+              gameSessionId: room.gameSessionId || null,
+              channel: 'GAME_CIVILIAN',
+              text: trimmed,
+              createdAt: now
+            };
+            await roomRepository.saveChatMessage(normalizedCode, 'GAME_CIVILIAN', clientMessage);
+
+            // Deliver ONLY to authorized civilians
+            const civilians = room.players.filter(p => p.role === 'CIVILIAN');
+            for (const civ of civilians) {
+              nsp.to(`user:${civ.id}`).emit('chat_message', clientMessage);
+            }
+            return ack({ success: true, message: clientMessage });
+          }
+
+          default:
+            return ack({ success: false, error: `Invalid chat channel: ${channel}` });
+        }
+      } catch (err) {
+        console.error('Error handling send_chat_message:', err);
+        return ack({ success: false, error: 'Internal server error while processing message' });
+      }
+    });
+
+    // 15. Fetch Chat History
+    socket.on('get_chat_history', async (data, callback) => {
+      const ack = (res) => {
+        if (typeof callback === 'function') callback(res);
+        else socket.emit('chat_history', res);
+      };
+
+      try {
+        const { roomCode, playerId } = data || {};
+        if (!roomCode || !playerId) {
+          return ack({ success: false, error: 'Room code and player ID are required' });
+        }
+
+        const normalizedCode = roomCode.toUpperCase();
+        const room = await roomRepository.getRoom(normalizedCode);
+        if (!room) {
+          return ack({ success: false, error: 'Room not found' });
+        }
+
+        const player = room.players.find(p => p.id === playerId);
+        if (!player) {
+          return ack({ success: false, error: 'Unauthorized: Player is not in this room' });
+        }
+
+        const history = {
+          LOBBY_GLOBAL: [],
+          GAME_GLOBAL: [],
+          GAME_IMPOSTER: [],
+          GAME_CIVILIAN: []
+        };
+
+        if (room.status === 'WAITING') {
+          history.LOBBY_GLOBAL = await roomRepository.getChatHistory(normalizedCode, 'LOBBY_GLOBAL');
+        } else if (room.status === 'FINISHED') {
+          // Completed game: game chat history is deleted and inaccessible
+          history.LOBBY_GLOBAL = [];
+          history.GAME_GLOBAL = [];
+          history.GAME_IMPOSTER = [];
+          history.GAME_CIVILIAN = [];
+        } else {
+          history.GAME_GLOBAL = await roomRepository.getChatHistory(normalizedCode, 'GAME_GLOBAL');
+
+          if (player.role === 'IMPOSTER') {
+            const totalImposters = room.players.filter(p => p.role === 'IMPOSTER').length;
+            if (totalImposters >= 2) {
+              history.GAME_IMPOSTER = await roomRepository.getChatHistory(normalizedCode, 'GAME_IMPOSTER');
+            }
+          } else if (player.role === 'CIVILIAN') {
+            const civHistory = await roomRepository.getChatHistory(normalizedCode, 'GAME_CIVILIAN');
+            history.GAME_CIVILIAN = civHistory.map(m => ({
+              id: m.id,
+              roomCode: m.roomCode,
+              channel: 'GAME_CIVILIAN',
+              text: m.text,
+              createdAt: m.createdAt
+            }));
+          }
+        }
+
+        return ack({ success: true, roomCode: normalizedCode, history });
+      } catch (err) {
+        console.error('Error handling get_chat_history:', err);
+        return ack({ success: false, error: 'Internal server error while fetching chat history' });
+      }
     });
 
     // 13. Disconnect Handler (Respects configurable grace periods)
@@ -1007,7 +1241,7 @@ function setupNamespace(nsp) {
                 });
 
                 if (result.gameOver) {
-                  nsp.to(`room:${normalizedCode}`).emit('game_finished', result.winnerResult);
+                  emitGameFinished(nsp, normalizedCode, result.winnerResult);
                 }
                 await broadcastPersonalizedRoomState(nsp, normalizedCode);
               }
@@ -1172,8 +1406,7 @@ function scheduleVotingTimeout(nsp, roomCode, durationSeconds = 45) {
           if (!tallyResult) return;
           await broadcastPersonalizedRoomState(nsp, normalizedCode);
           if (tallyResult.gameOver) {
-            clearRoomPhaseTimers(normalizedCode);
-            nsp.to(`room:${normalizedCode}`).emit('game_finished', tallyResult.winnerResult);
+            emitGameFinished(nsp, normalizedCode, tallyResult.winnerResult);
           } else {
             nsp.to(`room:${normalizedCode}`).emit('round_results', tallyResult.room.eliminationResult);
             scheduleNextRound(nsp, normalizedCode);

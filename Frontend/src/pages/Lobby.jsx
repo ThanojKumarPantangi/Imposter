@@ -11,6 +11,7 @@ import { CategorySelector } from '../components/CategorySelector';
 import { KickConfirmModal } from '../components/KickConfirmModal';
 import { DisconnectedBanner } from '../components/DisconnectedBanner';
 import { RejoinApprovalModal } from '../components/RejoinApprovalModal';
+import { ChatButton } from '../components/ChatButton';
 import { sounds } from '../utils/sound';
 
 export function Lobby() {
@@ -144,29 +145,33 @@ export function Lobby() {
           <LogOut className="w-4 h-4" />
         </button>
 
-        {/* Room Code Badge */}
-        <div className="flex items-center gap-3 bg-dark-900 border border-slate-800 px-4 sm:px-5 py-2 rounded-2xl shadow-xl">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Room Code
-            </span>
-            <span className="font-display font-black text-xl sm:text-2xl tracking-widest text-cyan-400 font-mono">
-              {normalizedCode}
-            </span>
+        <div className="flex items-center gap-3">
+          {/* Room Code Badge */}
+          <div className="flex items-center gap-3 bg-dark-900 border border-slate-800 px-4 sm:px-5 py-2 rounded-2xl shadow-xl">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Room Code
+              </span>
+              <span className="font-display font-black text-xl sm:text-2xl tracking-widest text-cyan-400 font-mono">
+                {normalizedCode}
+              </span>
+            </div>
+
+            <button
+              onClick={copyRoomLink}
+              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors active:scale-95"
+              title="Copy Invite Link"
+              aria-label="Copy Invite Link"
+            >
+              {copied ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+            </button>
           </div>
 
-          <button
-            onClick={copyRoomLink}
-            className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors active:scale-95"
-            title="Copy Invite Link"
-            aria-label="Copy Invite Link"
-          >
-            {copied ? (
-              <Check className="w-4 h-4 text-emerald-400" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-          </button>
+          <ChatButton compact />
         </div>
       </div>
 

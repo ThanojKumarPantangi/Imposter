@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { CountdownTimer } from '../components/CountdownTimer';
+import { ChatButton } from '../components/ChatButton';
 import { sounds } from '../utils/sound';
 import { serverTimeSync } from '../utils/serverTimeSync';
 
@@ -320,6 +321,8 @@ export function GameView() {
               label="Next Round"
             />
           )}
+
+          <ChatButton compact />
         </div>
       </div>
 
