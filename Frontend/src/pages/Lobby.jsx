@@ -85,7 +85,8 @@ export function Lobby() {
     impostersCount: 1,
     turnDurationSeconds: 30,
     votingDurationSeconds: 45,
-    lobbyDisconnectTimeout: 5
+    lobbyDisconnectTimeout: 5,
+    gameDisconnectTimeout: 15
   };
 
   // Shared room category selection across ALL players in this room

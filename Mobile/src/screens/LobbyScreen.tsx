@@ -155,6 +155,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
     turnDurationSeconds: 30,
     votingDurationSeconds: 45,
     lobbyDisconnectTimeout: 5,
+    gameDisconnectTimeout: 15,
   };
 
   const sharedCategorySlugs =
@@ -498,7 +499,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
               </View>
 
               <View style={styles.settingBlock}>
-                <Text style={styles.settingLabel}>Disconnect Timeout</Text>
+                <Text style={styles.settingLabel}>Lobby Disconnect Timeout</Text>
                 <View style={styles.segmentedRow}>
                   {[3, 5, 10, 15, 30].map((sec) => (
                     <AnimatedSegmentButton
@@ -510,6 +511,25 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
                       onSelect={() => {
                         sounds.playClick();
                         if (player?.id) updateSettings(normalizedCode, player.id, { lobbyDisconnectTimeout: sec });
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.settingBlock}>
+                <Text style={styles.settingLabel}>Game Disconnect Timeout</Text>
+                <View style={styles.segmentedRow}>
+                  {[3, 5, 10, 15, 30].map((sec) => (
+                    <AnimatedSegmentButton
+                      key={sec}
+                      sec={sec}
+                      label={`${sec}s`}
+                      isSelected={(settings.gameDisconnectTimeout || settings.gameDisconnectGracePeriod || 15) === sec}
+                      activeColor="#22d3ee"
+                      onSelect={() => {
+                        sounds.playClick();
+                        if (player?.id) updateSettings(normalizedCode, player.id, { gameDisconnectTimeout: sec });
                       }}
                     />
                   ))}
@@ -532,9 +552,15 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
                 <Text style={styles.summaryLabel}>Voting Timer</Text>
                 <Text style={styles.summaryValue}>{settings.votingDurationSeconds || 45}s</Text>
               </View>
-              <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
-                <Text style={styles.summaryLabel}>Disconnect Timeout</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Lobby Disconnect Timeout</Text>
                 <Text style={styles.summaryValue}>{settings.lobbyDisconnectTimeout || 5}s</Text>
+              </View>
+              <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
+                <Text style={styles.summaryLabel}>Game Disconnect Timeout</Text>
+                <Text style={styles.summaryValue}>
+                  {settings.gameDisconnectTimeout || settings.gameDisconnectGracePeriod || 15}s
+                </Text>
               </View>
             </View>
           )}
