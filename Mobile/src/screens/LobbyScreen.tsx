@@ -43,8 +43,9 @@ import { RADIUS, SPACING } from '../theme/spacing';
 import { sounds } from '../utils/sound';
 import { Player } from '../types';
 
-// Enable LayoutAnimation for Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+// Enable LayoutAnimation for Android (only on Old Architecture; Fabric handles LayoutAnimation natively)
+const isFabric = Boolean((global as any)?.nativeFabricUIManager);
+if (Platform.OS === 'android' && !isFabric && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 

@@ -15,6 +15,12 @@ class AudioRouteService {
 
   constructor() {
     if (Platform.OS === 'android' && AudioRouteModule) {
+      if (typeof AudioRouteModule.addListener !== 'function') {
+        AudioRouteModule.addListener = () => {};
+      }
+      if (typeof AudioRouteModule.removeListeners !== 'function') {
+        AudioRouteModule.removeListeners = () => {};
+      }
       this.emitter = new NativeEventEmitter(AudioRouteModule);
     }
   }
