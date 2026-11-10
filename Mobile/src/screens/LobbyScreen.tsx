@@ -156,6 +156,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
     votingDurationSeconds: 45,
     lobbyDisconnectTimeout: 5,
     gameDisconnectTimeout: 15,
+    difficulty: 'ALL',
   };
 
   const sharedCategorySlugs =
@@ -461,6 +462,30 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
               </View>
 
               <View style={styles.settingBlock}>
+                <Text style={styles.settingLabel}>Word Difficulty</Text>
+                <View style={styles.segmentedRow}>
+                  {[
+                    { key: 'ALL', label: 'Any', color: '#818cf8' },
+                    { key: 'EASY', label: 'Easy', color: '#34d399' },
+                    { key: 'MEDIUM', label: 'Med', color: '#fbbf24' },
+                    { key: 'HARD', label: 'Hard', color: '#f87171' },
+                  ].map((item) => (
+                    <AnimatedSegmentButton
+                      key={item.key}
+                      sec={item.key}
+                      label={item.label}
+                      isSelected={(settings.difficulty || 'ALL').toUpperCase() === item.key}
+                      activeColor={item.color}
+                      onSelect={() => {
+                        sounds.playClick();
+                        if (player?.id) updateSettings(normalizedCode, player.id, { difficulty: item.key });
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.settingBlock}>
                 <Text style={styles.settingLabel}>Turn Clue Timer</Text>
                 <View style={styles.segmentedRow}>
                   {[15, 30, 45, 60].map((sec) => (
@@ -542,6 +567,14 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ route, navigation }) =
                 <Text style={styles.summaryLabel}>Imposters</Text>
                 <Text style={styles.summaryValue}>
                   {settings.impostersCount || 1}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Word Difficulty</Text>
+                <Text style={styles.summaryValue}>
+                  {(settings.difficulty || 'ALL') === 'ALL'
+                    ? 'Any'
+                    : (settings.difficulty || 'ALL').charAt(0).toUpperCase() + (settings.difficulty || 'ALL').slice(1).toLowerCase()}
                 </Text>
               </View>
               <View style={styles.summaryRow}>

@@ -53,6 +53,7 @@ class GameEngine {
         lobbyDisconnectTimeout: options.lobbyDisconnectTimeout || 5,
         gameDisconnectTimeout: options.gameDisconnectTimeout || options.gameDisconnectGracePeriod || 15,
         gameDisconnectGracePeriod: options.gameDisconnectTimeout || options.gameDisconnectGracePeriod || 15,
+        difficulty: options.difficulty ? String(options.difficulty).toUpperCase() : 'ALL',
         maxPlayers: options.maxPlayers || 50
       },
       players: [
@@ -229,6 +230,14 @@ class GameEngine {
       }
       room.settings.gameDisconnectTimeout = t;
       room.settings.gameDisconnectGracePeriod = t;
+    }
+    if (newSettings.difficulty !== undefined) {
+      const allowed = ['ALL', 'EASY', 'MEDIUM', 'HARD'];
+      const diff = String(newSettings.difficulty).toUpperCase();
+      if (!allowed.includes(diff)) {
+        throw new Error('difficulty must be one of: ALL, EASY, MEDIUM, HARD');
+      }
+      room.settings.difficulty = diff;
     }
 
     await roomRepository.saveRoom(roomCode, room);
@@ -482,9 +491,9 @@ class GameEngine {
   }
 
   /**
-   * Retrieve eligible words pool for specified category slugs
+   * Retrieve eligible words pool for specified category slugs and optional difficulty
    */
-  async getWordsForCategories(slugs = ['fruits']) {
+  async getWordsForCategories(slugs = ['fruits'], difficulty = 'ALL') {
     const cleanSlugs = Array.isArray(slugs) && slugs.length > 0
       ? slugs
       : ['fruits'];
@@ -511,6 +520,7 @@ class GameEngine {
           words.push({
             word: w.word,
             hint: w.hint,
+            difficulty: (w.difficulty || 'EASY').toUpperCase(),
             categoryName: cat.name,
             categorySlug: cat.slug || cat.id
           });
@@ -522,25 +532,30 @@ class GameEngine {
     if (words.length === 0) {
       const fallbackMap = {
         fruits: [
-          { word: 'Apple', hint: 'Crisp fruit, often red or green', categoryName: 'Fruits' },
-          { word: 'Banana', hint: 'Curved yellow fruit rich in potassium', categoryName: 'Fruits' },
-          { word: 'Mango', hint: 'Tropical sweet stone fruit', categoryName: 'Fruits' }
+          { word: 'Apple', hint: 'Crisp fruit, often red or green', difficulty: 'EASY', categoryName: 'Fruits' },
+          { word: 'Banana', hint: 'Curved yellow fruit rich in potassium', difficulty: 'EASY', categoryName: 'Fruits' },
+          { word: 'Mango', hint: 'Tropical sweet stone fruit', difficulty: 'MEDIUM', categoryName: 'Fruits' },
+          { word: 'Pomegranate', hint: 'Fruit with many ruby seeds inside', difficulty: 'HARD', categoryName: 'Fruits' }
         ],
         vegetables: [
-          { word: 'Carrot', hint: 'Orange root vegetable loved by rabbits', categoryName: 'Vegetables' },
-          { word: 'Broccoli', hint: 'Tree-like green vegetable with florets', categoryName: 'Vegetables' }
+          { word: 'Carrot', hint: 'Orange root vegetable loved by rabbits', difficulty: 'EASY', categoryName: 'Vegetables' },
+          { word: 'Broccoli', hint: 'Tree-like green vegetable with florets', difficulty: 'MEDIUM', categoryName: 'Vegetables' },
+          { word: 'Artichoke', hint: 'Thistle-like vegetable with edible heart', difficulty: 'HARD', categoryName: 'Vegetables' }
         ],
         animals: [
-          { word: 'Elephant', hint: 'Largest living land animal with a trunk', categoryName: 'Animals & Pets' },
-          { word: 'Dolphin', hint: 'Highly intelligent aquatic mammal', categoryName: 'Animals & Pets' }
+          { word: 'Elephant', hint: 'Largest living land animal with a trunk', difficulty: 'EASY', categoryName: 'Animals & Pets' },
+          { word: 'Dolphin', hint: 'Highly intelligent aquatic mammal', difficulty: 'MEDIUM', categoryName: 'Animals & Pets' },
+          { word: 'Platypus', hint: 'Egg-laying semi-aquatic Australian mammal', difficulty: 'HARD', categoryName: 'Animals & Pets' }
         ],
         movies: [
-          { word: 'Inception', hint: 'Dream heist thriller directed by Nolan', categoryName: 'Movies & Cinema' },
-          { word: 'Titanic', hint: 'Epic romantic disaster film with a ship', categoryName: 'Movies & Cinema' }
+          { word: 'Titanic', hint: 'Epic romantic disaster film with a ship', difficulty: 'EASY', categoryName: 'Movies & Cinema' },
+          { word: 'Inception', hint: 'Dream heist thriller directed by Nolan', difficulty: 'MEDIUM', categoryName: 'Movies & Cinema' },
+          { word: 'Memento', hint: 'Reverse chronology psychological thriller', difficulty: 'HARD', categoryName: 'Movies & Cinema' }
         ],
         gaming: [
-          { word: 'Minecraft', hint: 'Block-building sandbox survival game', categoryName: 'Video Games' },
-          { word: 'Portal', hint: 'Physics puzzle game with a gun making portals', categoryName: 'Video Games' }
+          { word: 'Minecraft', hint: 'Block-building sandbox survival game', difficulty: 'EASY', categoryName: 'Video Games' },
+          { word: 'Portal', hint: 'Physics puzzle game with a gun making portals', difficulty: 'MEDIUM', categoryName: 'Video Games' },
+          { word: 'Elden Ring', hint: 'Dark fantasy action RPG by FromSoftware', difficulty: 'HARD', categoryName: 'Video Games' }
         ]
       };
 
@@ -555,9 +570,20 @@ class GameEngine {
         words.push({
           word: 'Apple',
           hint: 'Crisp fruit, often red or green',
+          difficulty: 'EASY',
           categoryName: 'Fruits'
         });
       }
+    }
+
+    // Filter by difficulty if requested and not 'ALL'
+    if (difficulty && difficulty !== 'ALL') {
+      const target = difficulty.toUpperCase();
+      const filtered = words.filter(w => (w.difficulty || 'EASY').toUpperCase() === target);
+      if (filtered.length > 0) {
+        return filtered;
+      }
+      // If no words matched the specific difficulty in the selected category, fall back to all words
     }
 
     return words;
@@ -602,7 +628,8 @@ class GameEngine {
 
     // Word selection: Draw word and hint from the SHARED room categories!
     const roomSlugs = (room.settings && (room.settings.categorySlugs || room.settings.selectedCategories)) || ['fruits'];
-    const eligibleWords = await this.getWordsForCategories(roomSlugs);
+    const difficulty = (room.settings && room.settings.difficulty) || 'ALL';
+    const eligibleWords = await this.getWordsForCategories(roomSlugs, difficulty);
     const chosenWordIndex = crypto.randomInt(0, eligibleWords.length);
     const chosenWordEntry = eligibleWords[chosenWordIndex];
 
@@ -619,6 +646,7 @@ class GameEngine {
         player.secretWord = null;
         player.assignedSecretWord = chosenWordEntry.word;
         player.categoryName = chosenWordEntry.categoryName;
+        player.wordDifficulty = chosenWordEntry.difficulty || 'EASY';
         newImposterIds.push(player.id);
       } else {
         player.role = 'CIVILIAN';
@@ -626,11 +654,13 @@ class GameEngine {
         player.assignedSecretWord = chosenWordEntry.word;
         player.hint = chosenWordEntry.hint;
         player.categoryName = chosenWordEntry.categoryName;
+        player.wordDifficulty = chosenWordEntry.difficulty || 'EASY';
       }
     }
 
     room.secretWord = chosenWordEntry.word;
     room.hint = chosenWordEntry.hint;
+    room.wordDifficulty = chosenWordEntry.difficulty || 'EASY';
     room.settings.categoryName = chosenWordEntry.categoryName;
 
     room.lastImposters = newImposterIds;

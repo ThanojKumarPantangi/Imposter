@@ -86,7 +86,8 @@ export function Lobby() {
     turnDurationSeconds: 30,
     votingDurationSeconds: 45,
     lobbyDisconnectTimeout: 5,
-    gameDisconnectTimeout: 15
+    gameDisconnectTimeout: 15,
+    difficulty: 'ALL'
   };
 
   // Shared room category selection across ALL players in this room
@@ -350,6 +351,38 @@ export function Lobby() {
                   </div>
                 </div>
 
+                {/* Word Difficulty */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Word Difficulty
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { key: 'ALL', label: 'Any', activeClass: 'bg-indigo-500/20 border-indigo-500 text-indigo-300 ring-1 ring-indigo-500' },
+                      { key: 'EASY', label: 'Easy', activeClass: 'bg-emerald-500/20 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500' },
+                      { key: 'MEDIUM', label: 'Medium', activeClass: 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500' },
+                      { key: 'HARD', label: 'Hard', activeClass: 'bg-rose-500/20 border-rose-500 text-rose-300 ring-1 ring-rose-500' }
+                    ].map((item) => {
+                      const isSelected = (settings.difficulty || 'ALL').toUpperCase() === item.key;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => updateSettings(normalizedCode, player.id, { difficulty: item.key })}
+                          className={`py-2 rounded-xl text-xs font-bold border transition-all ${isSelected
+                            ? item.activeClass
+                            : 'bg-dark-950 border-slate-800 text-slate-400 hover:text-white'
+                            }`}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Turn Duration */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
@@ -455,6 +488,14 @@ export function Lobby() {
                   <span className="text-xs font-medium text-slate-400">Imposters</span>
                   <span className="text-xs font-bold text-white px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700">
                     {settings.impostersCount || 1} {settings.impostersCount === 1 ? 'Imposter' : 'Imposters'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-slate-800/60">
+                  <span className="text-xs font-medium text-slate-400">Word Difficulty</span>
+                  <span className="text-xs font-bold text-white px-2.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700">
+                    {(settings.difficulty || 'ALL') === 'ALL'
+                      ? 'Any Difficulty'
+                      : (settings.difficulty || 'ALL').charAt(0).toUpperCase() + (settings.difficulty || 'ALL').slice(1).toLowerCase()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-slate-800/60">

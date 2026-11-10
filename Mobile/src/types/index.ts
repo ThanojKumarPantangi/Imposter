@@ -44,6 +44,7 @@ export interface RoomSettings {
   lobbyDisconnectTimeout: number;
   gameDisconnectTimeout?: number;
   gameDisconnectGracePeriod?: number;
+  difficulty?: 'ALL' | 'EASY' | 'MEDIUM' | 'HARD' | string;
   duration?: number;
 }
 

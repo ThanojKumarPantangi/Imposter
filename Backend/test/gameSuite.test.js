@@ -440,12 +440,24 @@ describe('🎮 Authoritative Imposter Multiplayer Test Suite', () => {
         impostersCount: 2,
         turnDurationSeconds: 45,
         votingDurationSeconds: 60,
-        lobbyDisconnectTimeout: 10
+        lobbyDisconnectTimeout: 10,
+        difficulty: 'HARD'
       });
       assert.equal(updated.settings.impostersCount, 2);
       assert.equal(updated.settings.turnDurationSeconds, 45);
       assert.equal(updated.settings.votingDurationSeconds, 60);
       assert.equal(updated.settings.lobbyDisconnectTimeout, 10);
+      assert.equal(updated.settings.difficulty, 'HARD');
+
+      // Invalid difficulty rejected
+      await assert.rejects(
+        async () => {
+          await gameEngine.updateSettings(room.code, host.id, {
+            difficulty: 'SUPER_HARD'
+          });
+        },
+        /difficulty must be one of: ALL, EASY, MEDIUM, HARD/
+      );
 
       // 2. Guest/Non-host attempts to update settings -> MUST REJECT
       await assert.rejects(
