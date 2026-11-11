@@ -259,6 +259,26 @@ export function AdminDashboard() {
     }
   };
 
+  const handleDeleteCategory = async (cat) => {
+    const targetCat = cat || selectedCategory;
+    if (!targetCat) return;
+    const catId = targetCat.id || targetCat.slug;
+    if (!window.confirm(`Are you sure you want to permanently delete category "${targetCat.name}" and all its ${targetCat.words?.length || 0} words?`)) return;
+
+    try {
+      const res = await adminApi.deleteCategory(catId);
+      if (res.success) {
+        const remaining = categories.filter(c => (c.id || c.slug) !== catId && c.slug !== targetCat.slug);
+        setCategories(remaining);
+        if (selectedCategory && ((selectedCategory.id || selectedCategory.slug) === catId || selectedCategory.slug === targetCat.slug)) {
+          setSelectedCategory(remaining.length > 0 ? remaining[0] : null);
+        }
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to delete category');
+    }
+  };
+
   const handleCreateCategory = async (e) => {
     e.preventDefault();
     try {
@@ -423,19 +443,32 @@ export function AdminDashboard() {
 
             <div className="overflow-y-auto space-y-1.5 pr-1 flex-1">
               {categories.map((c) => (
-                <button
+                <div
                   key={c.id || c.slug}
                   onClick={() => setSelectedCategory(c)}
-                  className={`w-full text-left p-3 rounded-xl border text-sm font-semibold transition-all flex items-center justify-between ${selectedCategory?.id === c.id
+                  className={`w-full text-left p-3 rounded-xl border text-sm font-semibold transition-all flex items-center justify-between cursor-pointer group ${selectedCategory?.id === c.id || selectedCategory?.slug === c.slug
                     ? 'bg-rose-950/40 border-rose-500/80 text-white shadow-md'
                     : 'bg-dark-950 border-slate-800 text-slate-300 hover:bg-slate-800/60'
                     }`}
                 >
-                  <span className="truncate">{c.name}</span>
-                  <span className="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded">
-                    {c.words?.length || 0} words
-                  </span>
-                </button>
+                  <span className="truncate flex-1 pr-2">{c.name}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-500 bg-slate-900 px-2 py-0.5 rounded">
+                      {c.words?.length || 0} words
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCategory(c);
+                      }}
+                      className="p-1 text-slate-500 hover:text-rose-400 rounded hover:bg-rose-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title={`Delete ${c.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -452,13 +485,23 @@ export function AdminDashboard() {
                     <p className="text-xs text-slate-400">{selectedCategory.description}</p>
                   </div>
 
-                  <button
-                    onClick={() => setShowAddWordModal(true)}
-                    className="btn-cyan text-xs flex items-center gap-1.5 py-2 px-3.5"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Word & Hint</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDeleteCategory(selectedCategory)}
+                      className="px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      title="Delete this Category"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Category</span>
+                    </button>
+                    <button
+                      onClick={() => setShowAddWordModal(true)}
+                      className="btn-cyan text-xs flex items-center gap-1.5 py-2 px-3.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Word & Hint</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Words Table */}

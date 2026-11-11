@@ -331,6 +331,41 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
     ]);
   };
 
+  const handleDeleteCategory = (cat?: Category) => {
+    const targetCat = cat || selectedCategory;
+    if (!targetCat) return;
+    const catId = targetCat.id || (targetCat as any)._id || targetCat.slug;
+
+    Alert.alert(
+      'Delete Category',
+      `Are you sure you want to delete category "${targetCat.name}" and all its ${targetCat.words?.length || 0} words?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await adminApi.deleteCategory(catId);
+              if (res.success) {
+                const remaining = categories.filter(
+                  (c) => (c.id || (c as any)._id || c.slug) !== catId && c.slug !== targetCat.slug
+                );
+                setCategories(remaining);
+                if (selectedCategory && ((selectedCategory.id || (selectedCategory as any)._id || selectedCategory.slug) === catId || selectedCategory.slug === targetCat.slug)) {
+                  setSelectedCategory(remaining.length > 0 ? remaining[0] : null);
+                }
+                Alert.alert('Success', `Category "${targetCat.name}" deleted.`);
+              }
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to delete category');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleCreateCategory = async () => {
     try {
       const res = await adminApi.createCategory({
@@ -488,21 +523,30 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
             {selectedCategory && (
               <Card style={styles.categoryDetailCard}>
                 <View style={styles.catHeader}>
-                  <View>
+                  <View style={{ flex: 1, marginRight: SPACING.sm }}>
                     <Text style={styles.catTitle}>{selectedCategory.name}</Text>
                     <Text style={styles.catSlug}>slug: {selectedCategory.slug}</Text>
                   </View>
 
-                  <TouchableOpacity
-                    onPress={() => {
-                      sounds.playClick();
-                      setShowAddWordModal(true);
-                    }}
-                    style={styles.addWordBtn}
-                  >
-                    <Plus size={14} color={COLORS.dark[950]} />
-                    <Text style={styles.addWordBtnText}>Add Word</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteCategory(selectedCategory)}
+                      style={styles.deleteCategoryBtn}
+                    >
+                      <Trash2 size={14} color={COLORS.imposter.default} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        sounds.playClick();
+                        setShowAddWordModal(true);
+                      }}
+                      style={styles.addWordBtn}
+                    >
+                      <Plus size={14} color={COLORS.dark[950]} />
+                      <Text style={styles.addWordBtnText}>Add Word</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {/* Words List */}
@@ -1137,6 +1181,15 @@ const styles = StyleSheet.create({
   catSlug: {
     fontSize: 10,
     color: COLORS.slate[500],
+  },
+  deleteCategoryBtn: {
+    padding: 8,
+    borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(244, 63, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addWordBtn: {
     flexDirection: 'row',
