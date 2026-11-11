@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import AppConfig from '../models/AppConfig.js';
 import AuditLog from '../models/AuditLog.js';
+import { invalidateVersionEnforcementCache } from '../middlewares/appVersionEnforcementMiddleware.js';
 
 // In-memory cache for fast access and maintenance checks
 let cachedConfig = null;
@@ -60,6 +61,7 @@ export function setCachedConfigForTesting(testConfig) {
     server: { ...(cachedConfig?.server || {}), ...(testConfig.server || {}) },
     appUpdate: { ...(cachedConfig?.appUpdate || {}), ...(testConfig.appUpdate || {}) }
   };
+  invalidateVersionEnforcementCache(cachedConfig);
   return cachedConfig;
 }
 
@@ -190,6 +192,7 @@ export async function updateServerStatus(req, res) {
       appUpdate: doc.appUpdate,
       version: doc.version
     };
+    invalidateVersionEnforcementCache(cachedConfig);
 
     // Log to AuditLog
     await AuditLog.create({
@@ -262,6 +265,7 @@ export async function updateAppUpdateStatus(req, res) {
       appUpdate: doc.appUpdate,
       version: doc.version
     };
+    invalidateVersionEnforcementCache(cachedConfig);
 
     // Log to AuditLog
     await AuditLog.create({

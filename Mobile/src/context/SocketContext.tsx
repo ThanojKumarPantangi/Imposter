@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
@@ -10,6 +10,8 @@ import { CONFIG, STORAGE_KEYS } from '../config/constants';
 import { RoomState, DisconnectAlert, RejoinRequest, RejoinState, Player, RoomSettings, RoomStatus } from '../types';
 import { restoreSessionScreen, getCurrentRouteName, replace } from '../navigation/navigationService';
 import { showToast as triggerGlobalToast } from '../components/Toast';
+import { appConfigService } from '../services/startup/appConfigService';
+import { startupGate } from '../services/startup/startupGate';
 
 type RoomLifecycle = 'ACTIVE_ROOM' | 'TEMPORARILY_DISCONNECTED' | 'INTENTIONAL_EXIT' | 'NO_ROOM';
 
@@ -277,6 +279,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       const customUrl = await AsyncStorage.getItem(STORAGE_KEYS.SERVER_URL);
       const serverUrl = customUrl ? customUrl.trim().replace(/\/+$/, '') : CONFIG.SOCKET_URL;
+      const installedVersionCode = appConfigService.getInstalledVersionCode();
 
       socket = io(`${serverUrl}/game`, {
         transports: ['websocket', 'polling'],
@@ -287,6 +290,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         reconnectionDelayMax: 5000,
         randomizationFactor: 0.5,
         timeout: 10000,
+        auth: {
+          platform: Platform.OS === 'android' ? 'android' : Platform.OS,
+          versionCode: installedVersionCode,
+        },
+        extraHeaders: Platform.OS === 'android' ? {
+          'X-App-Platform': 'android',
+          'X-App-Version-Code': String(installedVersionCode),
+        } : {},
       });
 
       socketRef.current = socket;
@@ -315,9 +326,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       });
 
-      socket.on('connect_error', (error: Error) => {
+      socket.on('connect_error', (error: any) => {
         setIsConnected(false);
         console.warn(`⚠️ [Socket] Connection error: ${error.message}`);
+
+        // If backend rejected connection due to outdated version (Section 10 & 11)
+        if (error.data?.code === 'APP_UPDATE_REQUIRED' || error.message?.includes('newer version of Imposter is required')) {
+          console.warn('[Socket] Blocked by backend version enforcement. Disconnecting and triggering HardUpdateScreen.');
+          socket.disconnect();
+          startupGate.triggerHardUpdate(error.data || {}, installedVersionCode);
+        }
       });
 
       socket.on('reconnect_attempt', (attempt: number) => {

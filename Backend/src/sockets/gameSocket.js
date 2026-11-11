@@ -1,6 +1,7 @@
 import gameEngine from '../services/gameEngine.js';
 import roomRepository from '../redis/roomRepository.js';
 import { REDIS_TTL } from '../config/redis.js';
+import { getCachedAppConfig, evaluateAndroidVersion } from '../middlewares/appVersionEnforcementMiddleware.js';
 
 // Server-authoritative phase timer registries (one authoritative timer per room)
 const activeTurnTimers = new Map();
@@ -50,9 +51,75 @@ export function emitGameFinished(nsp, roomCode, winnerResult) {
 export function registerGameSocket(io) {
   // Support both /game namespace and root / namespace
   const gameNamespace = io.of('/game');
+  applySocketVersionMiddleware(gameNamespace);
+  applySocketVersionMiddleware(io.of('/'));
+
   setupNamespace(gameNamespace);
   setupNamespace(io.of('/'));
   recoverActiveRoomTimers(gameNamespace);
+}
+
+/**
+ * Socket.IO Handshake Connection Middleware for Android Mobile Version Enforcement
+ * Executed ONCE during connection establishment using cached configuration.
+ * Web application requests are completely excluded.
+ */
+function applySocketVersionMiddleware(nsp) {
+  if (typeof nsp.use !== 'function') {
+    return;
+  }
+  nsp.use(async (socket, next) => {
+    try {
+      const handshake = socket.handshake || {};
+      const headers = handshake.headers || {};
+      const auth = handshake.auth || {};
+      const query = handshake.query || {};
+
+      const platform = (
+        auth.platform ||
+        query.platform ||
+        headers['x-app-platform'] ||
+        ''
+      ).toLowerCase().trim();
+
+      // Exclude non-Android platforms (web/desktop) immediately
+      if (platform !== 'android') {
+        return next();
+      }
+
+      // Extract versionCode from auth, query, or headers
+      const rawVersionCode = auth.versionCode ?? query.versionCode ?? headers['x-app-version-code'];
+      const parsedVersionCode = parseInt(rawVersionCode, 10);
+
+      if (isNaN(parsedVersionCode) || parsedVersionCode <= 0) {
+        const err = new Error('Invalid or missing X-App-Version-Code metadata for Android client');
+        err.data = { code: 'INVALID_VERSION_METADATA' };
+        return next(err);
+      }
+
+      const config = await getCachedAppConfig();
+      if (!config) {
+        // Fail safely or allow retry
+        return next();
+      }
+
+      const result = evaluateAndroidVersion(config, parsedVersionCode);
+      if (!result.allowed) {
+        console.warn(`[SocketVersionEnforcement] Rejected outdated Android socket handshake: v${parsedVersionCode} < v${result.updateData?.latestVersionCode}`);
+        const err = new Error('A newer version of Imposter is required to continue.');
+        err.data = {
+          code: 'APP_UPDATE_REQUIRED',
+          ...result.updateData
+        };
+        return next(err);
+      }
+
+      next();
+    } catch (e) {
+      console.warn('[SocketVersionEnforcement] Handshake verification error:', e.message);
+      next(); // Don't crash socket server
+    }
+  });
 }
 
 function setupNamespace(nsp) {

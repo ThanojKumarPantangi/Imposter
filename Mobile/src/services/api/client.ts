@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { CONFIG, STORAGE_KEYS } from '../../config/constants';
 import { startupGate } from '../startup/startupGate';
+import { appConfigService } from '../startup/appConfigService';
 
 export async function getApiBaseUrl(): Promise<string> {
   try {
@@ -42,8 +44,14 @@ export async function apiRequest<T = any>(
 
   const [baseUrl, token] = await Promise.all([getApiBaseUrl(), getAuthToken()]);
 
+  const installedVersionCode = appConfigService.getInstalledVersionCode();
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...(Platform.OS === 'android' ? {
+      'X-App-Platform': 'android',
+      'X-App-Version-Code': String(installedVersionCode),
+    } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...((options.headers as Record<string, string>) || {}),
   };
@@ -61,8 +69,14 @@ export async function apiRequest<T = any>(
   }));
 
   if (!response.ok) {
+    // Check for HTTP 426 Upgrade Required (Section 10)
+    if (response.status === 426 && (data.code === 'APP_UPDATE_REQUIRED' || data.data?.latestVersionCode)) {
+      console.warn('[client] Received 426 APP_UPDATE_REQUIRED from backend. Triggering HardUpdateScreen.');
+      startupGate.triggerHardUpdate(data.data, installedVersionCode);
+    }
+
     const error: any = new Error(
-      data.error || `Request failed with status ${response.status}`
+      data.error || data.message || `Request failed with status ${response.status}`
     );
     error.status = response.status;
     error.data = data;

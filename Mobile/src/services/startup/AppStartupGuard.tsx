@@ -72,6 +72,32 @@ export const AppStartupGuard: React.FC<AppStartupGuardProps> = ({ children }) =>
     performCheck(false);
   }, [performCheck]);
 
+  // Listen to runtime startupGate changes (e.g. if HTTP 426 triggers HARD_UPDATE)
+  useEffect(() => {
+    const unsubscribe = startupGate.subscribe((newState, hardUpdatePayload) => {
+      setStartupState(newState);
+      if (newState === 'HARD_UPDATE' && hardUpdatePayload?.updateData) {
+        setConfigData({
+          server: { enabled: true, message: '' },
+          appUpdate: {
+            enabled: true,
+            latestVersionCode: hardUpdatePayload.updateData.latestVersionCode,
+            isUpdateRequired: true,
+            isBlocked: true,
+            updateUrl: hardUpdatePayload.updateData.updateUrl,
+            title: hardUpdatePayload.updateData.title,
+            message: hardUpdatePayload.updateData.updateMessage,
+          },
+          version: 1
+        });
+        if (hardUpdatePayload.installedVersionCode) {
+          setInstalledVersionCode(hardUpdatePayload.installedVersionCode);
+        }
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   // 2. Hide native splash screen once startup check completes
   useEffect(() => {
     if (startupState !== 'LOADING') {

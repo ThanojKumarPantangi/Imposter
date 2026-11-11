@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import apiRoutes from './routes/index.js';
 import { checkServerMaintenance } from './controllers/appConfigController.js';
+import { appVersionEnforcementMiddleware } from './middlewares/appVersionEnforcementMiddleware.js';
 
 const app = express();
 
@@ -36,6 +37,9 @@ app.use((req, res, next) => {
 
 // Server Maintenance Guard (bypasses admin routes and public app config)
 app.use(checkServerMaintenance);
+
+// Android Mobile Version Enforcement Guard (only applies to Android mobile requests)
+app.use(appVersionEnforcementMiddleware);
 
 // Mount /api/v1
 app.use('/api/v1', apiRoutes);
