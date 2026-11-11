@@ -65,7 +65,6 @@ export const adminApi = {
 
   updateServerStatus: (data: {
     server: { enabled: boolean; message: string };
-    version?: number;
   }): Promise<{ success: boolean; data: any; message?: string }> =>
     apiRequest('/admin/server-status', {
       method: 'PUT',
@@ -76,13 +75,10 @@ export const adminApi = {
     appUpdate: {
       enabled: boolean;
       latestVersionCode: number;
-      isUpdateRequired: boolean;
-      isBlocked: boolean;
       updateUrl: string;
       title: string;
       message: string;
     };
-    version?: number;
   }): Promise<{ success: boolean; data: any; message?: string }> =>
     apiRequest('/admin/app-update', {
       method: 'PUT',

@@ -8,11 +8,12 @@ import { DisconnectAlert } from '../types';
 
 interface DisconnectedBannerProps {
   alertData?: DisconnectAlert | null;
+  subtitle?: string;
 }
 
-export const DisconnectedBanner: React.FC<DisconnectedBannerProps> = ({ alertData }) => {
-  const deadline = alertData?.deadline;
-  const timeoutSeconds = alertData?.timeoutSeconds;
+export const DisconnectedBanner: React.FC<DisconnectedBannerProps> = ({ alertData, subtitle }) => {
+  const deadline = alertData?.disconnectDeadline || alertData?.deadline;
+  const timeoutSeconds = alertData?.gameDisconnectTimeout || alertData?.timeoutSeconds;
   const username = alertData?.username;
 
   const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
@@ -52,7 +53,7 @@ export const DisconnectedBanner: React.FC<DisconnectedBannerProps> = ({ alertDat
             Player <Text style={styles.usernameText}>{username}</Text> Disconnected
           </Text>
           <Text style={styles.subtitleText}>
-            Game start is locked until all players reconnect.
+            {subtitle || 'Game start is locked until all players reconnect.'}
           </Text>
         </View>
 

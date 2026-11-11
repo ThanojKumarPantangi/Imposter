@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   Layers, Plus, Trash2, Edit2, Database, History, FileText,
   LogOut, Check, X, Search, Sparkles, BookOpen, AlertCircle,
-  Sliders, Smartphone, ShieldCheck, Power, RefreshCw
+  Sliders, Smartphone, ShieldCheck, Power, RefreshCw,
+  ExternalLink, AlertTriangle, CheckCircle2, ArrowUpRight, Info
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { adminApi } from '../api/adminApi';
@@ -44,11 +45,9 @@ export function AdminDashboard() {
   const [serverMessage, setServerMessage] = useState("We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!");
   const [updateEnabled, setUpdateEnabled] = useState(true);
   const [latestVersionCode, setLatestVersionCode] = useState(1);
-  const [isUpdateRequired, setIsUpdateRequired] = useState(true);
-  const [isBlocked, setIsBlocked] = useState(true);
   const [updateUrl, setUpdateUrl] = useState('');
-  const [updateTitle, setUpdateTitle] = useState('Update Available');
-  const [updateMessage, setUpdateMessage] = useState('A newer version of Imposter is available.');
+  const [updateTitle, setUpdateTitle] = useState('Critical Update Required');
+  const [updateMessage, setUpdateMessage] = useState('A newer version of Imposter is available with new categories, chat, and bug fixes.');
   const [configVersion, setConfigVersion] = useState(1);
 
   useEffect(() => {
@@ -107,14 +106,12 @@ export function AdminDashboard() {
         const d = res.data;
         setServerEnabled(d.server?.enabled ?? true);
         setServerMessage(d.server?.message || '');
-        setUpdateEnabled(d.appUpdate?.enabled ?? true);
-        setLatestVersionCode(d.appUpdate?.latestVersionCode ?? 4);
-        setIsUpdateRequired(d.appUpdate?.isUpdateRequired ?? true);
-        setIsBlocked(d.appUpdate?.isBlocked ?? true);
+        setUpdateEnabled(d.appUpdate?.enabled ?? false);
+        setLatestVersionCode(d.appUpdate?.latestVersionCode ?? 1);
         setUpdateUrl(d.appUpdate?.updateUrl || '');
-        setUpdateTitle(d.appUpdate?.title || '');
-        setUpdateMessage(d.appUpdate?.message || '');
-        setConfigVersion(d.version ?? 40);
+        setUpdateTitle(d.appUpdate?.title || 'Critical Update Required');
+        setUpdateMessage(d.appUpdate?.message || 'A newer version of Imposter is available with new categories, chat, and bug fixes.');
+        setConfigVersion(d.version ?? 1);
       }
     } catch (e) {
       console.error(e);
@@ -132,12 +129,12 @@ export function AdminDashboard() {
       const res = await adminApi.updateServerStatus({
         server: {
           enabled: serverEnabled,
-          message: serverMessage
-        },
-        version: Number(configVersion)
+          message: serverMessage.trim()
+        }
       });
       if (res.success) {
         setFeedbackMsg('✅ Server operational status updated successfully!');
+        if (res.data?.version) setConfigVersion(res.data.version);
       }
     } catch (err) {
       setFeedbackMsg(`❌ Failed to update server status: ${err.message}`);
@@ -155,16 +152,14 @@ export function AdminDashboard() {
         appUpdate: {
           enabled: updateEnabled,
           latestVersionCode: Number(latestVersionCode),
-          isUpdateRequired,
-          isBlocked,
-          updateUrl,
-          title: updateTitle,
-          message: updateMessage
-        },
-        version: Number(configVersion)
+          updateUrl: updateUrl.trim(),
+          title: updateTitle.trim(),
+          message: updateMessage.trim()
+        }
       });
       if (res.success) {
-        setFeedbackMsg('✅ App update settings updated successfully!');
+        setFeedbackMsg('✅ Android app update policy updated successfully!');
+        if (res.data?.version) setConfigVersion(res.data.version);
       }
     } catch (err) {
       setFeedbackMsg(`❌ Failed to update app update settings: ${err.message}`);
@@ -521,238 +516,382 @@ export function AdminDashboard() {
 
       {/* TAB 4: APP STARTUP CONFIG & MAINTENANCE */}
       {activeTab === 'CONFIG' && (
-        <div className="glass-card p-6 max-w-4xl">
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800 flex-wrap gap-3">
-            <div>
-              <h3 className="font-display font-bold text-xl text-white flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-rose-500" />
-                <span>Startup App Config & Maintenance Control</span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Centrally control server availability, dynamic maintenance notices, and mandatory Android APK updates.
-              </p>
+        <div className="space-y-6 max-w-6xl">
+          {/* Header & Quick Summary */}
+          <div className="glass-card p-6 border border-slate-800/80 bg-gradient-to-r from-dark-950 via-dark-900 to-dark-950">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h3 className="font-display font-extrabold text-2xl text-white flex items-center gap-3">
+                  <span className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                    <Sliders className="w-6 h-6" />
+                  </span>
+                  <span>App Management & Operations</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                  Centrally control game server availability, customize emergency maintenance notices, and enforce automated Android client updates.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {/* Live Server Indicator Pill */}
+                <div className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 border shadow-sm ${serverEnabled
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30 animate-pulse'
+                  }`}>
+                  <span className={`w-2 h-2 rounded-full ${serverEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+                  <span>{serverEnabled ? 'SERVER ONLINE' : 'MAINTENANCE MODE'}</span>
+                </div>
+
+                {/* Live Update Policy Pill */}
+                <div className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border ${updateEnabled
+                  ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>{updateEnabled ? `ENFORCING v${latestVersionCode}+` : 'UPDATE POLICY OFF'}</span>
+                </div>
+
+                {/* Database Sequence Badge */}
+                <div className="px-3 py-1.5 rounded-xl text-xs font-mono font-bold bg-dark-800/80 text-slate-300 border border-slate-700">
+                  Seq: v{configVersion}
+                </div>
+
+                {/* Reload Button */}
+                <button
+                  onClick={loadAppConfig}
+                  disabled={configLoading}
+                  className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3.5 ml-1"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${configLoading ? 'animate-spin text-rose-400' : ''}`} />
+                  <span>Reload</span>
+                </button>
+              </div>
             </div>
-            <button
-              onClick={loadAppConfig}
-              disabled={configLoading}
-              className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${configLoading ? 'animate-spin' : ''}`} />
-              <span>Reload Config</span>
-            </button>
           </div>
 
-          <div className="space-y-8">
-            {/* 1. Server Status Section */}
-            <form onSubmit={handleSaveServerStatus} className="p-5 rounded-2xl bg-dark-950 border border-slate-800 space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                  <span className="text-sm font-bold text-white flex items-center gap-2">
-                    <Power className="w-4 h-4 text-rose-400" />
-                    Server Operational Status
-                  </span>
-                  <span className="text-xs text-slate-400 block mt-0.5">
-                    When disabled, players will be held at the maintenance screen. Admin APIs always remain accessible.
-                  </span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* 1. Server Operational Status (Left / Full Width) */}
+            <div className="lg:col-span-12">
+              <form onSubmit={handleSaveServerStatus} className="glass-card p-6 border border-slate-800/80 bg-dark-950/80 space-y-5">
+                <div className="flex items-center justify-between flex-wrap gap-4 pb-4 border-b border-slate-800/60">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl border ${serverEnabled ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
+                      <Power className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-base font-bold text-white flex items-center gap-2">
+                        Game Server Traffic Gate
+                      </span>
+                      <span className="text-xs text-slate-400 block mt-0.5">
+                        Controls whether player devices can access matchmaking, rooms, and gameplay. Admin routes remain unblocked.
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setServerEnabled(!serverEnabled)}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2.5 border shadow-lg ${serverEnabled
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25 shadow-emerald-950/40'
+                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30 shadow-rose-950/50'
+                      }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${serverEnabled ? 'bg-emerald-400 animate-ping' : 'bg-rose-500'}`} />
+                    <span>{serverEnabled ? 'ONLINE · CLICK TO DISABLE' : 'OFFLINE · CLICK TO ACTIVATE'}</span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setServerEnabled(!serverEnabled)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${serverEnabled
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                    }`}
-                >
-                  {serverEnabled ? '🟢 OPERATIONAL (Online)' : '🔴 MAINTENANCE ACTIVE (Offline)'}
-                </button>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase text-slate-400 mb-1.5">
-                  Maintenance Announcement Message
-                </label>
-                <textarea
-                  value={serverMessage}
-                  onChange={(e) => setServerMessage(e.target.value)}
-                  rows={2}
-                  placeholder="We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!"
-                  className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
-                />
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <button
-                  type="submit"
-                  disabled={serverSaving}
-                  className="btn-primary px-6 py-2.5 text-xs flex items-center gap-2 font-bold"
-                >
-                  {serverSaving ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving Status...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Save Server Status</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-
-            {/* 2. App Update Configuration */}
-            <form onSubmit={handleSaveAppUpdate} className="p-5 rounded-2xl bg-dark-950 border border-slate-800 space-y-5">
-              <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-sm font-bold text-white flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                      Maintenance Announcement Message
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-500 uppercase font-semibold mr-1">Quick Presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => setServerMessage("We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!")}
+                        className="text-[10px] px-2 py-0.5 rounded bg-dark-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+                      >
+                        Scheduled
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setServerMessage("Upgrading game servers for improved multiplayer speed and stability. Reopening shortly!")}
+                        className="text-[10px] px-2 py-0.5 rounded bg-dark-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+                      >
+                        Upgrade
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setServerMessage("Investigating an unexpected network glitch. Matchmaking will be back online in minutes.")}
+                        className="text-[10px] px-2 py-0.5 rounded bg-dark-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+                      >
+                        Emergency
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    value={serverMessage}
+                    onChange={(e) => setServerMessage(e.target.value)}
+                    rows={2}
+                    placeholder="We're currently performing scheduled maintenance..."
+                    className="w-full bg-dark-900 border border-slate-700/80 px-4 py-3 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/50 transition-all"
+                  />
+                  <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+                    <span>This announcement will be delivered directly inside HTTP 503 responses to blocked mobile and web clients.</span>
+                    <span>{serverMessage.length} characters</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={serverSaving}
+                    className="btn-primary px-6 py-2.5 text-xs flex items-center gap-2 font-bold shadow-lg shadow-rose-950/40"
+                  >
+                    {serverSaving ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Applying Server Changes...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Save & Deploy Server Status</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* 2. Android App Update Configuration (Left 7 cols on desktop) */}
+            <div className="lg:col-span-7">
+              <form onSubmit={handleSaveAppUpdate} className="glass-card p-6 border border-slate-800/80 bg-dark-950/80 space-y-5 h-full flex flex-col justify-between">
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-slate-800/60">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                        <Smartphone className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-base font-bold text-white flex items-center gap-2">
+                          Android App Update Policy
+                        </span>
+                        <span className="text-xs text-slate-400 block mt-0.5">
+                          Enforces minimum client versionCode checks exclusively for Android APK installs.
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-dark-900 border border-slate-800 px-3.5 py-1.5 rounded-xl">
+                      <span className="text-xs font-bold text-slate-300">Enforcement</span>
+                      <input
+                        type="checkbox"
+                        checked={updateEnabled}
+                        onChange={(e) => setUpdateEnabled(e.target.checked)}
+                        className="w-4 h-4 accent-cyan-500 rounded cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Automated Enforcement Rule Notice */}
+                  <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 flex items-start gap-3">
+                    <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <div className="text-xs text-slate-300 leading-relaxed">
+                      <strong className="text-cyan-300 font-bold block mb-0.5">Automated Version Enforcement:</strong>
+                      When active, any Android client reporting a <code className="px-1.5 py-0.5 rounded bg-dark-900 text-cyan-400 font-mono font-bold">versionCode &lt; {latestVersionCode || 1}</code> is automatically locked with a full-screen Hard Update prompt.
+                    </div>
+                  </div>
+
+                  {/* Version Code Input */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                      Required Latest Android Version Code
+                    </label>
+                    <input
+                      type="number"
+                      value={latestVersionCode}
+                      onChange={(e) => setLatestVersionCode(parseInt(e.target.value, 10) || 1)}
+                      min="1"
+                      required
+                      className="w-full bg-dark-900 border border-slate-700/80 px-4 py-2.5 rounded-xl text-sm font-mono font-bold text-white outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+                    />
+                    <span className="text-[11px] text-slate-500 mt-1 block">
+                      Matches the numeric <code className="text-slate-400">versionCode</code> inside your Android build.gradle (e.g. 1, 2, 4, 10).
+                    </span>
+                  </div>
+
+                  {/* Update URL Input with Test Button */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        APK Download or Store URL
+                      </label>
+                      {updateUrl && (
+                        <a
+                          href={updateUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold transition-colors"
+                        >
+                          <span>Test URL</span>
+                          <ArrowUpRight className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="url"
+                        value={updateUrl}
+                        onChange={(e) => setUpdateUrl(e.target.value)}
+                        placeholder="https://github.com/org/repo/releases/download/v1.0.0/app.apk"
+                        required
+                        className="w-full bg-dark-900 border border-slate-700/80 px-4 py-2.5 rounded-xl text-sm font-mono text-cyan-300 placeholder-slate-600 outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all pr-10"
+                      />
+                      <ExternalLink className="w-4 h-4 text-slate-500 absolute right-3.5 top-3 pointer-events-none" />
+                    </div>
+                    <span className="text-[11px] text-slate-500 mt-1 block">
+                      Must begin with <code className="text-slate-400">https://</code> or <code className="text-slate-400">http://</code>. Direct APK link or Google Play Store URL.
+                    </span>
+                  </div>
+
+                  {/* Title and Message */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Modal Heading
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setUpdateTitle("Update Required")}
+                          className="text-[10px] text-slate-500 hover:text-white"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={updateTitle}
+                        onChange={(e) => setUpdateTitle(e.target.value)}
+                        placeholder="Critical Update Required"
+                        required
+                        className="w-full bg-dark-900 border border-slate-700/80 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-cyan-500"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Modal Description
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setUpdateMessage("A newer version of Imposter is available with new categories, chat, and bug fixes.")}
+                          className="text-[10px] text-slate-500 hover:text-white"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={updateMessage}
+                        onChange={(e) => setUpdateMessage(e.target.value)}
+                        placeholder="A newer version of Imposter is available..."
+                        required
+                        className="w-full bg-dark-900 border border-slate-700/80 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-4 border-t border-slate-800/60 mt-4">
+                  <button
+                    type="submit"
+                    disabled={updateSaving}
+                    className="btn-primary px-6 py-2.5 text-xs flex items-center gap-2 font-bold shadow-lg shadow-cyan-950/40"
+                  >
+                    {updateSaving ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Deploying Policy...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Save & Deploy Update Policy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* 3. Live Phone Preview (Right 5 cols on desktop) */}
+            <div className="lg:col-span-5">
+              <div className="glass-card p-6 border border-slate-800/80 bg-dark-950/80 flex flex-col items-center justify-center h-full">
+                <div className="flex items-center justify-between w-full mb-4">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                     <Smartphone className="w-4 h-4 text-cyan-400" />
-                    Android App Update Policy
+                    Live Mobile Dialog Preview
                   </span>
-                  <span className="text-xs text-slate-400 block mt-0.5">
-                    Controls mandatory version enforcement exclusively for the Android mobile application.
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-bold">
+                    WYSIWYG
                   </span>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                <div className="p-3 rounded-xl bg-dark-900 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-slate-300 block">Enforcement Active</span>
-                    <span className="text-[10px] text-slate-500">appUpdate.enabled</span>
+                {/* Smartphone Mockup */}
+                <div className="w-full max-w-[280px] bg-dark-900 border-[3px] border-slate-700 rounded-[32px] p-4 shadow-2xl shadow-cyan-950/30 relative flex flex-col justify-between aspect-[9/16]">
+                  {/* Speaker Earphone & Camera notch */}
+                  <div className="flex justify-center mb-3">
+                    <div className="w-16 h-3 bg-slate-800 rounded-full flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-slate-900" />
+                    </div>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={updateEnabled}
-                    onChange={(e) => setUpdateEnabled(e.target.checked)}
-                    className="w-4 h-4 accent-rose-500 rounded"
-                  />
-                </div>
 
-                <div className="p-3 rounded-xl bg-dark-900 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-slate-300 block">Update Required</span>
-                    <span className="text-[10px] text-slate-500">isUpdateRequired</span>
+                  {/* In-app Screen Content */}
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-2">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center text-xl shadow-lg shadow-rose-900/40 mb-3">
+                      🎭
+                    </div>
+
+                    <span className="text-xs font-mono font-bold text-rose-400 uppercase tracking-widest mb-1">
+                      IMPOSTER GAME
+                    </span>
+
+                    <h4 className="text-sm font-extrabold text-white leading-tight mb-2">
+                      {updateTitle || 'Update Available'}
+                    </h4>
+
+                    <p className="text-[11px] text-slate-400 leading-relaxed mb-4 px-1 line-clamp-4">
+                      {updateMessage || 'A newer version of Imposter is available.'}
+                    </p>
+
+                    <div className="w-full space-y-2">
+                      <div className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-rose-950/60 cursor-default">
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                        <span>Update to v{latestVersionCode || 1}</span>
+                      </div>
+                      <span className="text-[9px] text-slate-500 block uppercase font-bold tracking-wider">
+                        {updateEnabled ? '● Mandatory Update Required' : '○ Policy Currently Disabled'}
+                      </span>
+                    </div>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={isUpdateRequired}
-                    onChange={(e) => setIsUpdateRequired(e.target.checked)}
-                    className="w-4 h-4 accent-rose-500 rounded"
-                  />
-                </div>
 
-                <div className="p-3 rounded-xl bg-dark-900 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-slate-300 block">Mandatory Block</span>
-                    <span className="text-[10px] text-slate-500">isBlocked</span>
+                  {/* Home Indicator */}
+                  <div className="flex justify-center mt-2">
+                    <div className="w-24 h-1 bg-slate-700 rounded-full" />
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={isBlocked}
-                    onChange={(e) => setIsBlocked(e.target.checked)}
-                    className="w-4 h-4 accent-rose-500 rounded"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                    Latest Android Version Code
-                  </label>
-                  <input
-                    type="number"
-                    value={latestVersionCode}
-                    onChange={(e) => setLatestVersionCode(parseInt(e.target.value, 10) || 0)}
-                    min="1"
-                    required
-                    className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-1 block">
-                    Clients with installed versionCode &lt; this will be blocked if isBlocked is true.
-                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                    Config Version (Internal schema)
-                  </label>
-                  <input
-                    type="number"
-                    value={configVersion}
-                    onChange={(e) => setConfigVersion(parseInt(e.target.value, 10) || 0)}
-                    required
-                    className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-1 block">
-                    Payload config sequence version number.
-                  </span>
-                </div>
+                <span className="text-[11px] text-slate-500 text-center mt-3 max-w-xs">
+                  This preview renders in real time matching the client modal layout displayed on Android.
+                </span>
               </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                  APK Download URL (Direct HTTPS download link)
-                </label>
-                <input
-                  type="url"
-                  value={updateUrl}
-                  onChange={(e) => setUpdateUrl(e.target.value)}
-                  placeholder="https://..."
-                  required
-                  className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                    Update Screen Heading
-                  </label>
-                  <input
-                    type="text"
-                    value={updateTitle}
-                    onChange={(e) => setUpdateTitle(e.target.value)}
-                    placeholder="Update Available"
-                    className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-400 mb-1">
-                    Update Screen Description
-                  </label>
-                  <input
-                    type="text"
-                    value={updateMessage}
-                    onChange={(e) => setUpdateMessage(e.target.value)}
-                    placeholder="A newer version of Imposter is available."
-                    className="w-full bg-dark-900 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-rose-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={updateSaving}
-                  className="btn-primary px-6 py-2.5 text-xs flex items-center gap-2 font-bold"
-                >
-                  {updateSaving ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving Settings...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Save App Update Settings</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

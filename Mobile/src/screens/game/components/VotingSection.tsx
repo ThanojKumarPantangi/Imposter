@@ -23,6 +23,7 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
   onSelectTarget,
   onVoteSubmit,
   onSkipVote,
+  disconnectAlert,
 }) => {
   const alivePlayers = roomState.players.filter(
     (p) => p.isAlive && !p.permanentlyDeparted
@@ -43,6 +44,19 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
         {alivePlayers.map((p) => {
           const isSelf = p.id === currentPlayerId;
           const isSelected = selectedVoteTarget === p.id;
+          const playerDeadline =
+            p.disconnectDeadline ||
+            (disconnectAlert?.playerId === p.id
+              ? disconnectAlert.disconnectDeadline || disconnectAlert.deadline
+              : null);
+          const playerTimeout =
+            p.gameDisconnectTimeout ||
+            (disconnectAlert?.playerId === p.id
+              ? disconnectAlert.gameDisconnectTimeout || disconnectAlert.timeoutSeconds
+              : roomState.settings?.gameDisconnectTimeout ||
+                roomState.settings?.gameDisconnectGracePeriod ||
+                15);
+
           return (
             <VotePlayerCard
               key={p.id}
@@ -52,6 +66,9 @@ export const VotingSection: React.FC<VotingSectionProps> = ({
               hasVoted={hasVoted}
               isSpeaking={Boolean(activeSpeakerIds?.includes(p.id))}
               onSelect={onSelectTarget}
+              disconnectDeadline={playerDeadline}
+              disconnectTimeout={playerTimeout}
+              isGameOver={roomState.status === 'FINISHED'}
             />
           );
         })}

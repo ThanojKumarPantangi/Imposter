@@ -28,14 +28,6 @@ const appConfigSchema = new mongoose.Schema(
         type: Number,
         default: 1
       },
-      isUpdateRequired: {
-        type: Boolean,
-        default: false
-      },
-      isBlocked: {
-        type: Boolean,
-        default: false
-      },
       updateUrl: {
         type: String,
         default: ''

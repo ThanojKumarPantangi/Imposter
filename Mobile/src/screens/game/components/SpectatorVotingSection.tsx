@@ -3,6 +3,7 @@ import { View, Text, Animated, StyleSheet } from 'react-native';
 import { Eye } from 'lucide-react-native';
 import { Card } from '../../../components/common/Card';
 import { PlayerAvatar } from '../../../components/PlayerAvatar';
+import { DisconnectCountdownBadge } from './DisconnectCountdownBadge';
 import { COLORS } from '../../../theme/colors';
 import { votingStyles } from '../styles/votingStyles';
 import { gameStyles } from '../styles/gameStyles';
@@ -66,6 +67,7 @@ const vTypingStyles = StyleSheet.create({
 export const SpectatorVotingSection: React.FC<SpectatorVotingSectionProps> = ({
   roomState,
   activeSpeakerIds,
+  disconnectAlert,
 }) => {
   const alivePlayers = roomState.players.filter(
     (p) => p.isAlive && !p.permanentlyDeparted
@@ -92,6 +94,25 @@ export const SpectatorVotingSection: React.FC<SpectatorVotingSectionProps> = ({
             : roomState.players.find((p) => p.id === targetId);
           const hasCast = Boolean(targetId);
 
+          const isDisconnected =
+            (!voter.isConnected || voter.connectionStatus === 'DISCONNECTED') &&
+            voter.isAlive &&
+            !voter.permanentlyDeparted;
+
+          const playerDeadline =
+            voter.disconnectDeadline ||
+            (disconnectAlert?.playerId === voter.id
+              ? disconnectAlert.disconnectDeadline || disconnectAlert.deadline
+              : null);
+
+          const playerTimeout =
+            voter.gameDisconnectTimeout ||
+            (disconnectAlert?.playerId === voter.id
+              ? disconnectAlert.gameDisconnectTimeout || disconnectAlert.timeoutSeconds
+              : roomState.settings?.gameDisconnectTimeout ||
+                roomState.settings?.gameDisconnectGracePeriod ||
+                15);
+
           return (
             <View key={voter.id} style={votingStyles.spectatorVoteItem}>
               <View style={votingStyles.targetAvatarWrapper}>
@@ -104,9 +125,18 @@ export const SpectatorVotingSection: React.FC<SpectatorVotingSectionProps> = ({
               </View>
 
               <View style={votingStyles.targetInfoCol}>
-                <Text style={votingStyles.voterName} numberOfLines={1}>
-                  {voter.username}
-                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={votingStyles.voterName} numberOfLines={1}>
+                    {voter.username}
+                  </Text>
+                  {isDisconnected && (
+                    <DisconnectCountdownBadge
+                      deadline={playerDeadline}
+                      timeout={playerTimeout}
+                      isGameOver={roomState.status === 'FINISHED'}
+                    />
+                  )}
+                </View>
 
                 {hasCast ? (
                   isSkip ? (

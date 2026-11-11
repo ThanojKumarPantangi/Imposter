@@ -1,4 +1,4 @@
-import { Player, RoomState, ClueEntry, EliminationResult, WinnerResult } from '../../../types';
+import { Player, RoomState, ClueEntry, EliminationResult, WinnerResult, DisconnectAlert } from '../../../types';
 import { TurnNotificationVariant } from '../../../components/TurnNotificationBanner';
 
 export interface GameTopBarProps {
@@ -44,6 +44,8 @@ export interface CluePlayerRowProps {
   onClueInputChange?: (text: string) => void;
   onClueSubmit?: () => void;
   isImposter?: boolean;
+  disconnectDeadline?: number | null;
+  disconnectTimeout?: number;
 }
 
 export interface ClueRoundSectionProps {
@@ -57,6 +59,7 @@ export interface ClueRoundSectionProps {
   onClueInputChange: (text: string) => void;
   onClueSubmit: () => void;
   activeSpeakerIds: string[];
+  disconnectAlert?: DisconnectAlert | null;
 }
 
 export interface VotingProgressProps {
@@ -73,6 +76,9 @@ export interface VotePlayerCardProps {
   hasVoted: boolean;
   isSpeaking: boolean;
   onSelect: (playerId: string) => void;
+  disconnectDeadline?: number | null;
+  disconnectTimeout?: number;
+  isGameOver?: boolean;
 }
 
 export interface VotingSectionProps {
@@ -88,11 +94,13 @@ export interface VotingSectionProps {
   onSelectTarget: (playerId: string) => void;
   onVoteSubmit: () => void;
   onSkipVote: () => void;
+  disconnectAlert?: DisconnectAlert | null;
 }
 
 export interface SpectatorVotingSectionProps {
   roomState: RoomState;
   activeSpeakerIds: string[];
+  disconnectAlert?: DisconnectAlert | null;
 }
 
 export interface ResultsSectionProps {

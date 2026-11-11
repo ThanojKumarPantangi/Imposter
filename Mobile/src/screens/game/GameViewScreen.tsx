@@ -16,6 +16,7 @@ import { useKeyboardVisibility } from './hooks/useKeyboardVisibility';
 import { GameTopBar } from './components/GameTopBar';
 import { GameTurnBanner } from './components/GameTurnBanner';
 import { GameLoading } from './components/GameLoading';
+import { DisconnectedBanner } from '../../components/DisconnectedBanner';
 import { RoleRevealSection } from './components/RoleRevealSection';
 import { EliminatedBanner } from './components/EliminatedBanner';
 import { ClueRoundSection } from './components/ClueRoundSection';
@@ -38,6 +39,7 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
   const {
     roomState,
     kickedNotice,
+    disconnectAlert,
     joinRoom,
     leaveRoom,
     returnToLobby,
@@ -192,6 +194,14 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Disconnected Player Warning Banner */}
+        {disconnectAlert && roomState.status !== 'FINISHED' && (
+          <DisconnectedBanner
+            alertData={disconnectAlert}
+            subtitle="Player will be removed if they do not reconnect in time."
+          />
+        )}
+
         {/* Eliminated Spectator Banner */}
         {!isAlive && roomState.status !== 'FINISHED' && <EliminatedBanner />}
 
@@ -223,6 +233,7 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
             onClueInputChange={setClueInput}
             onClueSubmit={handleClueSubmit}
             activeSpeakerIds={activeSpeakerIds}
+            disconnectAlert={disconnectAlert}
           />
         )}
 
@@ -244,11 +255,13 @@ export const GameViewScreen: React.FC<GameViewScreenProps> = ({ route, navigatio
               onSelectTarget={setSelectedVoteTarget}
               onVoteSubmit={handleVoteSubmit}
               onSkipVote={handleSkipVote}
+              disconnectAlert={disconnectAlert}
             />
           ) : (
             <SpectatorVotingSection
               roomState={roomState}
               activeSpeakerIds={activeSpeakerIds}
+              disconnectAlert={disconnectAlert}
             />
           ))}
 

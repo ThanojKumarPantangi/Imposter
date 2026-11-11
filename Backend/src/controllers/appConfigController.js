@@ -68,6 +68,7 @@ export async function getPublicAppConfig(req, res) {
   try {
     const rawVersionCode = req.query.versionCode;
     let parsedVersionCode = null;
+    
     if (rawVersionCode !== undefined && rawVersionCode !== null && rawVersionCode !== '') {
       parsedVersionCode = parseInt(rawVersionCode, 10);
       if (isNaN(parsedVersionCode)) {
@@ -77,6 +78,7 @@ export async function getPublicAppConfig(req, res) {
 
     const config = await getActiveConfigFromDB();
 
+    // Default configuration if none found in DB
     if (!config) {
       return res.status(200).json({
         success: true,
@@ -97,6 +99,15 @@ export async function getPublicAppConfig(req, res) {
       });
     }
 
+    const appUpdateEnabled = Boolean(config.appUpdate?.enabled ?? false);
+    const latestVersionCode = Number(config.appUpdate?.latestVersionCode ?? 1);
+
+    // Dynamically calculate if the user needs an update
+    let requiresUpdate = false;
+    if (appUpdateEnabled && parsedVersionCode !== null && parsedVersionCode < latestVersionCode) {
+      requiresUpdate = true;
+    }
+
     return res.status(200).json({
       success: true,
       message: 'App configuration retrieved successfully',
@@ -106,10 +117,10 @@ export async function getPublicAppConfig(req, res) {
           message: String(config.server?.message || '')
         },
         appUpdate: {
-          enabled: Boolean(config.appUpdate?.enabled ?? false),
-          latestVersionCode: Number(config.appUpdate?.latestVersionCode ?? 1),
-          isUpdateRequired: Boolean(config.appUpdate?.isUpdateRequired ?? false),
-          isBlocked: Boolean(config.appUpdate?.isBlocked ?? false),
+          enabled: appUpdateEnabled,
+          latestVersionCode: latestVersionCode,
+          isUpdateRequired: requiresUpdate, // Auto-computed based on client's version
+          isBlocked: requiresUpdate,        // Automatically blocks if an update is required
           updateUrl: String(config.appUpdate?.updateUrl || ''),
           title: String(config.appUpdate?.title || ''),
           message: String(config.appUpdate?.message || '')
@@ -145,20 +156,18 @@ export async function getAdminAppConfig(req, res) {
 // Admin API: PUT /api/v1/admin/server-status
 export async function updateServerStatus(req, res) {
   try {
-    const { server, version } = req.body;
+    const { server } = req.body;
 
     const current = (await getActiveConfigFromDB()) || {
       server: { enabled: true, message: '' },
       appUpdate: {
         enabled: false,
         latestVersionCode: 1,
-        isUpdateRequired: false,
-        isBlocked: false,
         updateUrl: '',
         title: '',
         message: ''
       },
-      version: 1
+      version: 0
     };
 
     const updatedData = {
@@ -167,7 +176,7 @@ export async function updateServerStatus(req, res) {
         enabled: server?.enabled !== undefined ? Boolean(server.enabled) : current.server.enabled,
         message: server?.message !== undefined ? String(server.message) : current.server.message
       },
-      version: version !== undefined ? Number(version) : current.version
+      version: (current.version || 0) + 1
     };
 
     const doc = await AppConfig.findOneAndUpdate(
@@ -187,7 +196,7 @@ export async function updateServerStatus(req, res) {
       action: 'UPDATE_SERVER_STATUS',
       adminEmail: req.user?.email || 'admin@imposter.game',
       target: 'AppConfig',
-      details: { server: updatedData.server },
+      details: { server: updatedData.server, newVersion: updatedData.version },
       ip: req.ip || req.headers['x-forwarded-for'] || null
     }).catch(e => console.warn('[AuditLog] Failed to record server status change:', e.message));
 
@@ -208,20 +217,18 @@ export async function updateServerStatus(req, res) {
 // Admin API: PUT /api/v1/admin/app-update
 export async function updateAppUpdateStatus(req, res) {
   try {
-    const { appUpdate, version } = req.body;
+    const { appUpdate } = req.body;
 
     const current = (await getActiveConfigFromDB()) || {
       server: { enabled: true, message: '' },
       appUpdate: {
         enabled: false,
         latestVersionCode: 1,
-        isUpdateRequired: false,
-        isBlocked: false,
         updateUrl: '',
         title: '',
         message: ''
       },
-      version: 1
+      version: 0 
     };
 
     const updatedData = {
@@ -229,13 +236,11 @@ export async function updateAppUpdateStatus(req, res) {
       appUpdate: {
         enabled: appUpdate?.enabled !== undefined ? Boolean(appUpdate.enabled) : current.appUpdate.enabled,
         latestVersionCode: appUpdate?.latestVersionCode !== undefined ? Number(appUpdate.latestVersionCode) : current.appUpdate.latestVersionCode,
-        isUpdateRequired: appUpdate?.isUpdateRequired !== undefined ? Boolean(appUpdate.isUpdateRequired) : current.appUpdate.isUpdateRequired,
-        isBlocked: appUpdate?.isBlocked !== undefined ? Boolean(appUpdate.isBlocked) : current.appUpdate.isBlocked,
         updateUrl: appUpdate?.updateUrl !== undefined ? String(appUpdate.updateUrl) : current.appUpdate.updateUrl,
         title: appUpdate?.title !== undefined ? String(appUpdate.title) : current.appUpdate.title,
         message: appUpdate?.message !== undefined ? String(appUpdate.message) : current.appUpdate.message
       },
-      version: version !== undefined ? Number(version) : current.version
+      version: (current.version || 0) + 1 
     };
 
     // Validate updateUrl if provided
@@ -263,7 +268,7 @@ export async function updateAppUpdateStatus(req, res) {
       action: 'UPDATE_APP_UPDATE_STATUS',
       adminEmail: req.user?.email || 'admin@imposter.game',
       target: 'AppConfig',
-      details: { appUpdate: updatedData.appUpdate },
+      details: { appUpdate: updatedData.appUpdate, newVersion: updatedData.version },
       ip: req.ip || req.headers['x-forwarded-for'] || null
     }).catch(e => console.warn('[AuditLog] Failed to record app update status change:', e.message));
 

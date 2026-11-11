@@ -16,6 +16,7 @@ export const ClueRoundSection: React.FC<ClueRoundSectionProps> = ({
   onClueInputChange,
   onClueSubmit,
   activeSpeakerIds,
+  disconnectAlert,
 }) => {
   const currentRound = roomState.currentRound || 1;
   const isGameOver = roomState.status === 'FINISHED';
@@ -48,6 +49,20 @@ export const ClueRoundSection: React.FC<ClueRoundSectionProps> = ({
                 )
                 .sort((a, b) => Number(b.round) - Number(a.round)) || [];
 
+            const playerDeadline =
+              p.disconnectDeadline ||
+              (disconnectAlert?.playerId === p.id
+                ? disconnectAlert.disconnectDeadline || disconnectAlert.deadline
+                : null);
+
+            const playerTimeout =
+              p.gameDisconnectTimeout ||
+              (disconnectAlert?.playerId === p.id
+                ? disconnectAlert.gameDisconnectTimeout || disconnectAlert.timeoutSeconds
+                : roomState.settings?.gameDisconnectTimeout ||
+                  roomState.settings?.gameDisconnectGracePeriod ||
+                  15);
+
             return (
               <CluePlayerRow
                 key={p.id}
@@ -63,6 +78,8 @@ export const ClueRoundSection: React.FC<ClueRoundSectionProps> = ({
                 onClueInputChange={onClueInputChange}
                 onClueSubmit={onClueSubmit}
                 isImposter={isImposter}
+                disconnectDeadline={playerDeadline}
+                disconnectTimeout={playerTimeout}
               />
             );
           })}

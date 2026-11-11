@@ -8,6 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { PlayerAvatar } from '../../../components/PlayerAvatar';
+import { DisconnectCountdownBadge } from './DisconnectCountdownBadge';
 import { clueStyles } from '../styles/clueStyles';
 import { CluePlayerRowProps } from '../types/gameComponentTypes';
 
@@ -81,10 +82,13 @@ export const CluePlayerRow: React.FC<CluePlayerRowProps & { pastClues?: any[] }>
   clueEntry,
   pastClues = [],
   isSpeaking,
+  isGameOver = false,
   clueInput = '',
   onClueInputChange,
   onClueSubmit,
   isImposter = false,
+  disconnectDeadline,
+  disconnectTimeout = 15,
 }) => {
   const isDisconnected =
     (!player.isConnected || player.connectionStatus === 'DISCONNECTED') &&
@@ -132,20 +136,30 @@ export const CluePlayerRow: React.FC<CluePlayerRowProps & { pastClues?: any[] }>
       </View>
 
       <View style={clueStyles.playerInfoCol}>
-        <Text
-          style={[
-            clueStyles.cluePlayerName,
-            isActive ? clueStyles.cluePlayerNameActive : clueStyles.cluePlayerNameInactive,
-          ]}
-          numberOfLines={1}
-        >
-          {player.username}
-          {isCurrentPlayer ? (
-            <Text style={isActive ? clueStyles.youTagActive : clueStyles.youTagInactive}>
-              {' '}(You)
-            </Text>
-          ) : null}
-        </Text>
+        <View style={clueStyles.clueRowTop}>
+          <Text
+            style={[
+              clueStyles.cluePlayerName,
+              isActive ? clueStyles.cluePlayerNameActive : clueStyles.cluePlayerNameInactive,
+            ]}
+            numberOfLines={1}
+          >
+            {player.username}
+            {isCurrentPlayer ? (
+              <Text style={isActive ? clueStyles.youTagActive : clueStyles.youTagInactive}>
+                {' '}(You)
+              </Text>
+            ) : null}
+          </Text>
+
+          {isDisconnected && (
+            <DisconnectCountdownBadge
+              deadline={disconnectDeadline}
+              timeout={disconnectTimeout}
+              isGameOver={isGameOver}
+            />
+          )}
+        </View>
 
         {hasEnteredWord ? (
           <Text

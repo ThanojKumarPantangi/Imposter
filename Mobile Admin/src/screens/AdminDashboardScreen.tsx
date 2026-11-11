@@ -26,6 +26,10 @@ import {
   Smartphone,
   Power,
   RefreshCw,
+  ExternalLink,
+  ShieldCheck,
+  AlertTriangle,
+  Info,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { adminApi } from '../services/api/adminApi';
@@ -58,8 +62,6 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
   const [serverMessage, setServerMessage] = useState<string>("We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!");
   const [updateEnabled, setUpdateEnabled] = useState<boolean>(true);
   const [latestVersionCode, setLatestVersionCode] = useState<number>(1);
-  const [isUpdateRequired, setIsUpdateRequired] = useState<boolean>(true);
-  const [isBlocked, setIsBlocked] = useState<boolean>(true);
   const [updateUrl, setUpdateUrl] = useState<string>('');
   const [updateTitle, setUpdateTitle] = useState<string>('Update Available');
   const [updateMessage, setUpdateMessage] = useState<string>('A newer version of Imposter is available.');
@@ -133,13 +135,11 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         setServerEnabled(d.server?.enabled ?? true);
         setServerMessage(d.server?.message || '');
         setUpdateEnabled(d.appUpdate?.enabled ?? true);
-        setLatestVersionCode(d.appUpdate?.latestVersionCode ?? 4);
-        setIsUpdateRequired(d.appUpdate?.isUpdateRequired ?? true);
-        setIsBlocked(d.appUpdate?.isBlocked ?? true);
+        setLatestVersionCode(d.appUpdate?.latestVersionCode ?? 1);
         setUpdateUrl(d.appUpdate?.updateUrl || '');
-        setUpdateTitle(d.appUpdate?.title || '');
-        setUpdateMessage(d.appUpdate?.message || '');
-        setConfigVersion(d.version ?? 40);
+        setUpdateTitle(d.appUpdate?.title || 'Update Available');
+        setUpdateMessage(d.appUpdate?.message || 'A newer version of Imposter is available.');
+        setConfigVersion(d.version ?? 1);
       }
     } catch (e: any) {
       console.error(e);
@@ -157,11 +157,13 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
       const res = await adminApi.updateServerStatus({
         server: {
           enabled: serverEnabled,
-          message: serverMessage,
+          message: serverMessage.trim(),
         },
-        version: Number(configVersion),
       });
       if (res.success) {
+        if (res.data?.version) {
+          setConfigVersion(res.data.version);
+        }
         setFeedbackMsg('✅ Server operational status updated successfully!');
         Alert.alert('Server Status Saved', 'Server operational status has been updated on the backend.');
       }
@@ -182,15 +184,15 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         appUpdate: {
           enabled: updateEnabled,
           latestVersionCode: Number(latestVersionCode),
-          isUpdateRequired,
-          isBlocked,
-          updateUrl,
-          title: updateTitle,
-          message: updateMessage,
+          updateUrl: updateUrl.trim(),
+          title: updateTitle.trim(),
+          message: updateMessage.trim(),
         },
-        version: Number(configVersion),
       });
       if (res.success) {
+        if (res.data?.version) {
+          setConfigVersion(res.data.version);
+        }
         setFeedbackMsg('✅ App update settings updated successfully!');
         Alert.alert('Update Policy Saved', 'Android app update settings have been updated on the backend.');
       }
@@ -575,21 +577,55 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         {/* ========================================================== */}
         {activeTab === 'CONFIG' && (
           <View style={styles.tabContent}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md }}>
-              <Text style={styles.sectionHeading}>Startup App Config</Text>
+            {/* Header & Badges */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm }}>
+              <View>
+                <Text style={styles.sectionHeading}>Operations & Startup Control</Text>
+                <Text style={{ fontSize: 11, color: COLORS.slate[400], marginTop: 2 }}>
+                  Live runtime flags for mobile client startup handshake
+                </Text>
+              </View>
               <TouchableOpacity onPress={loadAppConfig} disabled={configLoading} style={styles.refreshBtn}>
-                <RefreshCw size={14} color={COLORS.slate[300]} />
+                <RefreshCw size={13} color={COLORS.slate[300]} />
                 <Text style={styles.refreshBtnText}>Reload</Text>
               </TouchableOpacity>
             </View>
 
+            {/* Quick Status Bar */}
+            <View style={styles.statusPillsRow}>
+              <View style={[styles.statusPill, serverEnabled ? styles.statusPillGreen : styles.statusPillRed]}>
+                <View style={[styles.pillDot, { backgroundColor: serverEnabled ? '#10b981' : '#f43f5e' }]} />
+                <Text style={[styles.statusPillText, { color: serverEnabled ? '#34d399' : '#fb7185' }]}>
+                  {serverEnabled ? 'ONLINE' : 'MAINTENANCE'}
+                </Text>
+              </View>
+
+              <View style={[styles.statusPill, updateEnabled ? styles.statusPillCyan : styles.statusPillGray]}>
+                <View style={[styles.pillDot, { backgroundColor: updateEnabled ? '#06b6d4' : '#64748b' }]} />
+                <Text style={[styles.statusPillText, { color: updateEnabled ? '#38bdf8' : '#94a3b8' }]}>
+                  {updateEnabled ? `ENFORCING v${latestVersionCode}+` : 'POLICY OFF'}
+                </Text>
+              </View>
+
+              <View style={[styles.statusPill, styles.statusPillPurple]}>
+                <Text style={[styles.statusPillText, { color: '#c084fc' }]}>
+                  Seq: v{configVersion}
+                </Text>
+              </View>
+            </View>
+
             {/* Server Operational Switch */}
             <Card style={styles.configCard}>
+              <View style={styles.configCardHeader}>
+                <Power size={18} color={serverEnabled ? COLORS.accent.emerald : COLORS.imposter.default} />
+                <Text style={styles.configHeaderTitle}>Server Traffic Gate</Text>
+              </View>
+
               <View style={styles.configRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.configLabel}>Server Status</Text>
                   <Text style={[styles.configSub, { color: serverEnabled ? COLORS.accent.emerald : COLORS.imposter.default }]}>
-                    {serverEnabled ? '🟢 Operational (Online)' : '🔴 Maintenance Active (Offline)'}
+                    {serverEnabled ? '🟢 Operational (Accepting Player Connections)' : '🔴 Maintenance Active (Traffic Blocked)'}
                   </Text>
                 </View>
                 <Switch
@@ -600,16 +636,43 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
                 />
               </View>
 
-              <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>Maintenance Notice</Text>
-              <TextInput
-                value={serverMessage}
-                onChangeText={setServerMessage}
-                placeholder="Scheduled maintenance message..."
-                placeholderTextColor={COLORS.slate[600]}
-                multiline
-                numberOfLines={2}
-                style={[styles.modalInput, { minHeight: 60, textAlignVertical: 'top' }]}
-              />
+              <View style={{ marginTop: SPACING.sm }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <Text style={styles.inputLabel}>Maintenance Notice</Text>
+                  <Text style={{ fontSize: 10, color: COLORS.slate[500] }}>{serverMessage.length} chars</Text>
+                </View>
+                <TextInput
+                  value={serverMessage}
+                  onChangeText={setServerMessage}
+                  placeholder="Scheduled maintenance message..."
+                  placeholderTextColor={COLORS.slate[600]}
+                  multiline
+                  numberOfLines={2}
+                  style={[styles.modalInput, { minHeight: 64, textAlignVertical: 'top' }]}
+                />
+
+                {/* Preset quick buttons */}
+                <View style={styles.presetButtonsRow}>
+                  <TouchableOpacity
+                    style={styles.presetChip}
+                    onPress={() => setServerMessage("We're currently performing scheduled maintenance. We'll be back shortly. Stay tuned!")}
+                  >
+                    <Text style={styles.presetChipText}>Scheduled</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.presetChip}
+                    onPress={() => setServerMessage("Our servers are undergoing a planned system upgrade. Please check back in a few minutes.")}
+                  >
+                    <Text style={styles.presetChipText}>Upgrade</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.presetChip}
+                    onPress={() => setServerMessage("We are investigating connectivity issues. Matchmaking is temporarily paused.")}
+                  >
+                    <Text style={styles.presetChipText}>Emergency</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               <GradientButton
                 title={serverSaving ? 'Saving Server Status...' : 'Save Server Status'}
@@ -622,87 +685,97 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
 
             {/* App Update Configuration */}
             <Card style={styles.configCard}>
-              <Text style={styles.configHeaderTitle}>Android App Update Policy</Text>
+              <View style={styles.configCardHeader}>
+                <Smartphone size={18} color={COLORS.civilian.default} />
+                <Text style={styles.configHeaderTitle}>Android App Update Policy</Text>
+              </View>
+
+              {/* Dynamic Rule Banner */}
+              <View style={styles.infoBox}>
+                <Info size={16} color="#38bdf8" />
+                <Text style={styles.infoBoxText}>
+                  Dynamic rule engine: When enforcement is enabled, clients connecting with version code less than <Text style={{ fontWeight: '800', color: COLORS.white }}>{latestVersionCode}</Text> will be blocked and directed to update.
+                </Text>
+              </View>
 
               <View style={styles.configRow}>
-                <Text style={styles.configLabel}>Enforcement Active (enabled)</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.configLabel}>Version Enforcement (enabled)</Text>
+                  <Text style={styles.configSubMuted}>Toggle active version checking on /app-config</Text>
+                </View>
                 <Switch
                   value={updateEnabled}
                   onValueChange={setUpdateEnabled}
                   trackColor={{ false: COLORS.slate[700], true: COLORS.imposter.default }}
+                  thumbColor={COLORS.white}
                 />
               </View>
 
-              <View style={styles.configRow}>
-                <Text style={styles.configLabel}>Update Required (isUpdateRequired)</Text>
-                <Switch
-                  value={isUpdateRequired}
-                  onValueChange={setIsUpdateRequired}
-                  trackColor={{ false: COLORS.slate[700], true: COLORS.imposter.default }}
+              <View style={{ marginTop: SPACING.sm }}>
+                <Text style={styles.inputLabel}>Required Latest Version Code (Numeric)</Text>
+                <TextInput
+                  value={String(latestVersionCode)}
+                  onChangeText={(v) => setLatestVersionCode(parseInt(v, 10) || 0)}
+                  keyboardType="numeric"
+                  placeholder="e.g. 5"
+                  placeholderTextColor={COLORS.slate[600]}
+                  style={styles.modalInput}
                 />
               </View>
 
-              <View style={styles.configRow}>
-                <Text style={styles.configLabel}>Mandatory Hard Block (isBlocked)</Text>
-                <Switch
-                  value={isBlocked}
-                  onValueChange={setIsBlocked}
-                  trackColor={{ false: COLORS.slate[700], true: COLORS.imposter.default }}
+              <View style={{ marginTop: SPACING.sm }}>
+                <Text style={styles.inputLabel}>APK Download / Store URL (HTTPS)</Text>
+                <TextInput
+                  value={updateUrl}
+                  onChangeText={setUpdateUrl}
+                  placeholder="https://drive.google.com/... or https://play.google.com/..."
+                  placeholderTextColor={COLORS.slate[600]}
+                  autoCapitalize="none"
+                  style={styles.modalInput}
                 />
               </View>
 
-              <View style={{ flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.md }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Latest Version Code</Text>
-                  <TextInput
-                    value={String(latestVersionCode)}
-                    onChangeText={(v) => setLatestVersionCode(parseInt(v, 10) || 0)}
-                    keyboardType="numeric"
-                    style={styles.modalInput}
-                  />
+              <View style={{ marginTop: SPACING.sm }}>
+                <Text style={styles.inputLabel}>Update Screen Title</Text>
+                <TextInput
+                  value={updateTitle}
+                  onChangeText={setUpdateTitle}
+                  placeholder="Update Available"
+                  placeholderTextColor={COLORS.slate[600]}
+                  style={styles.modalInput}
+                />
+              </View>
+
+              <View style={{ marginTop: SPACING.sm }}>
+                <Text style={styles.inputLabel}>Update Screen Message</Text>
+                <TextInput
+                  value={updateMessage}
+                  onChangeText={setUpdateMessage}
+                  placeholder="A newer version is available."
+                  placeholderTextColor={COLORS.slate[600]}
+                  multiline
+                  numberOfLines={2}
+                  style={[styles.modalInput, { minHeight: 56 }]}
+                />
+              </View>
+
+              {/* Mobile Preview Box */}
+              <View style={styles.previewContainer}>
+                <Text style={styles.previewLabel}>LIVE MOBILE PREVIEW</Text>
+                <View style={styles.previewCard}>
+                  <View style={styles.previewBadge}>
+                    <Text style={styles.previewBadgeText}>VERSION {latestVersionCode}</Text>
+                  </View>
+                  <Text style={styles.previewTitle}>{updateTitle || 'Update Available'}</Text>
+                  <Text style={styles.previewMsg}>{updateMessage || 'A newer version is available.'}</Text>
+                  <View style={styles.previewBtn}>
+                    <Text style={styles.previewBtnText}>UPDATE NOW</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Config Version</Text>
-                  <TextInput
-                    value={String(configVersion)}
-                    onChangeText={(v) => setConfigVersion(parseInt(v, 10) || 0)}
-                    keyboardType="numeric"
-                    style={styles.modalInput}
-                  />
-                </View>
               </View>
-
-              <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>APK Download URL (HTTPS)</Text>
-              <TextInput
-                value={updateUrl}
-                onChangeText={setUpdateUrl}
-                placeholder="https://..."
-                placeholderTextColor={COLORS.slate[600]}
-                autoCapitalize="none"
-                style={styles.modalInput}
-              />
-
-              <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>Update Screen Title</Text>
-              <TextInput
-                value={updateTitle}
-                onChangeText={setUpdateTitle}
-                placeholder="Update Available"
-                placeholderTextColor={COLORS.slate[600]}
-                style={styles.modalInput}
-              />
-
-              <Text style={[styles.inputLabel, { marginTop: SPACING.md }]}>Update Screen Message</Text>
-              <TextInput
-                value={updateMessage}
-                onChangeText={setUpdateMessage}
-                placeholder="A newer version is available."
-                placeholderTextColor={COLORS.slate[600]}
-                multiline
-                style={[styles.modalInput, { minHeight: 50 }]}
-              />
 
               <GradientButton
-                title={updateSaving ? 'Saving App Update Policy...' : 'Save App Update Settings'}
+                title={updateSaving ? 'Saving Policy...' : 'Save App Update Settings'}
                 onPress={handleSaveAppUpdate}
                 loading={updateSaving}
                 variant="primary"
@@ -1142,11 +1215,16 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     gap: SPACING.sm,
   },
+  configCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: SPACING.xs,
+  },
   configHeaderTitle: {
     fontSize: 14,
     fontWeight: '800',
     color: COLORS.white,
-    marginBottom: SPACING.sm,
   },
   configRow: {
     flexDirection: 'row',
@@ -1163,6 +1241,151 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
+  },
+  configSubMuted: {
+    fontSize: 11,
+    color: COLORS.slate[500],
+    marginTop: 2,
+  },
+  statusPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: SPACING.md,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.round,
+    borderWidth: 1,
+  },
+  pillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  statusPillGreen: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  statusPillRed: {
+    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+    borderColor: 'rgba(244, 63, 94, 0.3)',
+  },
+  statusPillCyan: {
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    borderColor: 'rgba(6, 182, 212, 0.3)',
+  },
+  statusPillGray: {
+    backgroundColor: 'rgba(100, 116, 139, 0.1)',
+    borderColor: 'rgba(100, 116, 139, 0.3)',
+  },
+  statusPillPurple: {
+    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+    borderColor: 'rgba(168, 85, 247, 0.3)',
+  },
+  presetButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  presetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.dark[800],
+    borderWidth: 1,
+    borderColor: COLORS.slate[700],
+  },
+  presetChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.slate[300],
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.25)',
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  infoBoxText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#bae6fd',
+    lineHeight: 16,
+  },
+  previewContainer: {
+    marginTop: SPACING.sm,
+    padding: SPACING.sm,
+    backgroundColor: COLORS.dark[950],
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.slate[800],
+  },
+  previewLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.slate[500],
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  previewCard: {
+    backgroundColor: COLORS.dark[900],
+    borderRadius: RADIUS.sm,
+    padding: SPACING.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.slate[800],
+  },
+  previewBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.round,
+    marginBottom: 6,
+  },
+  previewBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.accent.emerald,
+  },
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.white,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  previewMsg: {
+    fontSize: 11,
+    color: COLORS.slate[400],
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  previewBtn: {
+    backgroundColor: COLORS.imposter.default,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+  },
+  previewBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.white,
+    letterSpacing: 0.5,
   },
   inputLabel: {
     fontSize: 11,
