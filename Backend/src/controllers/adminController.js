@@ -130,6 +130,38 @@ export const deleteWord = async (req, res) => {
   }
 };
 
+export const updateWordHint = async (req, res) => {
+  try {
+    const { id, wordText } = req.params;
+    const { hint, difficulty } = req.body;
+
+    if (!hint || typeof hint !== 'string' || !hint.trim()) {
+      return res.status(400).json({ success: false, error: 'A valid hint is required' });
+    }
+
+    const category = await Category.findOne({ $or: [{ id }, { slug: id }] });
+    if (!category) return res.status(404).json({ success: false, error: 'Category not found' });
+
+    const decodedWord = decodeURIComponent(wordText).trim().toLowerCase();
+    const wordItem = category.words.find(w => w.word.trim().toLowerCase() === decodedWord);
+
+    if (!wordItem) {
+      return res.status(404).json({ success: false, error: 'Word not found in category' });
+    }
+
+    wordItem.hint = hint.trim();
+    if (difficulty && ['EASY', 'MEDIUM', 'HARD'].includes(difficulty.toUpperCase())) {
+      wordItem.difficulty = difficulty.toUpperCase();
+    }
+
+    await category.save();
+
+    return res.json({ success: true, category, updatedWord: wordItem });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export const getGameHistory = async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;

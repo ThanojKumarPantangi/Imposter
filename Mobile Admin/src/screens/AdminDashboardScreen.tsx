@@ -15,6 +15,7 @@ import {
   Layers,
   Plus,
   Trash2,
+  Edit2,
   Database,
   History,
   FileText,
@@ -72,6 +73,13 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
   const [newWord, setNewWord] = useState<string>('');
   const [newHint, setNewHint] = useState<string>('');
   const [newDifficulty, setNewDifficulty] = useState<'EASY' | 'MEDIUM' | 'HARD'>('EASY');
+
+  // Edit Word Hint Modal
+  const [showEditWordModal, setShowEditWordModal] = useState<boolean>(false);
+  const [editingWord, setEditingWord] = useState<string>('');
+  const [editHint, setEditHint] = useState<string>('');
+  const [editDifficulty, setEditDifficulty] = useState<'EASY' | 'MEDIUM' | 'HARD'>('EASY');
+  const [editSaving, setEditSaving] = useState<boolean>(false);
 
   // Add Category Modal
   const [showAddCategoryModal, setShowAddCategoryModal] = useState<boolean>(false);
@@ -259,6 +267,38 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
       }
     } catch (err: any) {
       Alert.alert('Error', err.message);
+    }
+  };
+
+  const handleOpenEditWord = (w: any) => {
+    sounds.playClick();
+    setEditingWord(w.word);
+    setEditHint(w.hint || '');
+    setEditDifficulty(w.difficulty || 'EASY');
+    setShowEditWordModal(true);
+  };
+
+  const handleUpdateWordHint = async () => {
+    if (!selectedCategory || !editingWord.trim() || !editHint.trim()) return;
+
+    try {
+      setEditSaving(true);
+      const catId = selectedCategory.id || (selectedCategory as any)._id;
+      const res = await adminApi.updateWordHint(catId, editingWord, {
+        hint: editHint.trim(),
+        difficulty: editDifficulty,
+      });
+
+      if (res.success && res.category) {
+        setSelectedCategory(res.category);
+        setCategories((prev) => prev.map((c) => (c.slug === res.category.slug ? res.category : c)));
+        setShowEditWordModal(false);
+        Alert.alert('Success', `Hint updated for "${editingWord}"`);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to update hint');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -474,12 +514,21 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
                           <Text style={styles.wordHint}>Hint: {w.hint}</Text>
                         </View>
 
-                        <TouchableOpacity
-                          onPress={() => handleDeleteWord(w.word)}
-                          style={styles.deleteWordBtn}
-                        >
-                          <Trash2 size={16} color={COLORS.imposter.default} />
-                        </TouchableOpacity>
+                        <View style={styles.wordActions}>
+                          <TouchableOpacity
+                            onPress={() => handleOpenEditWord(w)}
+                            style={styles.editWordBtn}
+                          >
+                            <Edit2 size={16} color={COLORS.civilian.default} />
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => handleDeleteWord(w.word)}
+                            style={styles.deleteWordBtn}
+                          >
+                            <Trash2 size={16} color={COLORS.imposter.default} />
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     ))
                   )}
@@ -823,6 +872,60 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         </View>
       </Modal>
 
+      {/* Edit Word Hint Modal */}
+      <Modal visible={showEditWordModal} transparent animationType="fade" onRequestClose={() => setShowEditWordModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Edit Hint: {editingWord}</Text>
+                <Text style={styles.modalSub}>{selectedCategory?.name}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowEditWordModal(false)}>
+                <X size={18} color={COLORS.slate[400]} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Secret Word</Text>
+            <TextInput
+              value={editingWord}
+              editable={false}
+              style={[styles.modalInput, { opacity: 0.6 }]}
+            />
+
+            <Text style={[styles.inputLabel, { marginTop: SPACING.sm }]}>Secret Word Hint</Text>
+            <TextInput
+              value={editHint}
+              onChangeText={setEditHint}
+              placeholder="Enter informative hint for imposter..."
+              placeholderTextColor={COLORS.slate[500]}
+              multiline
+              numberOfLines={3}
+              style={[styles.modalInput, { minHeight: 70, textAlignVertical: 'top' }]}
+            />
+
+            <View style={{ flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.md }}>
+              <TouchableOpacity
+                onPress={() => setShowEditWordModal(false)}
+                style={[styles.cancelBtn, { flex: 1 }]}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <View style={{ flex: 1.5 }}>
+                <GradientButton
+                  title={editSaving ? 'Saving...' : 'Update Hint'}
+                  onPress={handleUpdateWordHint}
+                  loading={editSaving}
+                  variant="cyan"
+                  style={styles.fullWidth}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Add Category Modal */}
       <Modal visible={showAddCategoryModal} transparent animationType="fade" onRequestClose={() => setShowAddCategoryModal(false)}>
         <View style={styles.modalBackdrop}>
@@ -1075,8 +1178,39 @@ const styles = StyleSheet.create({
     color: COLORS.slate[400],
     marginTop: 2,
   },
+  wordActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  editWordBtn: {
+    padding: 6,
+    borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+  },
   deleteWordBtn: {
     padding: 6,
+    borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+  },
+  modalSub: {
+    fontSize: 11,
+    color: COLORS.slate[400],
+    marginTop: 2,
+  },
+  cancelBtn: {
+    backgroundColor: COLORS.dark[800],
+    borderWidth: 1,
+    borderColor: COLORS.slate[700],
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  cancelBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.slate[300],
   },
   sectionHeading: {
     fontSize: 15,

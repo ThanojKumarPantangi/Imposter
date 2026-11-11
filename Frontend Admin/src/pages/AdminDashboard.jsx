@@ -30,6 +30,13 @@ export function AdminDashboard() {
   const [newHint, setNewHint] = useState('');
   const [newDifficulty, setNewDifficulty] = useState('EASY');
 
+  // Edit Word Hint Modal state
+  const [showEditWordModal, setShowEditWordModal] = useState(false);
+  const [editingWord, setEditingWord] = useState('');
+  const [editHint, setEditHint] = useState('');
+  const [editDifficulty, setEditDifficulty] = useState('EASY');
+  const [editSaving, setEditSaving] = useState(false);
+
   // Add Category Modal state
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -204,6 +211,35 @@ export function AdminDashboard() {
       }
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleOpenEditWord = (w) => {
+    setEditingWord(w.word);
+    setEditHint(w.hint || '');
+    setEditDifficulty(w.difficulty || 'EASY');
+    setShowEditWordModal(true);
+  };
+
+  const handleUpdateWordHint = async (e) => {
+    e?.preventDefault();
+    if (!selectedCategory || !editingWord.trim() || !editHint.trim()) return;
+
+    try {
+      setEditSaving(true);
+      const res = await adminApi.updateWordHint(selectedCategory.id, editingWord, {
+        hint: editHint.trim(),
+        difficulty: editDifficulty
+      });
+      if (res.success && res.category) {
+        setSelectedCategory(res.category);
+        setCategories(prev => prev.map(c => (c.id === res.category.id ? res.category : c)));
+        setShowEditWordModal(false);
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -441,13 +477,22 @@ export function AdminDashboard() {
                         </p>
                       </div>
 
-                      <button
-                        onClick={() => handleDeleteWord(w.word)}
-                        className="p-2 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-colors"
-                        title="Delete Word"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleOpenEditWord(w)}
+                          className="p-2 text-slate-400 hover:text-cyan-400 rounded-lg hover:bg-cyan-500/10 transition-colors"
+                          title="Edit Hint & Difficulty"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteWord(w.word)}
+                          className="p-2 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-colors"
+                          title="Delete Word"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -952,6 +997,82 @@ export function AdminDashboard() {
                 </button>
                 <button type="submit" className="btn-primary text-xs px-5 py-2">
                   Save Word
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Word Hint Modal */}
+      {showEditWordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark-950/85 backdrop-blur-md">
+          <div className="w-full max-w-md bg-dark-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+              <div>
+                <h3 className="font-display font-bold text-lg text-white">
+                  Edit Hint: <span className="text-cyan-400">{editingWord}</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Category: {selectedCategory?.name}</p>
+              </div>
+              <button
+                onClick={() => setShowEditWordModal(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateWordHint} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Secret Word</label>
+                <input
+                  type="text"
+                  value={editingWord}
+                  disabled
+                  className="w-full bg-dark-950/60 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm text-slate-400 outline-none cursor-not-allowed font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Updated Hint</label>
+                <textarea
+                  value={editHint}
+                  onChange={(e) => setEditHint(e.target.value)}
+                  placeholder="Enter clear, informative hint for the imposter..."
+                  required
+                  rows={3}
+                  className="w-full bg-dark-950 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Difficulty</label>
+                <select
+                  value={editDifficulty}
+                  onChange={(e) => setEditDifficulty(e.target.value)}
+                  className="w-full bg-dark-950 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none"
+                >
+                  <option value="EASY">EASY</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="HARD">HARD</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditWordModal(false)}
+                  className="btn-secondary text-xs px-4 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="btn-cyan text-xs px-5 py-2 flex items-center gap-1.5"
+                >
+                  {editSaving ? 'Saving...' : 'Update Hint'}
                 </button>
               </div>
             </form>

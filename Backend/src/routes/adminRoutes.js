@@ -8,6 +8,7 @@ import {
   deleteCategory,
   addWord,
   deleteWord,
+  updateWordHint,
   getGameHistory,
   getAuditLogs,
   triggerSeed
@@ -31,6 +32,7 @@ router.put('/categories/:id', updateCategory);
 router.delete('/categories/:id', deleteCategory);
 
 router.post('/categories/:id/words', addWord);
+router.put('/categories/:id/words/:wordText', updateWordHint);
 router.delete('/categories/:id/words/:wordText', deleteWord);
 
 router.get('/history', getGameHistory);
