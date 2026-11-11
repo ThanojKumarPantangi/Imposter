@@ -5,8 +5,8 @@ import Guest from '../models/Guest.js';
 import AdminUser from '../models/AdminUser.js';
 import AuditLog from '../models/AuditLog.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'imposter_default_secret_jwt';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN;
 
 class AuthService {
   /**

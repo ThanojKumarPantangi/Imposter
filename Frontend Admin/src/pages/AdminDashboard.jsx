@@ -30,8 +30,9 @@ export function AdminDashboard() {
   const [newHint, setNewHint] = useState('');
   const [newDifficulty, setNewDifficulty] = useState('EASY');
 
-  // Edit Word Hint Modal state
+  // Edit Word Modal state
   const [showEditWordModal, setShowEditWordModal] = useState(false);
+  const [originalWord, setOriginalWord] = useState('');
   const [editingWord, setEditingWord] = useState('');
   const [editHint, setEditHint] = useState('');
   const [editDifficulty, setEditDifficulty] = useState('EASY');
@@ -215,19 +216,21 @@ export function AdminDashboard() {
   };
 
   const handleOpenEditWord = (w) => {
+    setOriginalWord(w.word);
     setEditingWord(w.word);
     setEditHint(w.hint || '');
     setEditDifficulty(w.difficulty || 'EASY');
     setShowEditWordModal(true);
   };
 
-  const handleUpdateWordHint = async (e) => {
+  const handleUpdateWord = async (e) => {
     e?.preventDefault();
-    if (!selectedCategory || !editingWord.trim() || !editHint.trim()) return;
+    if (!selectedCategory || !originalWord.trim() || !editingWord.trim() || !editHint.trim()) return;
 
     try {
       setEditSaving(true);
-      const res = await adminApi.updateWordHint(selectedCategory.id, editingWord, {
+      const res = await adminApi.updateWord(selectedCategory.id, originalWord, {
+        word: editingWord.trim(),
         hint: editHint.trim(),
         difficulty: editDifficulty
       });
@@ -1004,14 +1007,14 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* Edit Word Hint Modal */}
+      {/* Edit Word & Hint Modal */}
       {showEditWordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark-950/85 backdrop-blur-md">
           <div className="w-full max-w-md bg-dark-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
               <div>
                 <h3 className="font-display font-bold text-lg text-white">
-                  Edit Hint: <span className="text-cyan-400">{editingWord}</span>
+                  Edit Secret Word & Hint
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">Category: {selectedCategory?.name}</p>
               </div>
@@ -1023,14 +1026,16 @@ export function AdminDashboard() {
               </button>
             </div>
 
-            <form onSubmit={handleUpdateWordHint} className="space-y-4">
+            <form onSubmit={handleUpdateWord} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase text-slate-400 mb-1">Secret Word</label>
                 <input
                   type="text"
                   value={editingWord}
-                  disabled
-                  className="w-full bg-dark-950/60 border border-slate-800 px-3.5 py-2.5 rounded-xl text-sm text-slate-400 outline-none cursor-not-allowed font-semibold"
+                  onChange={(e) => setEditingWord(e.target.value)}
+                  placeholder="e.g. Avocado"
+                  required
+                  className="w-full bg-dark-950 border border-slate-700 px-3.5 py-2.5 rounded-xl text-sm text-white outline-none focus:border-cyan-500 font-semibold"
                 />
               </div>
 
@@ -1072,7 +1077,7 @@ export function AdminDashboard() {
                   disabled={editSaving}
                   className="btn-cyan text-xs px-5 py-2 flex items-center gap-1.5"
                 >
-                  {editSaving ? 'Saving...' : 'Update Hint'}
+                  {editSaving ? 'Saving...' : 'Update Word'}
                 </button>
               </div>
             </form>

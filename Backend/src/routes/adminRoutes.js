@@ -8,6 +8,7 @@ import {
   deleteCategory,
   addWord,
   deleteWord,
+  updateWord,
   updateWordHint,
   getGameHistory,
   getAuditLogs,
@@ -32,7 +33,7 @@ router.put('/categories/:id', updateCategory);
 router.delete('/categories/:id', deleteCategory);
 
 router.post('/categories/:id/words', addWord);
-router.put('/categories/:id/words/:wordText', updateWordHint);
+router.put('/categories/:id/words/:wordText', updateWord);
 router.delete('/categories/:id/words/:wordText', deleteWord);
 
 router.get('/history', getGameHistory);

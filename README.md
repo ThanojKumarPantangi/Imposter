@@ -1,3 +1,21 @@
+Fruits
+Vegetables
+Snacks & street Food
+World Cuisines
+Household Appliances
+personal care & grooming
+office & stationery
+Mammals
+Birds
+pets
+Farm Animals
+World Cities
+Transportation & Vehicles
+Team & sports
+Computer Hardware
+Actions & Everyday Verbs
+Countries
+
 # 🎭 Imposter Multiplayer Party Game
 
 Full-stack real-time multiplayer party game inspired by *Undercover / Imposter*. Built with Node.js, Express, Socket.IO, Redis, MongoDB, React, Vite, Tailwind CSS, and PWA support.

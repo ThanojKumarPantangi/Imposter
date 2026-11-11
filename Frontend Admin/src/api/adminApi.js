@@ -8,6 +8,7 @@ export const adminApi = {
   updateCategory: (id, data) => apiRequest(`/admin/categories/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCategory: (id) => apiRequest(`/admin/categories/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   addWord: (categoryId, wordData) => apiRequest(`/admin/categories/${encodeURIComponent(categoryId)}/words`, { method: 'POST', body: JSON.stringify(wordData) }),
+  updateWord: (categoryId, wordText, data) => apiRequest(`/admin/categories/${encodeURIComponent(categoryId)}/words/${encodeURIComponent(wordText)}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateWordHint: (categoryId, wordText, data) => apiRequest(`/admin/categories/${encodeURIComponent(categoryId)}/words/${encodeURIComponent(wordText)}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteWord: (categoryId, wordText) => apiRequest(`/admin/categories/${encodeURIComponent(categoryId)}/words/${encodeURIComponent(wordText)}`, { method: 'DELETE' }),
   getHistory: (page = 1, limit = 20) => apiRequest(`/admin/history?page=${page}&limit=${limit}`),

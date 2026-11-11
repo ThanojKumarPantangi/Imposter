@@ -74,8 +74,9 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
   const [newHint, setNewHint] = useState<string>('');
   const [newDifficulty, setNewDifficulty] = useState<'EASY' | 'MEDIUM' | 'HARD'>('EASY');
 
-  // Edit Word Hint Modal
+  // Edit Word Modal
   const [showEditWordModal, setShowEditWordModal] = useState<boolean>(false);
+  const [originalWord, setOriginalWord] = useState<string>('');
   const [editingWord, setEditingWord] = useState<string>('');
   const [editHint, setEditHint] = useState<string>('');
   const [editDifficulty, setEditDifficulty] = useState<'EASY' | 'MEDIUM' | 'HARD'>('EASY');
@@ -272,19 +273,21 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
 
   const handleOpenEditWord = (w: any) => {
     sounds.playClick();
+    setOriginalWord(w.word);
     setEditingWord(w.word);
     setEditHint(w.hint || '');
     setEditDifficulty(w.difficulty || 'EASY');
     setShowEditWordModal(true);
   };
 
-  const handleUpdateWordHint = async () => {
-    if (!selectedCategory || !editingWord.trim() || !editHint.trim()) return;
+  const handleUpdateWord = async () => {
+    if (!selectedCategory || !originalWord.trim() || !editingWord.trim() || !editHint.trim()) return;
 
     try {
       setEditSaving(true);
       const catId = selectedCategory.id || (selectedCategory as any)._id;
-      const res = await adminApi.updateWordHint(catId, editingWord, {
+      const res = await adminApi.updateWord(catId, originalWord, {
+        word: editingWord.trim(),
         hint: editHint.trim(),
         difficulty: editDifficulty,
       });
@@ -293,10 +296,10 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         setSelectedCategory(res.category);
         setCategories((prev) => prev.map((c) => (c.slug === res.category.slug ? res.category : c)));
         setShowEditWordModal(false);
-        Alert.alert('Success', `Hint updated for "${editingWord}"`);
+        Alert.alert('Success', `Word updated successfully to "${editingWord}"`);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update hint');
+      Alert.alert('Error', err.message || 'Failed to update word');
     } finally {
       setEditSaving(false);
     }
@@ -872,13 +875,13 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
         </View>
       </Modal>
 
-      {/* Edit Word Hint Modal */}
+      {/* Edit Word & Hint Modal */}
       <Modal visible={showEditWordModal} transparent animationType="fade" onRequestClose={() => setShowEditWordModal(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Edit Hint: {editingWord}</Text>
+                <Text style={styles.modalTitle}>Edit Secret Word</Text>
                 <Text style={styles.modalSub}>{selectedCategory?.name}</Text>
               </View>
               <TouchableOpacity onPress={() => setShowEditWordModal(false)}>
@@ -889,8 +892,10 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
             <Text style={styles.inputLabel}>Secret Word</Text>
             <TextInput
               value={editingWord}
-              editable={false}
-              style={[styles.modalInput, { opacity: 0.6 }]}
+              onChangeText={setEditingWord}
+              placeholder="Word (e.g. Pineapple)"
+              placeholderTextColor={COLORS.slate[500]}
+              style={styles.modalInput}
             />
 
             <Text style={[styles.inputLabel, { marginTop: SPACING.sm }]}>Secret Word Hint</Text>
@@ -914,8 +919,8 @@ export const AdminDashboardScreen: React.FC<{ navigation: any }> = ({ navigation
 
               <View style={{ flex: 1.5 }}>
                 <GradientButton
-                  title={editSaving ? 'Saving...' : 'Update Hint'}
-                  onPress={handleUpdateWordHint}
+                  title={editSaving ? 'Saving...' : 'Update Word'}
+                  onPress={handleUpdateWord}
                   loading={editSaving}
                   variant="cyan"
                   style={styles.fullWidth}

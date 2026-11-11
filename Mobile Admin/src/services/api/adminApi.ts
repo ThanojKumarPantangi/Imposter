@@ -39,10 +39,23 @@ export const adminApi = {
       body: JSON.stringify(wordData),
     }),
 
+  updateWord: (
+    categoryId: string,
+    wordText: string,
+    data: { word?: string; hint?: string; difficulty?: string }
+  ): Promise<{ success: boolean; category: Category; updatedWord?: any }> =>
+    apiRequest(
+      `/admin/categories/${encodeURIComponent(categoryId)}/words/${encodeURIComponent(wordText)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }
+    ),
+
   updateWordHint: (
     categoryId: string,
     wordText: string,
-    data: { hint: string; difficulty?: string }
+    data: { word?: string; hint?: string; difficulty?: string }
   ): Promise<{ success: boolean; category: Category; updatedWord?: any }> =>
     apiRequest(
       `/admin/categories/${encodeURIComponent(categoryId)}/words/${encodeURIComponent(wordText)}`,

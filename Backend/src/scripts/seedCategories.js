@@ -7,6 +7,11 @@ import bcrypt from 'bcryptjs';
 import Category from '../models/Category.js';
 import AdminUser from '../models/AdminUser.js';
 
+
+/* ######################### CAUTION #################
+  MANDATORY DONT EDIT THIS FILE THIS IS READ ONLY FILE 
+*/
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -17,6 +22,12 @@ const categoriesData = JSON.parse(
 );
 
 export async function seed() {
+
+
+  if (true) {
+    console.log("Seeding is restricted");
+    return;
+  }
   const uri = process.env.MONGODB_URI;
   if (!uri || uri.includes('<username>') || uri.includes('<password>')) {
     console.error('❌ MONGODB_URI is not configured in Backend/.env. Please update it with your actual connection string.');
@@ -45,7 +56,7 @@ export async function seed() {
     // 2. Seed Default Admin User
     const adminEmail = (process.env.ADMIN_EMAIL || 'admin@imposter.game').toLowerCase();
     const adminPassword = process.env.ADMIN_PASSWORD || 'AdminSecret123!';
-    
+
     let admin = await AdminUser.findOne({ email: adminEmail });
     if (!admin) {
       const salt = await bcrypt.genSalt(10);

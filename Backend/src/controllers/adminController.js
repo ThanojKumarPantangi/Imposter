@@ -130,14 +130,10 @@ export const deleteWord = async (req, res) => {
   }
 };
 
-export const updateWordHint = async (req, res) => {
+export const updateWord = async (req, res) => {
   try {
     const { id, wordText } = req.params;
-    const { hint, difficulty } = req.body;
-
-    if (!hint || typeof hint !== 'string' || !hint.trim()) {
-      return res.status(400).json({ success: false, error: 'A valid hint is required' });
-    }
+    const { word: newWord, hint, difficulty } = req.body;
 
     const category = await Category.findOne({ $or: [{ id }, { slug: id }] });
     if (!category) return res.status(404).json({ success: false, error: 'Category not found' });
@@ -149,7 +145,31 @@ export const updateWordHint = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Word not found in category' });
     }
 
-    wordItem.hint = hint.trim();
+    // If newWord is provided, check if it's already taken by another word in the same category
+    if (newWord && typeof newWord === 'string' && newWord.trim()) {
+      const trimmedNewWord = newWord.trim();
+      const normalizedNewWord = trimmedNewWord.toLowerCase();
+
+      // Check duplicate within the same category if changing word text
+      if (normalizedNewWord !== decodedWord) {
+        const duplicate = category.words.find(
+          w => w.word.trim().toLowerCase() === normalizedNewWord
+        );
+        if (duplicate) {
+          return res.status(400).json({ success: false, error: 'A word with this name already exists in this category' });
+        }
+        wordItem.word = trimmedNewWord;
+        wordItem.normalizedWord = normalizedNewWord;
+      }
+    }
+
+    if (hint !== undefined) {
+      if (!hint || typeof hint !== 'string' || !hint.trim()) {
+        return res.status(400).json({ success: false, error: 'A valid hint is required' });
+      }
+      wordItem.hint = hint.trim();
+    }
+
     if (difficulty && ['EASY', 'MEDIUM', 'HARD'].includes(difficulty.toUpperCase())) {
       wordItem.difficulty = difficulty.toUpperCase();
     }
@@ -161,6 +181,8 @@ export const updateWordHint = async (req, res) => {
     return res.status(500).json({ success: false, error: error.message });
   }
 };
+
+export const updateWordHint = updateWord;
 
 export const getGameHistory = async (req, res) => {
   try {
@@ -192,7 +214,7 @@ export const getStatsSummary = async (req, res) => {
     const totalPlayers = await Guest.countDocuments();
     const totalGames = await GameHistory.countDocuments();
     const totalCategories = await Category.countDocuments();
-    
+
     const civilianWins = await GameHistory.countDocuments({ winnerRole: 'CIVILIAN' });
     const imposterWins = await GameHistory.countDocuments({ winnerRole: 'IMPOSTER' });
 
@@ -213,8 +235,8 @@ export const getStatsSummary = async (req, res) => {
 
 export const triggerSeed = async (req, res) => {
   try {
-    await seed();
-    return res.json({ success: true, message: 'Seed triggered and completed successfully' });
+    // await seed();
+    return res.json({ success: true, message: 'Seed is disabled' });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
